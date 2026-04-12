@@ -13,6 +13,8 @@ import { verifyHashChain, sealMerkleBlock } from "../lib/integrity";
 import { broadcastLog } from "../lib/ws";
 import { BLOCK_SIZE } from "../lib/merkle";
 import { computeConsistencyScore } from "../lib/consistency";
+import { logRateLimiter, getRateLimitStats } from "../lib/rateLimit";
+import { checkAndSealArchive } from "../lib/archiver";
 
 const router: IRouter = Router();
 
@@ -41,7 +43,22 @@ function verifySentinelKey(req: any): boolean {
   return key === expected;
 }
 
-router.post("/v1/log", async (req, res): Promise<void> => {
+router.post("/v1/simulate", async (req, res): Promise<void> => {
+  const { rationale, eventType, payload } = req.body ?? {};
+  if (!eventType || !payload) {
+    res.status(400).json({ error: "eventType and payload are required" });
+    return;
+  }
+  const result = computeConsistencyScore(rationale ?? null, String(eventType), payload as object);
+  res.json({
+    consistencyScore: result.score,
+    consistencyReasons: result.reasons,
+    isHighRisk: result.isHighRisk,
+    label: result.score < 0.5 ? "HIGH-RISK" : result.score < 0.75 ? "MARGINAL" : "CONSISTENT",
+  });
+});
+
+router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   if (!verifySentinelKey(req)) {
     res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
     return;
@@ -98,14 +115,20 @@ router.post("/v1/log", async (req, res): Promise<void> => {
     "Audit log created",
   );
 
-  // Seal the Merkle block when it fills up (every BLOCK_SIZE entries)
   const newCount = currentCount + 1;
+
+  // Seal the Merkle block when it fills up (every BLOCK_SIZE entries)
   if (newCount % BLOCK_SIZE === 0) {
     const completedBlockIndex = Math.floor((newCount - 1) / BLOCK_SIZE);
     sealMerkleBlock(completedBlockIndex).catch((err) => {
       req.log.error({ err, blockIndex: completedBlockIndex }, "Failed to seal Merkle block");
     });
   }
+
+  // Seal a cold-storage archive block every 10,000 entries
+  checkAndSealArchive(newCount).catch((err) => {
+    req.log.error({ err }, "Failed to check/seal archive block");
+  });
 
   const logData = rowToLog(inserted);
   broadcastLog(logData as unknown as Record<string, unknown>);
@@ -256,6 +279,8 @@ router.get("/v1/stats", async (_req, res): Promise<void> => {
     eventTypeCountsMap[row.eventType] = Number(row.cnt);
   }
 
+  const rateLimitStats = getRateLimitStats();
+
   res.json({
     totalLogs: Number(totalLogs),
     totalAgents: Number(totalAgents),
@@ -264,6 +289,8 @@ router.get("/v1/stats", async (_req, res): Promise<void> => {
     eventTypeCounts: eventTypeCountsMap,
     recentActivity: recentRows.map(rowToLog),
     integrityOk: integrityStatus.ok,
+    globalRequestsLastMinute: rateLimitStats.globalRequestsLastMinute,
+    trackedAgents: rateLimitStats.trackedAgents,
   });
 });
 

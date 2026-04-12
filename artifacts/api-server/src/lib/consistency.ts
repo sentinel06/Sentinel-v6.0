@@ -86,6 +86,26 @@ function extractPayloadAction(payload: object): string | null {
   return null;
 }
 
+/**
+ * Determine if a raw action string (which may be snake_case, kebab-case, or camelCase)
+ * maps to one of our known delete or write verb sets.
+ *
+ * Examples: "delete_file", "remove-record", "deleteUser" → delete verbs
+ *           "create_invoice", "writeFile" → write verbs
+ */
+function classifyAction(raw: string): { isDelete: boolean; isWrite: boolean } {
+  // Split on non-alpha boundaries (_, -, camelCase transitions) and check each segment
+  const segments = raw
+    .replace(/([a-z])([A-Z])/g, "$1_$2") // camelCase → snake_case
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+
+  const isDelete = segments.some((s) => ACTION_DELETE_EVENTS.has(s));
+  const isWrite = segments.some((s) => ACTION_WRITE_EVENTS.has(s));
+  return { isDelete, isWrite };
+}
+
 // ── Main scoring function ──────────────────────────────────────────────────
 
 export function computeConsistencyScore(
@@ -105,13 +125,11 @@ export function computeConsistencyScore(
   const payloadStr = JSON.stringify(payload);
 
   // ── Check 1: Read-only intent vs write/create/update/delete action ──────
-  const isWriteAction =
-    ACTION_WRITE_EVENTS.has(normalizedEvent) ||
-    (payloadAction !== null && ACTION_WRITE_EVENTS.has(payloadAction.replace(/[^a-z]/g, "")));
+  const eventClassification = classifyAction(normalizedEvent);
+  const payloadClassification = payloadAction ? classifyAction(payloadAction) : { isDelete: false, isWrite: false };
 
-  const isDeleteAction =
-    ACTION_DELETE_EVENTS.has(normalizedEvent) ||
-    (payloadAction !== null && ACTION_DELETE_EVENTS.has(payloadAction.replace(/[^a-z]/g, "")));
+  const isWriteAction = eventClassification.isWrite || payloadClassification.isWrite;
+  const isDeleteAction = eventClassification.isDelete || payloadClassification.isDelete;
 
   // Read-only intent contradicts ANY mutation (write OR delete)
   if (INTENT_READONLY.test(rationale) && (isWriteAction || isDeleteAction)) {
@@ -163,13 +181,10 @@ export function computeConsistencyScore(
 
   // ── Check 6: Explicit payload action vs stated intent verb ───────────────
   if (payloadAction) {
-    const isDeletePayloadAction = ACTION_DELETE_EVENTS.has(payloadAction.replace(/[^a-z]/g, ""));
-    const isWritePayloadAction = ACTION_WRITE_EVENTS.has(payloadAction.replace(/[^a-z]/g, ""));
-
-    if (isDeletePayloadAction && INTENT_READONLY.test(rationale)) {
-      // Already covered by Check 1 in combination but add specificity
-      reasons.push(`Explicit payload action "${payloadAction}" is a delete — contradicts read-only rationale`);
-    } else if (isWritePayloadAction && INTENT_NO_DELETE.test(rationale) && isDeletePayloadAction) {
+    if (payloadClassification.isDelete && INTENT_READONLY.test(rationale)) {
+      // Specificity: already covered by Check 1 but add a targeted message
+      reasons.push(`Explicit payload action "${payloadAction}" is a delete operation — contradicts read-only rationale`);
+    } else if (payloadClassification.isDelete && INTENT_NO_DELETE.test(rationale)) {
       reasons.push(`Explicit payload action "${payloadAction}" contradicts no-delete rationale`);
     }
   }

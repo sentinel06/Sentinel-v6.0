@@ -97,12 +97,19 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Initialize liveLogs with recent activity when stats loads
+  // Initialize liveLogs with recent activity when stats loads.
+  // Deduplicate by ID so WebSocket messages and the initial fetch don't collide.
   useEffect(() => {
-    if (stats?.recentActivity && liveLogs.length === 0) {
-      setLiveLogs(stats.recentActivity);
+    if (stats?.recentActivity) {
+      setLiveLogs((prev) => {
+        const existing = new Map(prev.map((l) => [l.id, l]));
+        for (const log of stats.recentActivity as AuditLogWithConsistency[]) {
+          if (!existing.has(log.id)) existing.set(log.id, log);
+        }
+        return Array.from(existing.values()).slice(0, 50);
+      });
     }
-  }, [stats, liveLogs.length]);
+  }, [stats]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
