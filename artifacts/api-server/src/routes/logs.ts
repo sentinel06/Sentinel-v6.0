@@ -1,0 +1,325 @@
+import { Router, type IRouter } from "express";
+import { eq, desc, asc, and, gte, lte, count, sql } from "drizzle-orm";
+import { db, auditLogsTable } from "@workspace/db";
+import {
+  CreateAuditLogBody,
+  GetAuditLogsQueryParams,
+  GetAuditLogParams,
+  GetTraceParams,
+  ExportComplianceReportQueryParams,
+} from "@workspace/api-zod";
+import { getLastHash, computeHash, detectAnomaly } from "../lib/hash";
+import { verifyHashChain } from "../lib/integrity";
+import { broadcastLog } from "../lib/ws";
+
+const router: IRouter = Router();
+
+function rowToLog(row: typeof auditLogsTable.$inferSelect) {
+  return {
+    id: row.id,
+    timestamp: row.timestamp.toISOString(),
+    agentId: row.agentId,
+    traceId: row.traceId,
+    eventType: row.eventType,
+    payload: row.payload,
+    rationale: row.rationale,
+    currentHash: row.currentHash,
+    previousHash: row.previousHash,
+    isAnomalous: row.isAnomalous,
+    anomalyReason: row.anomalyReason,
+  };
+}
+
+function verifySentinelKey(req: any): boolean {
+  const key = req.headers["x-sentinel-key"];
+  const expected = process.env["SENTINEL_KEY"];
+  if (!expected) return true;
+  return key === expected;
+}
+
+router.post("/v1/log", async (req, res): Promise<void> => {
+  if (!verifySentinelKey(req)) {
+    res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
+    return;
+  }
+
+  const parsed = CreateAuditLogBody.safeParse(req.body);
+  if (!parsed.success) {
+    req.log.warn({ errors: parsed.error.message }, "Invalid audit log body");
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { agentId, traceId, eventType, payload, rationale } = parsed.data;
+  const timestamp = new Date();
+  const previousHash = await getLastHash();
+  const currentHash = computeHash(
+    timestamp.toISOString(),
+    agentId,
+    payload as object,
+    previousHash,
+  );
+
+  const anomaly = detectAnomaly(eventType, rationale);
+
+  const [inserted] = await db
+    .insert(auditLogsTable)
+    .values({
+      timestamp,
+      agentId,
+      traceId,
+      eventType,
+      payload,
+      rationale: rationale ?? null,
+      currentHash,
+      previousHash,
+      isAnomalous: anomaly.isAnomalous,
+      anomalyReason: anomaly.anomalyReason,
+    })
+    .returning();
+
+  req.log.info({ logId: inserted.id, agentId, eventType, traceId }, "Audit log created");
+  const logData = rowToLog(inserted);
+  broadcastLog(logData as unknown as Record<string, unknown>);
+  res.status(201).json(logData);
+});
+
+router.get("/v1/logs", async (req, res): Promise<void> => {
+  const parsed = GetAuditLogsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const {
+    agentId,
+    traceId,
+    eventType,
+    startTime,
+    endTime,
+    limit = 50,
+    offset = 0,
+    anomaliesOnly,
+  } = parsed.data;
+
+  const conditions = [];
+  if (agentId) conditions.push(eq(auditLogsTable.agentId, agentId));
+  if (traceId) conditions.push(eq(auditLogsTable.traceId, traceId));
+  if (eventType) conditions.push(eq(auditLogsTable.eventType, eventType));
+  if (startTime) conditions.push(gte(auditLogsTable.timestamp, new Date(startTime)));
+  if (endTime) conditions.push(lte(auditLogsTable.timestamp, new Date(endTime)));
+  if (anomaliesOnly) conditions.push(eq(auditLogsTable.isAnomalous, true));
+
+  const effectiveLimit = Math.min(limit ?? 50, 200);
+  const effectiveOffset = offset ?? 0;
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rows, [{ value: totalCount }]] = await Promise.all([
+    db
+      .select()
+      .from(auditLogsTable)
+      .where(where)
+      .orderBy(desc(auditLogsTable.timestamp))
+      .limit(effectiveLimit)
+      .offset(effectiveOffset),
+    db
+      .select({ value: count() })
+      .from(auditLogsTable)
+      .where(where),
+  ]);
+
+  res.json({
+    logs: rows.map(rowToLog),
+    total: Number(totalCount),
+    limit: effectiveLimit,
+    offset: effectiveOffset,
+  });
+});
+
+router.get("/v1/logs/:id", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const parsed = GetAuditLogParams.safeParse({ id: raw });
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(auditLogsTable)
+    .where(eq(auditLogsTable.id, parsed.data.id));
+
+  if (!row) {
+    res.status(404).json({ error: "Audit log entry not found" });
+    return;
+  }
+
+  res.json(rowToLog(row));
+});
+
+router.get("/v1/traces/:traceId", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.traceId) ? req.params.traceId[0] : req.params.traceId;
+  const parsed = GetTraceParams.safeParse({ traceId: raw });
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(auditLogsTable)
+    .where(eq(auditLogsTable.traceId, parsed.data.traceId))
+    .orderBy(asc(auditLogsTable.timestamp));
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "Trace not found" });
+    return;
+  }
+
+  const hasAnomalies = rows.some((r) => r.isAnomalous);
+  const hasError = rows.some((r) => r.eventType === "Error");
+  const hasResult = rows.some((r) => r.eventType === "Result");
+  const status = hasError ? "error" : hasResult ? "success" : "in-progress";
+
+  res.json({
+    traceId: parsed.data.traceId,
+    agentId: rows[0].agentId,
+    startTime: rows[0].timestamp.toISOString(),
+    endTime: rows[rows.length - 1].timestamp.toISOString(),
+    status,
+    events: rows.map(rowToLog),
+    totalEvents: rows.length,
+    hasAnomalies,
+  });
+});
+
+router.get("/v1/stats", async (_req, res): Promise<void> => {
+  const [
+    [{ totalLogs }],
+    [{ totalAgents }],
+    [{ totalTraces }],
+    [{ anomalyCount }],
+    eventTypeCounts,
+    recentRows,
+    integrityStatus,
+  ] = await Promise.all([
+    db.select({ totalLogs: count() }).from(auditLogsTable),
+    db.select({ totalAgents: sql<number>`count(distinct ${auditLogsTable.agentId})` }).from(auditLogsTable),
+    db.select({ totalTraces: sql<number>`count(distinct ${auditLogsTable.traceId})` }).from(auditLogsTable),
+    db.select({ anomalyCount: count() }).from(auditLogsTable).where(eq(auditLogsTable.isAnomalous, true)),
+    db
+      .select({
+        eventType: auditLogsTable.eventType,
+        cnt: count(),
+      })
+      .from(auditLogsTable)
+      .groupBy(auditLogsTable.eventType),
+    db
+      .select()
+      .from(auditLogsTable)
+      .orderBy(desc(auditLogsTable.timestamp))
+      .limit(10),
+    verifyHashChain(),
+  ]);
+
+  const eventTypeCountsMap: Record<string, number> = {};
+  for (const row of eventTypeCounts) {
+    eventTypeCountsMap[row.eventType] = Number(row.cnt);
+  }
+
+  res.json({
+    totalLogs: Number(totalLogs),
+    totalAgents: Number(totalAgents),
+    totalTraces: Number(totalTraces),
+    anomalyCount: Number(anomalyCount),
+    eventTypeCounts: eventTypeCountsMap,
+    recentActivity: recentRows.map(rowToLog),
+    integrityOk: integrityStatus.ok,
+  });
+});
+
+router.get("/v1/agents", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      agentId: auditLogsTable.agentId,
+      totalEvents: count(),
+      lastSeen: sql<Date>`max(${auditLogsTable.timestamp})`,
+      anomalyCount: sql<number>`count(*) filter (where ${auditLogsTable.isAnomalous} = true)`,
+    })
+    .from(auditLogsTable)
+    .groupBy(auditLogsTable.agentId)
+    .orderBy(desc(sql`max(${auditLogsTable.timestamp})`));
+
+  res.json({
+    agents: rows.map((r) => ({
+      agentId: r.agentId,
+      totalEvents: Number(r.totalEvents),
+      lastSeen: new Date(r.lastSeen).toISOString(),
+      anomalyCount: Number(r.anomalyCount),
+    })),
+  });
+});
+
+router.get("/v1/compliance/export", async (req, res): Promise<void> => {
+  const parsed = ExportComplianceReportQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { agentId, startTime, endTime } = parsed.data;
+
+  const conditions = [
+    eq(auditLogsTable.agentId, agentId),
+    gte(auditLogsTable.timestamp, new Date(startTime)),
+    lte(auditLogsTable.timestamp, new Date(endTime)),
+  ];
+
+  const [rows, [{ anomalyCount }], integrityStatus] = await Promise.all([
+    db
+      .select()
+      .from(auditLogsTable)
+      .where(and(...conditions))
+      .orderBy(asc(auditLogsTable.timestamp)),
+    db
+      .select({ anomalyCount: count() })
+      .from(auditLogsTable)
+      .where(and(...conditions, eq(auditLogsTable.isAnomalous, true))),
+    verifyHashChain(),
+  ]);
+
+  res.json({
+    agentId,
+    startTime,
+    endTime,
+    generatedAt: new Date().toISOString(),
+    totalEvents: rows.length,
+    anomalyCount: Number(anomalyCount),
+    integrityVerified: integrityStatus.ok,
+    logs: rows.map(rowToLog),
+  });
+});
+
+router.get("/v1/integrity/status", async (_req, res): Promise<void> => {
+  const status = await verifyHashChain();
+  res.json({
+    ...status,
+    lastVerifiedAt: new Date().toISOString(),
+  });
+});
+
+router.post("/v1/integrity/verify", async (req, res): Promise<void> => {
+  if (!verifySentinelKey(req)) {
+    res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
+    return;
+  }
+
+  const status = await verifyHashChain();
+  res.json({
+    ...status,
+    lastVerifiedAt: new Date().toISOString(),
+  });
+});
+
+export default router;

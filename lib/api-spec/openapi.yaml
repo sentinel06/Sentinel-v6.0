@@ -3,13 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Agent-Sentinel Immutable Audit Ledger API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: logs
+    description: Audit log operations
+  - name: compliance
+    description: Compliance and reporting operations
+  - name: integrity
+    description: Hash chain integrity operations
 paths:
   /healthz:
     get:
@@ -24,7 +30,243 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /v1/log:
+    post:
+      operationId: createAuditLog
+      tags: [logs]
+      summary: Submit an audit log entry
+      description: Receives an audit packet from an AI agent and stores it with hash chaining
+      security:
+        - SentinelKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAuditLogBody"
+      responses:
+        "201":
+          description: Log entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing Sentinel-Key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/logs:
+    get:
+      operationId: getAuditLogs
+      tags: [logs]
+      summary: List audit logs
+      description: Returns paginated audit log entries, optionally filtered
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: Filter by agent ID
+        - name: traceId
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: Filter by trace ID
+        - name: eventType
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: Filter by event type (Intent/Action/Result/Error)
+        - name: startTime
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: ISO 8601 start timestamp filter
+        - name: endTime
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: ISO 8601 end timestamp filter
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+          description: Number of results to return (default 50, max 200)
+        - name: offset
+          in: query
+          schema:
+            type: ["integer", "null"]
+          description: Pagination offset
+        - name: anomaliesOnly
+          in: query
+          schema:
+            type: ["boolean", "null"]
+          description: If true, only return flagged anomalous entries
+      responses:
+        "200":
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogList"
+
+  /v1/logs/{id}:
+    get:
+      operationId: getAuditLog
+      tags: [logs]
+      summary: Get a single audit log entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit log entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLog"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/traces/{traceId}:
+    get:
+      operationId: getTrace
+      tags: [logs]
+      summary: Get all logs for a trace
+      description: Returns all audit log entries grouped into a single trace lifecycle
+      parameters:
+        - name: traceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All log entries for the trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceView"
+
+  /v1/stats:
+    get:
+      operationId: getStats
+      tags: [logs]
+      summary: Dashboard statistics
+      description: Returns aggregate counts, event type breakdown, and active agents
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /v1/agents:
+    get:
+      operationId: getAgents
+      tags: [logs]
+      summary: List unique agents
+      description: Returns all distinct agent IDs that have logged events
+      responses:
+        "200":
+          description: List of agent IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentList"
+
+  /v1/compliance/export:
+    get:
+      operationId: exportComplianceReport
+      tags: [compliance]
+      summary: Export compliance report
+      description: Generates a compliance report for a specific agent within a time range
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ISO 8601 start timestamp
+        - name: endTime
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ISO 8601 end timestamp
+        - name: format
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: Export format - csv or json (default json)
+      responses:
+        "200":
+          description: Compliance report data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceReport"
+
+  /v1/integrity/status:
+    get:
+      operationId: getIntegrityStatus
+      tags: [integrity]
+      summary: Get hash chain integrity status
+      description: Returns the current integrity verification status of the hash chain
+      responses:
+        "200":
+          description: Integrity status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrityStatus"
+
+  /v1/integrity/verify:
+    post:
+      operationId: verifyIntegrity
+      tags: [integrity]
+      summary: Trigger hash chain verification
+      description: Manually triggers a full hash chain verification
+      security:
+        - SentinelKey: []
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrityStatus"
+
 components:
+  securitySchemes:
+    SentinelKey:
+      type: apiKey
+      in: header
+      name: X-Sentinel-Key
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +276,238 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID primary key
+        timestamp:
+          type: string
+          description: UTC timestamp of the event
+        agentId:
+          type: string
+          description: Identifier of the AI agent
+        traceId:
+          type: string
+          description: Groups related events into a single decision trace
+        eventType:
+          type: string
+          description: "One of: Intent, Action, Result, Error"
+        payload:
+          type: object
+          description: Raw event data (JSONB)
+          additionalProperties: true
+        rationale:
+          type: ["string", "null"]
+          description: Chain-of-thought rationale for the action
+        currentHash:
+          type: string
+          description: SHA-256 hash of this entry
+        previousHash:
+          type: ["string", "null"]
+          description: Hash of the previous entry in chain
+        isAnomalous:
+          type: boolean
+          description: Whether this entry was flagged as anomalous
+        anomalyReason:
+          type: ["string", "null"]
+          description: Reason this entry was flagged as anomalous
+      required:
+        - id
+        - timestamp
+        - agentId
+        - traceId
+        - eventType
+        - payload
+        - currentHash
+        - isAnomalous
+
+    CreateAuditLogBody:
+      type: object
+      properties:
+        agentId:
+          type: string
+        traceId:
+          type: string
+        eventType:
+          type: string
+          description: "One of: Intent, Action, Result, Error"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: ["string", "null"]
+      required:
+        - agentId
+        - traceId
+        - eventType
+        - payload
+
+    AuditLogList:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - logs
+        - total
+        - limit
+        - offset
+
+    TraceView:
+      type: object
+      properties:
+        traceId:
+          type: string
+        agentId:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: ["string", "null"]
+        status:
+          type: string
+          description: "derived: success, error, in-progress"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        totalEvents:
+          type: integer
+        hasAnomalies:
+          type: boolean
+      required:
+        - traceId
+        - agentId
+        - startTime
+        - status
+        - events
+        - totalEvents
+        - hasAnomalies
+
+    DashboardStats:
+      type: object
+      properties:
+        totalLogs:
+          type: integer
+        totalAgents:
+          type: integer
+        totalTraces:
+          type: integer
+        anomalyCount:
+          type: integer
+        eventTypeCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        integrityOk:
+          type: boolean
+      required:
+        - totalLogs
+        - totalAgents
+        - totalTraces
+        - anomalyCount
+        - eventTypeCounts
+        - recentActivity
+        - integrityOk
+
+    AgentList:
+      type: object
+      properties:
+        agents:
+          type: array
+          items:
+            type: object
+            properties:
+              agentId:
+                type: string
+              totalEvents:
+                type: integer
+              lastSeen:
+                type: string
+              anomalyCount:
+                type: integer
+            required:
+              - agentId
+              - totalEvents
+              - lastSeen
+              - anomalyCount
+      required:
+        - agents
+
+    ComplianceReport:
+      type: object
+      properties:
+        agentId:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        generatedAt:
+          type: string
+        totalEvents:
+          type: integer
+        anomalyCount:
+          type: integer
+        integrityVerified:
+          type: boolean
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+      required:
+        - agentId
+        - startTime
+        - endTime
+        - generatedAt
+        - totalEvents
+        - anomalyCount
+        - integrityVerified
+        - logs
+
+    IntegrityStatus:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        lastVerifiedAt:
+          type: ["string", "null"]
+        totalChecked:
+          type: integer
+        tamperDetected:
+          type: boolean
+        tamperedEntries:
+          type: array
+          items:
+            type: string
+          description: IDs of entries where hash chain is broken
+        message:
+          type: string
+      required:
+        - ok
+        - totalChecked
+        - tamperDetected
+        - tamperedEntries
+        - message
