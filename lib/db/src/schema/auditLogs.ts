@@ -75,3 +75,26 @@ export const merkleCheckpointsTable = pgTable(
 );
 
 export type MerkleCheckpoint = typeof merkleCheckpointsTable.$inferSelect;
+
+// Cold storage archive seal: records every 10,000-row block sealed to disk
+export const archiveSealsTable = pgTable(
+  "archive_seals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    blockIndex: integer("block_index").notNull().unique(),
+    blockStart: integer("block_start").notNull(),
+    blockEnd: integer("block_end").notNull(),
+    entryCount: integer("entry_count").notNull(),
+    // SHA-256 over all concatenated currentHash values in the block
+    digest: text("digest").notNull(),
+    // HMAC-SHA256(digest, SESSION_SECRET) — proves the export wasn't tampered
+    signature: text("signature").notNull(),
+    archivePath: text("archive_path").notNull(),
+    sealedAt: timestamp("sealed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("archive_seals_block_index_idx").on(table.blockIndex),
+  ],
+);
+
+export type ArchiveSeal = typeof archiveSealsTable.$inferSelect;
