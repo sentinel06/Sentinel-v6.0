@@ -9,8 +9,9 @@ import {
   ExportComplianceReportQueryParams,
 } from "@workspace/api-zod";
 import { getLastHash, computeHash, detectAnomaly } from "../lib/hash";
-import { verifyHashChain } from "../lib/integrity";
+import { verifyHashChain, sealMerkleBlock } from "../lib/integrity";
 import { broadcastLog } from "../lib/ws";
+import { BLOCK_SIZE } from "../lib/merkle";
 
 const router: IRouter = Router();
 
@@ -52,6 +53,11 @@ router.post("/v1/log", async (req, res): Promise<void> => {
 
   const { agentId, traceId, eventType, payload, rationale } = parsed.data;
   const timestamp = new Date();
+
+  // Count rows before insert to determine block position (append-only table)
+  const [{ totalRows }] = await db.select({ totalRows: count() }).from(auditLogsTable);
+  const currentCount = Number(totalRows);
+
   const previousHash = await getLastHash();
   const currentHash = computeHash(
     timestamp.toISOString(),
@@ -79,6 +85,16 @@ router.post("/v1/log", async (req, res): Promise<void> => {
     .returning();
 
   req.log.info({ logId: inserted.id, agentId, eventType, traceId }, "Audit log created");
+
+  // Seal the Merkle block when it fills up (every BLOCK_SIZE entries)
+  const newCount = currentCount + 1;
+  if (newCount % BLOCK_SIZE === 0) {
+    const completedBlockIndex = Math.floor((newCount - 1) / BLOCK_SIZE);
+    sealMerkleBlock(completedBlockIndex).catch((err) => {
+      req.log.error({ err, blockIndex: completedBlockIndex }, "Failed to seal Merkle block");
+    });
+  }
+
   const logData = rowToLog(inserted);
   broadcastLog(logData as unknown as Record<string, unknown>);
   res.status(201).json(logData);

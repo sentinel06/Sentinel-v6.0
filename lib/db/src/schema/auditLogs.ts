@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, jsonb, boolean, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -47,3 +47,22 @@ export const integrityCheckTable = pgTable("integrity_checks", {
 });
 
 export type IntegrityCheck = typeof integrityCheckTable.$inferSelect;
+
+// Merkle checkpoint: one root hash per block of BLOCK_SIZE entries
+export const merkleCheckpointsTable = pgTable(
+  "merkle_checkpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    blockIndex: integer("block_index").notNull().unique(),
+    blockStart: integer("block_start").notNull(),
+    blockEnd: integer("block_end").notNull(),
+    entryCount: integer("entry_count").notNull(),
+    merkleRoot: text("merkle_root").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("merkle_checkpoints_block_index_idx").on(table.blockIndex),
+  ],
+);
+
+export type MerkleCheckpoint = typeof merkleCheckpointsTable.$inferSelect;
