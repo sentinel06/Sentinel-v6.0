@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, boolean, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, jsonb, boolean, integer, real, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,18 +10,25 @@ export const auditLogsTable = pgTable(
     agentId: text("agent_id").notNull(),
     traceId: text("trace_id").notNull(),
     eventType: text("event_type").notNull(),
+    // Long-form text, uncapped — PostgreSQL TEXT has no length limit
     payload: jsonb("payload").notNull(),
     rationale: text("rationale"),
     currentHash: text("current_hash").notNull(),
     previousHash: text("previous_hash"),
     isAnomalous: boolean("is_anomalous").notNull().default(false),
     anomalyReason: text("anomaly_reason"),
+    // Consistency Score: 0.0 (hallucination) → 1.0 (perfect intent-action match)
+    // Computed at INSERT time; never updated (immutability trigger compliant)
+    consistencyScore: real("consistency_score").notNull().default(1.0),
+    // Structured list of deductions that reduced the score
+    consistencyReasons: jsonb("consistency_reasons").notNull().default([]),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
     index("audit_logs_trace_id_idx").on(table.traceId),
     index("audit_logs_timestamp_idx").on(table.timestamp),
     index("audit_logs_is_anomalous_idx").on(table.isAnomalous),
+    index("audit_logs_consistency_score_idx").on(table.consistencyScore),
   ],
 );
 
@@ -32,6 +39,8 @@ export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({
   previousHash: true,
   isAnomalous: true,
   anomalyReason: true,
+  consistencyScore: true,
+  consistencyReasons: true,
 });
 
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;

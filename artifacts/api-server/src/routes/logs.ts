@@ -12,6 +12,7 @@ import { getLastHash, computeHash, detectAnomaly } from "../lib/hash";
 import { verifyHashChain, sealMerkleBlock } from "../lib/integrity";
 import { broadcastLog } from "../lib/ws";
 import { BLOCK_SIZE } from "../lib/merkle";
+import { computeConsistencyScore } from "../lib/consistency";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,8 @@ function rowToLog(row: typeof auditLogsTable.$inferSelect) {
     previousHash: row.previousHash,
     isAnomalous: row.isAnomalous,
     anomalyReason: row.anomalyReason,
+    consistencyScore: row.consistencyScore,
+    consistencyReasons: row.consistencyReasons,
   };
 }
 
@@ -66,7 +69,11 @@ router.post("/v1/log", async (req, res): Promise<void> => {
     previousHash,
   );
 
-  const anomaly = detectAnomaly(eventType, rationale);
+  // Consistency score: intent (rationale) vs action (eventType + payload)
+  const consistency = computeConsistencyScore(rationale, eventType, payload as object);
+
+  // Anomaly detection now incorporates consistency score — low score → High-Risk flag
+  const anomaly = detectAnomaly(eventType, rationale, consistency.score, consistency.reasons);
 
   const [inserted] = await db
     .insert(auditLogsTable)
@@ -81,10 +88,15 @@ router.post("/v1/log", async (req, res): Promise<void> => {
       previousHash,
       isAnomalous: anomaly.isAnomalous,
       anomalyReason: anomaly.anomalyReason,
+      consistencyScore: consistency.score,
+      consistencyReasons: consistency.reasons,
     })
     .returning();
 
-  req.log.info({ logId: inserted.id, agentId, eventType, traceId }, "Audit log created");
+  req.log.info(
+    { logId: inserted.id, agentId, eventType, traceId, consistencyScore: consistency.score },
+    "Audit log created",
+  );
 
   // Seal the Merkle block when it fills up (every BLOCK_SIZE entries)
   const newCount = currentCount + 1;

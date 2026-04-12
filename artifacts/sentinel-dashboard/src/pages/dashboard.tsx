@@ -9,7 +9,8 @@ import {
   ShieldCheck, 
   ShieldAlert,
   ArrowRight,
-  Database
+  Database,
+  BrainCircuit
 } from "lucide-react";
 import { 
   useGetStats, 
@@ -17,9 +18,30 @@ import {
 } from "@workspace/api-client-react";
 import { isAnomalous, formatTime, truncateHash } from "@/lib/audit-utils";
 
+type AuditLogWithConsistency = AuditLog & {
+  consistencyScore?: number;
+  consistencyReasons?: string[];
+};
+
+function ConsistencyBadge({ score }: { score: number | undefined }) {
+  if (score === undefined || score === null) return null;
+  const pct = Math.round(score * 100);
+  const color =
+    pct >= 80 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
+    pct >= 50 ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/20" :
+                "text-destructive bg-destructive/10 border-destructive/20";
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${color}`}
+      title={`Consistency score: ${pct}% — how closely the agent's stated intent matches its actual action`}>
+      <BrainCircuit className="w-2.5 h-2.5" />
+      {pct}%
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const { data: stats, isLoading } = useGetStats({ query: { refetchInterval: 10000 } });
-  const [liveLogs, setLiveLogs] = useState<AuditLog[]>([]);
+  const [liveLogs, setLiveLogs] = useState<AuditLogWithConsistency[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -160,19 +182,24 @@ export default function DashboardPage() {
               <div className="divide-y divide-border/40">
                 {liveLogs.map((log) => {
                   const anomalous = log.isAnomalous || isAnomalous(log.eventType, log.rationale);
+                  const score = log.consistencyScore;
+                  const isHallucination = score !== undefined && score < 0.5;
+                  const borderColor = isHallucination
+                    ? "border-l-destructive bg-destructive/5"
+                    : anomalous
+                    ? "border-l-accent bg-accent/5"
+                    : "border-l-transparent";
                   return (
                     <div 
                       key={log.id} 
-                      className={`p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-muted/30 ${
-                        anomalous ? "bg-accent/5 border-l-2 border-l-accent" : "border-l-2 border-l-transparent"
-                      }`}
+                      className={`p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-muted/30 border-l-2 ${borderColor}`}
                     >
                       <div className="text-muted-foreground w-24 shrink-0 mt-0.5 text-xs">
                         {formatTime(log.timestamp)}
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
                             log.eventType === 'Error' ? 'bg-destructive/20 text-destructive' :
                             log.eventType === 'Intent' ? 'bg-blue-500/20 text-blue-400' :
@@ -181,22 +208,30 @@ export default function DashboardPage() {
                           }`}>
                             {log.eventType}
                           </span>
+                          <ConsistencyBadge score={score} />
                           <span className="text-xs text-muted-foreground truncate" title={log.agentId}>
-                            Agent: {log.agentId.substring(0, 8)}...
+                            {log.agentId.substring(0, 8)}…
                           </span>
-                          <ArrowRight className="w-3 h-3 text-muted-foreground/50 mx-1" />
+                          <ArrowRight className="w-3 h-3 text-muted-foreground/50" />
                           <span className="text-xs text-muted-foreground truncate" title={log.traceId}>
-                            Trace: {log.traceId.substring(0, 8)}...
+                            {log.traceId.substring(0, 8)}…
                           </span>
                         </div>
                         
                         {log.rationale && (
-                          <div className={`mt-1.5 text-xs leading-relaxed ${anomalous ? 'text-accent/90' : 'text-foreground/80'}`}>
+                          <div className={`mt-1.5 text-xs leading-relaxed ${isHallucination ? 'text-destructive/80' : anomalous ? 'text-accent/90' : 'text-foreground/80'}`}>
                             {log.rationale}
                           </div>
                         )}
+
+                        {isHallucination && log.consistencyReasons && (log.consistencyReasons as string[]).length > 0 && (
+                          <div className="mt-2 text-[10px] text-destructive bg-destructive/10 px-2 py-1.5 rounded flex items-start gap-1.5 border border-destructive/20">
+                            <BrainCircuit className="w-3 h-3 mt-0.5 shrink-0" />
+                            <span>{(log.consistencyReasons as string[])[0]}</span>
+                          </div>
+                        )}
                         
-                        {anomalous && log.anomalyReason && (
+                        {!isHallucination && anomalous && log.anomalyReason && (
                           <div className="mt-2 text-[10px] text-accent bg-accent/10 px-2 py-1 rounded inline-flex items-center gap-1 border border-accent/20">
                             <AlertTriangle className="w-3 h-3" />
                             {log.anomalyReason}

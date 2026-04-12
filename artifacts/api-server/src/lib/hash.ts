@@ -31,12 +31,39 @@ const HIGH_RISK_KEYWORDS = [
   "permission",
 ];
 
+export interface AnomalyResult {
+  isAnomalous: boolean;
+  anomalyReason: string | null;
+  severity: "none" | "medium" | "high";
+}
+
+/**
+ * Detects anomalies from event type and rationale keywords.
+ * Consistency-based anomalies are merged in separately at the call site
+ * so the two systems remain independently testable.
+ */
 export function detectAnomaly(
   eventType: string,
   rationale: string | null | undefined,
-): { isAnomalous: boolean; anomalyReason: string | null } {
+  consistencyScore?: number,
+  consistencyReasons?: string[],
+): AnomalyResult {
+  // High-Risk: hallucination detected (intent ≠ action)
+  if (consistencyScore !== undefined && consistencyScore < 0.5) {
+    const primary = consistencyReasons?.[0] ?? "Intent-action mismatch detected";
+    return {
+      isAnomalous: true,
+      anomalyReason: `HIGH-RISK: Consistency score ${Math.round(consistencyScore * 100)}% — ${primary}`,
+      severity: "high",
+    };
+  }
+
   if (eventType === "Error") {
-    return { isAnomalous: true, anomalyReason: "Event type is Error" };
+    return {
+      isAnomalous: true,
+      anomalyReason: "Event type is Error",
+      severity: "medium",
+    };
   }
 
   if (rationale) {
@@ -46,9 +73,19 @@ export function detectAnomaly(
       return {
         isAnomalous: true,
         anomalyReason: `High-risk keyword detected in rationale: "${matched}"`,
+        severity: "medium",
       };
     }
   }
 
-  return { isAnomalous: false, anomalyReason: null };
+  // Medium-risk: marginal consistency (0.5 ≤ score < 0.75)
+  if (consistencyScore !== undefined && consistencyScore < 0.75 && consistencyScore >= 0.5) {
+    return {
+      isAnomalous: true,
+      anomalyReason: `Consistency score ${Math.round(consistencyScore * 100)}% — marginal intent-action alignment`,
+      severity: "medium",
+    };
+  }
+
+  return { isAnomalous: false, anomalyReason: null, severity: "none" };
 }
