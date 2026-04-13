@@ -97,7 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="w-full md:w-64 border-r border-border bg-card flex flex-col flex-shrink-0 relative z-10">
         <div className="h-16 flex items-center px-6 border-b border-border">
-          <div className="w-2 h-2 rounded-full bg-primary mr-3 shadow-[0_0_8px_rgba(14,165,233,0.8)]" />
+          <div className="w-2 h-2 rounded-full bg-primary mr-3 shadow-[0_0_6px_rgba(64,181,149,0.35)]" />
           <h1 className="font-mono font-bold tracking-tight text-foreground">AGENT-SENTINEL</h1>
         </div>
 

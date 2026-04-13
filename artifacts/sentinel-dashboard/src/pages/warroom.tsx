@@ -232,7 +232,7 @@ export default function WarRoomPage() {
             onClick={toggleKill}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-mono text-sm font-bold transition-all ${
               killActive
-                ? "bg-destructive text-white border-destructive hover:bg-destructive/80 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                ? "bg-destructive text-white border-destructive hover:bg-destructive/80 shadow-[0_0_10px_rgba(217,97,97,0.22)]"
                 : "bg-card border-destructive/50 text-destructive hover:bg-destructive/10"
             }`}
           >

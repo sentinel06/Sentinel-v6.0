@@ -186,20 +186,20 @@ export default function DashboardPage() {
             {liveLogs.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground font-mono text-sm">Waiting for incoming packets...</div>
             ) : (
-              <div className="divide-y divide-border/40">
+              <div className="divide-y divide-[#2C3136]">
                 {liveLogs.map((log) => {
                   const anomalous = log.isAnomalous || isAnomalous(log.eventType, log.rationale);
                   const score = log.consistencyScore;
                   const isHallucination = score !== undefined && score < 0.5;
                   const borderColor = isHallucination
-                    ? "border-l-destructive bg-destructive/5"
+                    ? "border-l-[#D96161]"
                     : anomalous
-                    ? "border-l-accent bg-accent/5"
-                    : "border-l-transparent";
+                    ? "border-l-[#EBC06D]"
+                    : "border-l-[#2C3136]";
                   return (
                     <div 
                       key={log.id} 
-                      className={`p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-muted/30 border-l-2 ${borderColor}`}
+                      className={`p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-[#2C3136]/40 border-l-2 ${borderColor}`}
                     >
                       <div className="text-muted-foreground w-24 shrink-0 mt-0.5 text-xs">
                         {formatTime(log.timestamp)}
