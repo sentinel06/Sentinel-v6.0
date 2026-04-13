@@ -135,8 +135,11 @@ export function analyzeToolCallDrift(
 export function buildDriftReportFromLogs(
   logs: Array<{ eventType: string }>,
 ): DriftReport {
+  // DB returns rows in DESC order (newest first). Reverse so that index 0 = oldest
+  // (baseline history) and the last DETECTION_WINDOW entries = most recent calls.
   const eventTypes = logs
     .slice(0, BASELINE_WINDOW)
-    .map((l) => l.eventType);
+    .map((l) => l.eventType)
+    .reverse();
   return analyzeToolCallDrift(eventTypes);
 }

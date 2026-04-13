@@ -18,6 +18,9 @@ import { checkAndSealArchive } from "../lib/archiver";
 import {
   recordConsistencyScore,
   isAgentRevoked,
+  isDriftLocked,
+  lockAgentForDrift,
+  getDriftLockInfo,
 } from "../lib/governance";
 import { signWithMLDSA, getQuantumIntegrityManifest } from "../crypto/pqc";
 import { buildDriftReportFromLogs } from "../lib/driftDetector";
@@ -96,6 +99,19 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
     res.status(403).json({
       error: "Agent revoked",
       reason: "This agent's session has been revoked. Contact your administrator.",
+    });
+    return;
+  }
+
+  // 1b. Cognitive drift lockout — triggered when CRITICAL_DRIFT was detected on a prior call
+  if (isDriftLocked(agentId)) {
+    const lockInfo = getDriftLockInfo(agentId);
+    res.status(403).json({
+      error: "DRIFT_LOCKOUT",
+      reason: lockInfo?.reason ?? "Agent locked due to critical behavioral drift.",
+      lockedAt: lockInfo?.lockedAt,
+      driftScore: lockInfo?.driftScore,
+      action: "Contact your administrator or POST /v1/admin/kill-switch to review.",
     });
     return;
   }
@@ -194,6 +210,15 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
     .limit(120);
 
   const driftReport = buildDriftReportFromLogs(recentAgentLogs);
+
+  // Lock the agent on CRITICAL_DRIFT — subsequent calls will receive 403
+  if (driftReport.status === "CRITICAL_DRIFT") {
+    lockAgentForDrift(agentId, driftReport.driftScore);
+    req.log.warn(
+      { agentId, driftScore: driftReport.driftScore, deviatingTypes: driftReport.deviatingTypes },
+      "COGNITIVE DRIFT LOCKOUT activated — agent blocked from further calls",
+    );
+  }
 
   req.log.info(
     { logId: inserted.id, agentId, eventType, traceId, consistencyScore: consistency.score },

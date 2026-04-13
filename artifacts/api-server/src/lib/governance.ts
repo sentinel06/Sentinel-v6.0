@@ -40,6 +40,44 @@ export function getAllSessionHealths(): Map<string, number> {
   return result;
 }
 
+// ── Cognitive Drift Lockout ────────────────────────────────────────────────
+//
+// When the drift detector raises CRITICAL_DRIFT, the agent is locked at the
+// governance layer — identical to a kill-switch but with a different reason
+// code so it appears distinctly in compliance reports.
+
+interface DriftLockEntry {
+  lockedAt: string;
+  driftScore: number;
+  reason: string;
+}
+
+const driftLockedAgents = new Map<string, DriftLockEntry>();
+
+export function lockAgentForDrift(agentId: string, driftScore: number): void {
+  driftLockedAgents.set(agentId, {
+    lockedAt: new Date().toISOString(),
+    driftScore,
+    reason: `CRITICAL_DRIFT: behavioral deviation score ${(driftScore * 100).toFixed(1)}% exceeds threshold`,
+  });
+}
+
+export function isDriftLocked(agentId: string): boolean {
+  return driftLockedAgents.has(agentId);
+}
+
+export function getDriftLockInfo(agentId: string): DriftLockEntry | undefined {
+  return driftLockedAgents.get(agentId);
+}
+
+export function clearDriftLock(agentId: string): void {
+  driftLockedAgents.delete(agentId);
+}
+
+export function getAllDriftLocks(): Record<string, DriftLockEntry> {
+  return Object.fromEntries(driftLockedAgents.entries());
+}
+
 // ── Kill-Switch ────────────────────────────────────────────────────────────
 
 const revokedAgents = new Set<string>();
