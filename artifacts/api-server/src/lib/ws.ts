@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import { Server } from "http";
 import { logger } from "./logger";
+import { onGovernanceEvent } from "./governance";
 
 let wss: WebSocketServer | null = null;
 const clients = new Set<WebSocket>();
@@ -26,16 +27,28 @@ export function setupWebSocket(server: Server): void {
     ws.send(JSON.stringify({ type: "connected", message: "Agent-Sentinel live stream active" }));
   });
 
+  // Relay all governance events (auth requests, kill-switch) to dashboard
+  onGovernanceEvent(({ type, payload }) => {
+    broadcast(type, payload);
+  });
+
   logger.info("WebSocket server initialized at /api/v1/ws");
 }
 
-export function broadcastLog(log: Record<string, unknown>): void {
+function broadcast(type: string, data: object): void {
   if (!wss || clients.size === 0) return;
-
-  const message = JSON.stringify({ type: "log", data: log });
+  const message = JSON.stringify({ type, data });
   for (const client of clients) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   }
+}
+
+export function broadcastLog(log: Record<string, unknown>): void {
+  broadcast("log", log);
+}
+
+export function broadcastGovernanceEvent(type: string, payload: object): void {
+  broadcast(type, payload);
 }

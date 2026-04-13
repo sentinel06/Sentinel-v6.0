@@ -10,18 +10,18 @@ export const auditLogsTable = pgTable(
     agentId: text("agent_id").notNull(),
     traceId: text("trace_id").notNull(),
     eventType: text("event_type").notNull(),
-    // Long-form text, uncapped — PostgreSQL TEXT has no length limit
     payload: jsonb("payload").notNull(),
     rationale: text("rationale"),
     currentHash: text("current_hash").notNull(),
     previousHash: text("previous_hash"),
     isAnomalous: boolean("is_anomalous").notNull().default(false),
     anomalyReason: text("anomaly_reason"),
-    // Consistency Score: 0.0 (hallucination) → 1.0 (perfect intent-action match)
-    // Computed at INSERT time; never updated (immutability trigger compliant)
     consistencyScore: real("consistency_score").notNull().default(1.0),
-    // Structured list of deductions that reduced the score
     consistencyReasons: jsonb("consistency_reasons").notNull().default([]),
+    // Multi-agent orchestration chain fields (EU AI Act Art. 12 — traceability)
+    // Both MUST have defaults — the immutability trigger blocks any UPDATE on this table
+    parentTraceId: text("parent_trace_id").default(null),
+    dependencyChain: jsonb("dependency_chain").notNull().default([]),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
@@ -29,6 +29,7 @@ export const auditLogsTable = pgTable(
     index("audit_logs_timestamp_idx").on(table.timestamp),
     index("audit_logs_is_anomalous_idx").on(table.isAnomalous),
     index("audit_logs_consistency_score_idx").on(table.consistencyScore),
+    index("audit_logs_parent_trace_id_idx").on(table.parentTraceId),
   ],
 );
 
@@ -57,7 +58,6 @@ export const integrityCheckTable = pgTable("integrity_checks", {
 
 export type IntegrityCheck = typeof integrityCheckTable.$inferSelect;
 
-// Merkle checkpoint: one root hash per block of BLOCK_SIZE entries
 export const merkleCheckpointsTable = pgTable(
   "merkle_checkpoints",
   {
@@ -69,14 +69,11 @@ export const merkleCheckpointsTable = pgTable(
     merkleRoot: text("merkle_root").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    index("merkle_checkpoints_block_index_idx").on(table.blockIndex),
-  ],
+  (table) => [index("merkle_checkpoints_block_index_idx").on(table.blockIndex)],
 );
 
 export type MerkleCheckpoint = typeof merkleCheckpointsTable.$inferSelect;
 
-// Cold storage archive seal: records every 10,000-row block sealed to disk
 export const archiveSealsTable = pgTable(
   "archive_seals",
   {
@@ -85,16 +82,73 @@ export const archiveSealsTable = pgTable(
     blockStart: integer("block_start").notNull(),
     blockEnd: integer("block_end").notNull(),
     entryCount: integer("entry_count").notNull(),
-    // SHA-256 over all concatenated currentHash values in the block
     digest: text("digest").notNull(),
-    // HMAC-SHA256(digest, SESSION_SECRET) — proves the export wasn't tampered
     signature: text("signature").notNull(),
     archivePath: text("archive_path").notNull(),
     sealedAt: timestamp("sealed_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    index("archive_seals_block_index_idx").on(table.blockIndex),
-  ],
+  (table) => [index("archive_seals_block_index_idx").on(table.blockIndex)],
 );
 
 export type ArchiveSeal = typeof archiveSealsTable.$inferSelect;
+
+// ── Governed Agent Registry ────────────────────────────────────────────────
+// Each agent must be registered before its logs are accepted (or logs are
+// accepted with an "UNREGISTERED" warning). The registry defines what tools
+// each agent is authorized to use, its risk tier, and spend limits.
+
+export const agentRegistryTable = pgTable(
+  "agent_registry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull().unique(),
+    ownerEmail: text("owner_email").notNull(),
+    // Array of authorized tool/event-type names (jsonb for flexibility)
+    authorizedTools: jsonb("authorized_tools").notNull().default([]),
+    // Low | Medium | High
+    riskTier: text("risk_tier").notNull().default("Medium"),
+    // Maximum allowed spend per trace (null = unlimited)
+    maxBudgetPerTrace: real("max_budget_per_trace"),
+    isActive: boolean("is_active").notNull().default(true),
+    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("agent_registry_agent_id_idx").on(table.agentId),
+    index("agent_registry_risk_tier_idx").on(table.riskTier),
+    index("agent_registry_is_active_idx").on(table.isActive),
+  ],
+);
+
+export type AgentRegistryEntry = typeof agentRegistryTable.$inferSelect;
+
+// ── Authorization Requests (Sentinel-Gate Circuit Breaker) ─────────────────
+// Written whenever an agent calls POST /v1/authorize before a high-risk action.
+// Status lifecycle: PENDING → AUTHORIZED | BLOCKED
+// Immutable audit trail of every human intervention.
+
+export const authorizationRequestsTable = pgTable(
+  "authorization_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    traceId: text("trace_id").notNull(),
+    intent: text("intent").notNull(),
+    proposedAction: text("proposed_action").notNull(),
+    actionType: text("action_type").notNull(),
+    // PENDING | AUTHORIZED | BLOCKED | AUTO_BLOCKED
+    status: text("status").notNull().default("PENDING"),
+    sessionHealthScore: real("session_health_score"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: text("resolved_by"),
+    notes: text("notes"),
+  },
+  (table) => [
+    index("auth_requests_agent_id_idx").on(table.agentId),
+    index("auth_requests_status_idx").on(table.status),
+    index("auth_requests_requested_at_idx").on(table.requestedAt),
+  ],
+);
+
+export type AuthorizationRequest = typeof authorizationRequestsTable.$inferSelect;

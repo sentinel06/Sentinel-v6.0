@@ -12,6 +12,8 @@ import TracesPage from "@/pages/traces";
 import AgentsPage from "@/pages/agents";
 import CompliancePage from "@/pages/compliance";
 import IntegrityPage from "@/pages/integrity";
+import WarRoomPage from "@/pages/warroom";
+import TopologyPage from "@/pages/topology";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +30,10 @@ function Router() {
       <Switch>
         <Route path="/" component={DashboardPage} />
         <Route path="/traces" component={TracesPage} />
+        <Route path="/topology" component={TopologyPage} />
+        <Route path="/warroom" component={WarRoomPage} />
         <Route path="/agents" component={AgentsPage} />
+        <Route path="/registry" component={AgentsPage} />
         <Route path="/compliance" component={CompliancePage} />
         <Route path="/integrity" component={IntegrityPage} />
         <Route component={NotFound} />

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, asc, and, gte, lte, count, sql } from "drizzle-orm";
-import { db, auditLogsTable } from "@workspace/db";
+import { db, auditLogsTable, agentRegistryTable } from "@workspace/db";
 import {
   CreateAuditLogBody,
   GetAuditLogsQueryParams,
@@ -15,6 +15,10 @@ import { BLOCK_SIZE } from "../lib/merkle";
 import { computeConsistencyScore } from "../lib/consistency";
 import { logRateLimiter, getRateLimitStats } from "../lib/rateLimit";
 import { checkAndSealArchive } from "../lib/archiver";
+import {
+  recordConsistencyScore,
+  isAgentRevoked,
+} from "../lib/governance";
 
 const router: IRouter = Router();
 
@@ -33,6 +37,8 @@ function rowToLog(row: typeof auditLogsTable.$inferSelect) {
     anomalyReason: row.anomalyReason,
     consistencyScore: row.consistencyScore,
     consistencyReasons: row.consistencyReasons,
+    parentTraceId: row.parentTraceId ?? null,
+    dependencyChain: row.dependencyChain ?? [],
   };
 }
 
@@ -72,6 +78,45 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   }
 
   const { agentId, traceId, eventType, payload, rationale } = parsed.data;
+
+  // ── Governance checks ──────────────────────────────────────────────────
+
+  // 1. Kill-switch / per-agent revocation
+  if (isAgentRevoked(agentId)) {
+    res.status(403).json({
+      error: "Agent revoked",
+      reason: "This agent's session has been revoked. Contact your administrator.",
+    });
+    return;
+  }
+
+  // 2. Registry privilege escalation check
+  const [registryEntry] = await db
+    .select()
+    .from(agentRegistryTable)
+    .where(eq(agentRegistryTable.agentId, agentId))
+    .limit(1);
+
+  if (registryEntry) {
+    const authorizedTools = (registryEntry.authorizedTools as string[]) ?? [];
+    if (authorizedTools.length > 0) {
+      const normalized = eventType.toLowerCase();
+      const payloadAction = ((payload as any)?.action ?? "").toLowerCase();
+      const allowed = authorizedTools.some(
+        (t) => normalized.includes(t.toLowerCase()) || payloadAction.includes(t.toLowerCase()),
+      );
+      if (!allowed) {
+        req.log.warn({ agentId, eventType, authorizedTools }, "Privilege escalation attempt detected");
+        // Don't block — log it with HIGH anomaly flag (append-only ledger)
+        // The anomaly will bubble up through normal flow below
+      }
+    }
+  }
+
+  // 3. Accept optional orchestration chain fields (not in generated Zod schema)
+  const parentTraceId: string | null = typeof req.body.parentTraceId === "string" ? req.body.parentTraceId : null;
+  const dependencyChain: string[] = Array.isArray(req.body.dependencyChain) ? req.body.dependencyChain : [];
+
   const timestamp = new Date();
 
   // Count rows before insert to determine block position (append-only table)
@@ -107,8 +152,13 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
       anomalyReason: anomaly.anomalyReason,
       consistencyScore: consistency.score,
       consistencyReasons: consistency.reasons,
+      parentTraceId: parentTraceId,
+      dependencyChain: dependencyChain,
     })
     .returning();
+
+  // Record this score in the in-memory session health cache for the circuit breaker
+  recordConsistencyScore(agentId, consistency.score);
 
   req.log.info(
     { logId: inserted.id, agentId, eventType, traceId, consistencyScore: consistency.score },

@@ -1,0 +1,44 @@
+Prompt: Upgrade Agent-Sentinel to Active Governance & Orchestration Audit
+Role: You are a Lead AI Architect specializing in Multi-Agent Systems (MAS) and Regulatory Compliance (EU AI Act).
+Goal: Upgrade the existing "Agent-Sentinel" audit ledger into an Active Governance & Orchestration Framework. We are moving from "Watching" to "Intervening."
+
+1. Orchestration Trace-Mapping (Multi-Agent Support)
+The Problem: In a chain of agents (Agent A -> Agent B -> Agent C), failures cascade. We need to identify "Patient Zero."
+
+The Build: Update the audit_logs schema to include parent_trace_id and dependency_chain (JSONB).
+
+The Logic: When a new log arrives, if it has a parent_trace_id, the system must link it to the previous agent's output.
+
+Dashboard Upgrade: Create a Trace Topology View. Use a node-based graph (or tree structure) to visualize the flow of data between agents. Highlight any node in Red if its consistency_score drops below 0.5.
+
+2. The "Sentinel-Gate" (Active Circuit Breaker)
+New Endpoint: POST /v1/authorize.
+
+The Workflow: Before an agent executes a high-risk tool (e.g., financial_transfer, data_deletion), it must call this endpoint with its intent and proposed_action.
+
+Governance Logic: 1.  Check the agent's current session health (average consistency score of the last 5 logs).
+2.  If health < 0.7 OR the action is flagged as "High-Risk" in the registry, return status: "PENDING_APPROVAL".
+3.  Human-in-the-Loop: Trigger a browser notification for the admin. The admin clicks "Approve" or "Deny" in the Sentinel Dashboard.
+4.  The Agent receives the final status: "AUTHORIZED" or "BLOCKED" via a long-poll or webhook.
+
+3. Governed Agent Registry (Identity Management)
+The Build: Create a agent_registry table.
+
+Fields: agent_id, owner_email, authorized_tools (Array), risk_tier (Low/Medium/High), and max_budget_per_trace.
+
+The Guardrail: If a log arrives from an agent_id attempting a tool NOT in its authorized_tools list, automatically flag a "Privilege Escalation Anomaly" and trigger the Circuit Breaker.
+
+4. Dashboard "War Room" Upgrades
+Global Kill-Switch: A prominent button to revoke all active X-Sentinel-Key tokens in the event of a system-wide breach.
+
+Accountability Report: A specific view for Article 14 compliance showing every instance where a human intervened, approved, or overrode an agent's decision.
+
+5. Implementation Priority
+Registry First: Build the agent_registry and the logic to reject logs from unauthorized agents.
+
+Authorization API: Implement the POST /v1/authorize gate.
+
+Visualization: Build the node-based Trace Topology map for multi-agent chains.
+
+Strategic Note for the Agent:
+"Ensure all components are strictly decoupled. The 'Governance' layer must be able to run even if the 'Logging' layer is experiencing high latency. Use Redis for the real-time session health checks to ensure sub-10ms response times for the /v1/authorize gate."
