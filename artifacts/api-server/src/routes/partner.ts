@@ -13,7 +13,7 @@ import { randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 import { db, partnerKeysTable, agentRegistryTable, auditLogsTable } from "@workspace/db";
-import { eq, desc, avg, count, and } from "drizzle-orm";
+import { eq, desc, avg, count, and, inArray, gte, lte } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -120,6 +120,133 @@ router.patch("/v1/partner/keys/:keyId/revoke", async (req, res): Promise<void> =
   }
 
   res.json({ success: true, keyId, status: "revoked" });
+});
+
+// ── GET /v1/compliance/audit-report ──────────────────────────────────────
+//
+// Professional Audit Report: partner-scoped, time-windowed executive summary.
+// Aggregates trust score, anomaly disposition (detected vs blocked), and
+// quantum-readiness certification score across all partner swarms.
+
+router.get("/v1/compliance/audit-report", async (req, res): Promise<void> => {
+  const { partnerId, timeHorizon = "30d" } = req.query;
+
+  if (!partnerId) {
+    res.status(400).json({ error: "partnerId (ownerEmail) is required" });
+    return;
+  }
+
+  // Resolve time window
+  const now = new Date();
+  const windowStart = new Date(now);
+  if (timeHorizon === "7d") windowStart.setDate(windowStart.getDate() - 7);
+  else if (timeHorizon === "30d") windowStart.setDate(windowStart.getDate() - 30);
+  else if (timeHorizon === "90d") windowStart.setDate(windowStart.getDate() - 90);
+  else if (timeHorizon === "365d") windowStart.setFullYear(windowStart.getFullYear() - 1);
+  else windowStart.setDate(windowStart.getDate() - 30);
+
+  // 1. Get all agents owned by this partner
+  const agents = await db
+    .select()
+    .from(agentRegistryTable)
+    .where(eq(agentRegistryTable.ownerEmail, String(partnerId)));
+
+  if (agents.length === 0) {
+    res.status(404).json({ error: "No agents found for this partner" });
+    return;
+  }
+
+  const agentIds = agents.map((a) => a.agentId);
+
+  // 2. Pull all audit logs for these agents in the time window
+  const allLogs = await db
+    .select()
+    .from(auditLogsTable)
+    .where(
+      and(
+        inArray(auditLogsTable.agentId, agentIds),
+        gte(auditLogsTable.timestamp, windowStart),
+        lte(auditLogsTable.timestamp, now),
+      ),
+    );
+
+  const totalEvents = allLogs.length;
+
+  // 3. Trust score — average consistencyScore across all logs
+  const rawTrust =
+    totalEvents > 0
+      ? allLogs.reduce((s, l) => s + (l.consistencyScore ?? 1.0), 0) / totalEvents
+      : 1.0;
+  const avgTrustScore = Math.round(rawTrust * 1000) / 10;
+
+  // 4. Anomaly disposition
+  const detected = allLogs.filter((l) => l.isAnomalous);
+  const totalAnomaliesDetected = detected.length;
+
+  const blockedKeywords = /blocked|circuit|lockout|kill.switch|revoked|drift.lock/i;
+  const totalAnomaliesBlocked = detected.filter(
+    (l) => l.anomalyReason && blockedKeywords.test(l.anomalyReason),
+  ).length;
+  const blockRate =
+    totalAnomaliesDetected > 0
+      ? Math.round((totalAnomaliesBlocked / totalAnomaliesDetected) * 1000) / 10
+      : 0;
+
+  // 5. Quantum-Readiness — % of events with a QL-2.0 pqSignature envelope
+  const quantumSigned = allLogs.filter((l) => l.pqSignature !== null).length;
+  const quantumCoverage =
+    totalEvents > 0 ? Math.round((quantumSigned / totalEvents) * 1000) / 10 : 0;
+
+  let quantumCertification: string;
+  let quantumTier: number; // 0-4
+  if (quantumCoverage === 0) { quantumCertification = "NOT STARTED"; quantumTier = 0; }
+  else if (quantumCoverage < 50)  { quantumCertification = "PARTIAL COVERAGE"; quantumTier = 1; }
+  else if (quantumCoverage < 90)  { quantumCertification = "CERTIFIED — QL-1.0"; quantumTier = 2; }
+  else if (quantumCoverage < 100) { quantumCertification = "QUANTUM-SECURE — QL-2.0"; quantumTier = 3; }
+  else                             { quantumCertification = "FULLY SOVEREIGN — QL-2.0 GOLD"; quantumTier = 4; }
+
+  // 6. Risk profile
+  let riskProfile: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  const anomalyRate = totalEvents > 0 ? totalAnomaliesDetected / totalEvents : 0;
+  if (avgTrustScore >= 90 && anomalyRate < 0.02) riskProfile = "LOW";
+  else if (avgTrustScore >= 75 && anomalyRate < 0.1) riskProfile = "MEDIUM";
+  else if (avgTrustScore >= 55 && anomalyRate < 0.25) riskProfile = "HIGH";
+  else riskProfile = "CRITICAL";
+
+  // 7. Narrative summary
+  const summaryLines: string[] = [
+    `Across ${agents.length} governed agent${agents.length !== 1 ? "s" : ""} in the ${timeHorizon} window, ${totalEvents.toLocaleString()} audit events were ingested.`,
+    totalAnomaliesDetected > 0
+      ? `${totalAnomaliesDetected} anomal${totalAnomaliesDetected === 1 ? "y was" : "ies were"} detected; ${totalAnomaliesBlocked} ${totalAnomaliesBlocked === 1 ? "was" : "were"} autonomously blocked by the active circuit breaker (${blockRate}% block rate).`
+      : "No anomalies were detected within the selected time horizon.",
+    quantumTier >= 2
+      ? `Quantum-readiness certification: ${quantumCertification}. ${quantumCoverage}% of events carry ML-DSA-87 hybrid signatures, protecting against harvest-now-decrypt-later attacks.`
+      : `Quantum-readiness is at ${quantumCoverage}% coverage — migration to QL-2.0 (ML-DSA-87) is recommended to meet the 2030 Quantum Horizon standard.`,
+    `Overall risk profile: ${riskProfile}.`,
+  ];
+
+  res.json({
+    partnerEmail: String(partnerId),
+    timeHorizon,
+    windowStart: windowStart.toISOString(),
+    windowEnd: now.toISOString(),
+    reportGeneratedAt: now.toISOString(),
+    agentsGovernedCount: agents.length,
+    activeAgentsCount: agents.filter((a) => a.isActive).length,
+    agentIds,
+    totalEvents,
+    avgTrustScore,
+    totalAnomaliesDetected,
+    totalAnomaliesBlocked,
+    blockRate,
+    quantumSignedEvents: quantumSigned,
+    quantumCoverage,
+    quantumCertification,
+    quantumTier,
+    riskProfile,
+    complianceFramework: "EU AI Act Art. 12/14 · NIST AI RMF · QL-2.0",
+    summary: summaryLines.join(" "),
+  });
 });
 
 // ── GET /v1/partner/health ────────────────────────────────────────────────
