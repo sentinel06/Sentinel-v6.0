@@ -1,26 +1,22 @@
 /**
  * Governance State Engine
  *
- * Replaces Redis for sub-10ms in-process operations on a single-node server.
- * If the service is ever scaled horizontally, swap this Map for a Redis
- * sorted-set implementation behind the same interface.
- *
  * Responsibilities:
  *   1. Session health cache — last N consistency scores per agent
  *   2. Authorization request store — in-memory pending/resolved state with
  *      long-poll resolution via EventEmitter
  *   3. Kill-switch state — set of revoked agent IDs
  *   4. High-risk action classification
+ *   5. Honey-token trap — fake high-privilege tools that trigger lockdown
  */
 
 import { EventEmitter } from "events";
 
 // ── Session Health Cache ───────────────────────────────────────────────────
 
-const HEALTH_WINDOW = 5; // rolling window of last N logs
-const HEALTH_THRESHOLD = 0.7; // below this → require human approval
+const HEALTH_WINDOW = 5;
+const HEALTH_THRESHOLD = 0.7;
 
-/** Per-agent circular buffer of recent consistency scores */
 const sessionScores = new Map<string, number[]>();
 
 export function recordConsistencyScore(agentId: string, score: number): void {
@@ -32,7 +28,7 @@ export function recordConsistencyScore(agentId: string, score: number): void {
 
 export function getSessionHealth(agentId: string): number {
   const scores = sessionScores.get(agentId);
-  if (!scores || scores.length === 0) return 1.0; // unknown agent → full health
+  if (!scores || scores.length === 0) return 1.0;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
 
@@ -73,6 +69,30 @@ export function getRevokedAgents(): string[] {
   return Array.from(revokedAgents);
 }
 
+// ── Honey-Token Trap ───────────────────────────────────────────────────────
+//
+// These "ghost" tools appear nowhere in any legitimate agent's authorized
+// tool list. Any attempt to invoke one is an immediate CRITICAL BREACH:
+// the agent is permanently revoked and the War Room receives a priority alert.
+
+export const HONEYPOT_TOKENS = new Set([
+  "admin_global_reset",
+  "root_override",
+  "bypass_audit",
+  "disable_sentinel",
+  "master_key_access",
+  "sudo_exec",
+  "schema_wipe",
+]);
+
+export function isHoneypotToken(actionType: string): boolean {
+  const normalized = actionType.toLowerCase().replace(/[\s-]/g, "_");
+  for (const token of HONEYPOT_TOKENS) {
+    if (normalized.includes(token)) return true;
+  }
+  return false;
+}
+
 // ── High-Risk Action Classification ───────────────────────────────────────
 
 const HIGH_RISK_ACTIONS = new Set([
@@ -111,12 +131,14 @@ export interface AuthRequestState {
   intent: string;
   proposedAction: string;
   actionType: string;
-  status: "PENDING" | "AUTHORIZED" | "BLOCKED" | "AUTO_BLOCKED";
+  status: "PENDING" | "AUTHORIZED" | "BLOCKED" | "AUTO_BLOCKED" | "HONEYPOT_BREACH";
   sessionHealthScore: number;
+  clusterHealthScore?: number;
   requestedAt: string;
   resolvedAt?: string;
   resolvedBy?: string;
   notes?: string;
+  isCriticalBreach?: boolean;
 }
 
 const authRequestStore = new Map<string, AuthRequestState>();
@@ -141,10 +163,6 @@ export function getAllAuthRequests(): AuthRequestState[] {
   );
 }
 
-/**
- * Resolve an authorization request.
- * Emits an event that any waiting long-poll listeners pick up immediately.
- */
 export function resolveAuthRequest(
   id: string,
   status: "AUTHORIZED" | "BLOCKED",
@@ -162,10 +180,6 @@ export function resolveAuthRequest(
   return req;
 }
 
-/**
- * Wait for a specific authorization request to be resolved.
- * Used by long-poll: resolves in ≤ timeoutMs or returns the current state.
- */
 export function waitForResolution(id: string, timeoutMs = 30_000): Promise<AuthRequestState> {
   const req = authRequestStore.get(id);
   if (!req) return Promise.reject(new Error("Auth request not found"));
@@ -178,13 +192,12 @@ export function waitForResolution(id: string, timeoutMs = 30_000): Promise<AuthR
     };
     const timer = setTimeout(() => {
       authEventEmitter.off(`resolved:${id}`, handler);
-      resolve(authRequestStore.get(id) ?? req); // return current state on timeout
+      resolve(authRequestStore.get(id) ?? req);
     }, timeoutMs);
     authEventEmitter.once(`resolved:${id}`, handler);
   });
 }
 
-/** Emit a governance event for WebSocket broadcast */
 export function emitGovernanceEvent(type: string, payload: object): void {
   authEventEmitter.emit("governance", { type, payload });
 }

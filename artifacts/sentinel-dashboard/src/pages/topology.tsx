@@ -2,16 +2,15 @@
  * Trace Topology View — Multi-Agent Orchestration Map
  *
  * Renders a node-based graph of agent interaction chains.
- * Each node = one unique (agentId, traceId) pair.
- * Edges = parent_trace_id linkages between traces.
  * Node color = red if lowestConsistencyScore < 0.5, yellow < 0.75, green otherwise.
+ * Cluster health = weighted propagation of ancestor scores (logic poisoning detection).
  */
 
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useGetAuditLogs } from "@workspace/api-client-react";
-import { GitBranch, AlertTriangle, Info, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { GitBranch, AlertTriangle, Info, ZoomIn, ZoomOut, Maximize2, Skull } from "lucide-react";
 
 interface LogEntry {
   id: string;
@@ -29,15 +28,18 @@ interface TraceNode {
   agentId: string;
   parentTraceId: string | null;
   lowestScore: number;
+  clusterHealth: number;   // weighted propagation of ancestor scores
   eventCount: number;
   anomalyCount: number;
   firstSeen: string;
   children: string[];
+  isPoisoned: boolean;     // clusterHealth substantially worse than own lowestScore
 }
 
 function buildGraph(logs: LogEntry[]): Map<string, TraceNode> {
   const nodes = new Map<string, TraceNode>();
 
+  // First pass: build nodes
   for (const log of logs) {
     if (!nodes.has(log.traceId)) {
       nodes.set(log.traceId, {
@@ -45,10 +47,12 @@ function buildGraph(logs: LogEntry[]): Map<string, TraceNode> {
         agentId: log.agentId,
         parentTraceId: (log as any).parentTraceId ?? null,
         lowestScore: log.consistencyScore ?? 1.0,
+        clusterHealth: log.consistencyScore ?? 1.0,
         eventCount: 0,
         anomalyCount: 0,
         firstSeen: log.timestamp,
         children: [],
+        isPoisoned: false,
       });
     }
     const node = nodes.get(log.traceId)!;
@@ -59,17 +63,40 @@ function buildGraph(logs: LogEntry[]): Map<string, TraceNode> {
     }
   }
 
-  // Build children list from parent linkages
+  // Second pass: build parent→children edges
   for (const [, node] of nodes) {
     if (node.parentTraceId && nodes.has(node.parentTraceId)) {
       nodes.get(node.parentTraceId)!.children.push(node.traceId);
     }
   }
 
+  // Third pass: propagate cluster health (recursive, memoized)
+  const memo = new Map<string, number>();
+  function clusterHealth(traceId: string): number {
+    if (memo.has(traceId)) return memo.get(traceId)!;
+    const node = nodes.get(traceId);
+    if (!node) return 1.0;
+    if (!node.parentTraceId || !nodes.has(node.parentTraceId)) {
+      memo.set(traceId, node.lowestScore);
+      return node.lowestScore;
+    }
+    const parentH = clusterHealth(node.parentTraceId);
+    const score = 0.6 * node.lowestScore + 0.4 * parentH;
+    memo.set(traceId, score);
+    return score;
+  }
+
+  for (const [id, node] of nodes) {
+    node.clusterHealth = clusterHealth(id);
+    // Poisoned = cluster is significantly worse than own health
+    node.isPoisoned = node.clusterHealth < node.lowestScore - 0.12;
+  }
+
   return nodes;
 }
 
-function nodeColor(score: number, anomalyCount: number): { fill: string; stroke: string; text: string } {
+function nodeColor(score: number, anomalyCount: number, isPoisoned: boolean): { fill: string; stroke: string; text: string } {
+  if (isPoisoned) return { fill: "rgba(168,85,247,0.15)", stroke: "#a855f7", text: "#a855f7" };
   if (score < 0.5 || anomalyCount > 0)
     return { fill: "rgba(239,68,68,0.15)", stroke: "#ef4444", text: "#ef4444" };
   if (score < 0.75)
@@ -84,47 +111,20 @@ interface LayoutNode {
   node: TraceNode;
 }
 
-/**
- * Layered Sugiyama-lite layout: roots at top, children below.
- * Returns positions for each traceId.
- */
 function layoutGraph(nodes: Map<string, TraceNode>): LayoutNode[] {
-  const W = 180; // node width
-  const H = 100; // node height
+  const W = 180;
+  const H = 100;
   const HGAP = 40;
   const VGAP = 60;
 
-  // Find roots (no parent in graph)
   const roots: string[] = [];
   for (const [id, node] of nodes) {
     if (!node.parentTraceId || !nodes.has(node.parentTraceId)) roots.push(id);
   }
 
   const positions = new Map<string, { x: number; y: number }>();
-  const colByDepth = new Map<number, number>(); // how many cols used at each depth
-
-  function place(id: string, depth: number): number {
-    const col = (colByDepth.get(depth) ?? 0);
-    colByDepth.set(depth, col + 1);
-
-    const node = nodes.get(id)!;
-    let subtreeWidth = 0;
-
-    if (node.children.length === 0) {
-      subtreeWidth = 1;
-    } else {
-      let childX = 0;
-      for (const childId of node.children) {
-        childX += place(childId, depth + 1);
-      }
-      subtreeWidth = Math.max(1, childX);
-    }
-
-    return subtreeWidth;
-  }
-
-  // Two-pass: first calculate subtree widths, then assign x positions
   const subtreeWidths = new Map<string, number>();
+
   function calcWidth(id: string): number {
     const node = nodes.get(id)!;
     if (node.children.length === 0) { subtreeWidths.set(id, 1); return 1; }
@@ -169,13 +169,13 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
   const layout = useMemo(() => layoutGraph(nodes), [nodes]);
 
   const W = 180;
-  const H = 80;
+  const H = 90;
 
   const maxX = Math.max(...layout.map((n) => n.x + W), 600);
   const maxY = Math.max(...layout.map((n) => n.y + H), 300);
 
   // Build edge paths
-  const edges: Array<{ from: string; to: string; path: string }> = [];
+  const edges: Array<{ from: string; to: string; path: string; isPoisoned: boolean }> = [];
   for (const { id, x, y, node } of layout) {
     for (const childId of node.children) {
       const child = layout.find((n) => n.id === childId);
@@ -189,6 +189,7 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
         from: id,
         to: childId,
         path: `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`,
+        isPoisoned: child.node.isPoisoned,
       });
     }
   }
@@ -222,6 +223,9 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
               <path d="M0,0 L0,6 L8,3 z" fill="#334155" />
             </marker>
+            <marker id="arrow-poison" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+            </marker>
           </defs>
 
           {/* Edges */}
@@ -230,16 +234,17 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
               key={`${e.from}-${e.to}`}
               d={e.path}
               fill="none"
-              stroke="#334155"
-              strokeWidth="1.5"
-              markerEnd="url(#arrow)"
-              strokeDasharray="4 2"
+              stroke={e.isPoisoned ? "#a855f7" : "#334155"}
+              strokeWidth={e.isPoisoned ? 2 : 1.5}
+              markerEnd={e.isPoisoned ? "url(#arrow-poison)" : "url(#arrow)"}
+              strokeDasharray={e.isPoisoned ? "6 2" : "4 2"}
+              opacity={e.isPoisoned ? 0.8 : 1}
             />
           ))}
 
           {/* Nodes */}
           {layout.map(({ id, x, y, node }) => {
-            const colors = nodeColor(node.lowestScore, node.anomalyCount);
+            const colors = nodeColor(node.lowestScore, node.anomalyCount, node.isPoisoned);
             const isSelected = selected === id;
             return (
               <g
@@ -258,52 +263,38 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
                   strokeWidth={isSelected ? 2.5 : 1.5}
                   filter={isSelected ? "drop-shadow(0 0 8px rgba(14,165,233,0.5))" : undefined}
                 />
+
+                {/* Poison badge */}
+                {node.isPoisoned && (
+                  <>
+                    <rect x={x + W - 52} y={y + 4} width={48} height={12} rx={4} fill="#a855f720" stroke="#a855f7" strokeWidth={0.8} />
+                    <text x={x + W - 28} y={y + 13} textAnchor="middle" fill="#a855f7" fontSize="7" fontFamily="monospace" fontWeight="bold">POISONED</text>
+                  </>
+                )}
+
                 {/* Agent ID */}
-                <text
-                  x={x + W / 2}
-                  y={y + 22}
-                  textAnchor="middle"
-                  fill={colors.stroke}
-                  fontSize="9"
-                  fontFamily="monospace"
-                  fontWeight="bold"
-                >
+                <text x={x + W / 2} y={y + 22} textAnchor="middle" fill={colors.stroke} fontSize="9" fontFamily="monospace" fontWeight="bold">
                   {node.agentId.substring(0, 18)}
                 </text>
                 {/* Trace ID */}
-                <text
-                  x={x + W / 2}
-                  y={y + 38}
-                  textAnchor="middle"
-                  fill="#64748b"
-                  fontSize="8"
-                  fontFamily="monospace"
-                >
-                  {id.substring(0, 20)}…
+                <text x={x + W / 2} y={y + 36} textAnchor="middle" fill="#64748b" fontSize="7.5" fontFamily="monospace">
+                  {id.substring(0, 18)}…
                 </text>
-                {/* Score */}
-                <text
-                  x={x + W / 2}
-                  y={y + 56}
-                  textAnchor="middle"
-                  fill={colors.text}
-                  fontSize="10"
-                  fontFamily="monospace"
-                  fontWeight="bold"
-                >
+                {/* Own score */}
+                <text x={x + W / 2} y={y + 53} textAnchor="middle" fill={colors.text} fontSize="9.5" fontFamily="monospace" fontWeight="bold">
                   ⬡ {Math.round(node.lowestScore * 100)}%
                 </text>
+                {/* Cluster health (only shown when different) */}
+                {node.isPoisoned && (
+                  <text x={x + W / 2} y={y + 66} textAnchor="middle" fill="#a855f7" fontSize="7.5" fontFamily="monospace">
+                    cluster: {Math.round(node.clusterHealth * 100)}%
+                  </text>
+                )}
                 {/* Event count */}
-                <text
-                  x={x + W / 2}
-                  y={y + 70}
-                  textAnchor="middle"
-                  fill="#475569"
-                  fontSize="8"
-                  fontFamily="monospace"
-                >
+                <text x={x + W / 2} y={node.isPoisoned ? y + 79 : y + 67} textAnchor="middle" fill="#475569" fontSize="7.5" fontFamily="monospace">
                   {node.eventCount} events
                 </text>
+
                 {/* Anomaly dot */}
                 {node.anomalyCount > 0 && (
                   <circle cx={x + W - 12} cy={y + 12} r={6} fill="#ef4444" />
@@ -316,23 +307,39 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
 
       {/* Node detail panel */}
       {selectedNode && (
-        <div className="mt-3 p-4 bg-card/80 border border-border/60 rounded-lg font-mono text-xs space-y-2">
+        <div className="mt-3 p-4 bg-card/80 border border-border/60 rounded-lg font-mono text-xs space-y-3">
           <div className="flex items-center gap-2 font-bold text-foreground">
             <Info className="w-3.5 h-3.5 text-primary" />
             Node Detail — {selectedNode.node.agentId}
+            {selectedNode.node.isPoisoned && (
+              <span className="ml-auto flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400">
+                <Skull className="w-3 h-3" />
+                LOGIC POISONING DETECTED
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-muted-foreground">
             <span>Trace ID:</span><span className="text-foreground truncate">{selectedNode.id}</span>
             <span>Parent Trace:</span><span className="text-foreground truncate">{selectedNode.node.parentTraceId ?? "ROOT"}</span>
             <span>Events:</span><span className="text-foreground">{selectedNode.node.eventCount}</span>
             <span>Anomalies:</span><span className={selectedNode.node.anomalyCount > 0 ? "text-destructive font-bold" : "text-foreground"}>{selectedNode.node.anomalyCount}</span>
-            <span>Lowest Score:</span>
+            <span>Own Lowest Score:</span>
             <span className={selectedNode.node.lowestScore < 0.5 ? "text-destructive font-bold" : selectedNode.node.lowestScore < 0.75 ? "text-yellow-400" : "text-emerald-400"}>
               {Math.round(selectedNode.node.lowestScore * 100)}%
+            </span>
+            <span>Cluster Health:</span>
+            <span className={selectedNode.node.clusterHealth < 0.5 ? "text-destructive font-bold" : selectedNode.node.clusterHealth < 0.75 ? "text-yellow-400 font-bold" : "text-emerald-400"}>
+              {Math.round(selectedNode.node.clusterHealth * 100)}%
+              {selectedNode.node.isPoisoned && <span className="ml-1.5 text-purple-400 text-[10px]">(degraded by ancestors)</span>}
             </span>
             <span>First Seen:</span><span className="text-foreground">{new Date(selectedNode.node.firstSeen).toLocaleTimeString()}</span>
             <span>Children:</span><span className="text-foreground">{selectedNode.node.children.length} downstream traces</span>
           </div>
+          {selectedNode.node.isPoisoned && (
+            <div className="p-3 rounded bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-300 leading-relaxed">
+              <strong>Logic Poisoning Warning:</strong> This node's cluster health ({Math.round(selectedNode.node.clusterHealth * 100)}%) is significantly lower than its own consistency score ({Math.round(selectedNode.node.lowestScore * 100)}%). An upstream ancestor in the trace chain has degraded trust, which automatically lowers the Sentinel's approval threshold for actions from this node — even if the node itself appears healthy.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -342,7 +349,7 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
 export default function TopologyPage() {
   const { data: logData, isLoading } = useGetAuditLogs(
     { limit: 200 },
-    { query: { queryKey: ["topology-logs"] } }
+    { query: { queryKey: ["topology-logs"], refetchInterval: 15000 } }
   );
 
   const graphNodes = useMemo(() => {
@@ -351,13 +358,14 @@ export default function TopologyPage() {
   }, [logData]);
 
   const stats = useMemo(() => {
-    let roots = 0, chained = 0, compromised = 0;
+    let roots = 0, chained = 0, compromised = 0, poisoned = 0;
     for (const [, node] of graphNodes) {
       if (!node.parentTraceId || !graphNodes.has(node.parentTraceId)) roots++;
       else chained++;
       if (node.lowestScore < 0.5 || node.anomalyCount > 0) compromised++;
+      if (node.isPoisoned) poisoned++;
     }
-    return { roots, chained, compromised, total: graphNodes.size };
+    return { roots, chained, compromised, poisoned, total: graphNodes.size };
   }, [graphNodes]);
 
   return (
@@ -368,16 +376,17 @@ export default function TopologyPage() {
           Trace Topology
         </h1>
         <p className="text-sm text-muted-foreground font-mono mt-1">
-          Multi-agent orchestration map · parent_trace_id chains · EU AI Act Art. 12
+          Multi-agent orchestration map · cluster health propagation · EU AI Act Art. 12
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Total Traces", value: stats.total, color: "text-primary" },
           { label: "Root Traces", value: stats.roots, color: "text-foreground" },
           { label: "Chained", value: stats.chained, color: "text-blue-400" },
-          { label: "Compromised Nodes", value: stats.compromised, color: "text-destructive" },
+          { label: "Compromised", value: stats.compromised, color: "text-destructive" },
+          { label: "Logic Poisoned", value: stats.poisoned, color: "text-purple-400" },
         ].map(({ label, value, color }) => (
           <Card key={label} className="p-4 border-border/60 bg-card/50">
             <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">{label}</div>
@@ -393,6 +402,7 @@ export default function TopologyPage() {
           { color: "border-emerald-500 bg-emerald-500/10", label: "Score ≥ 75% — clean" },
           { color: "border-yellow-400 bg-yellow-500/10", label: "Score 50–74% — marginal" },
           { color: "border-destructive bg-destructive/10", label: "Score < 50% — compromised" },
+          { color: "border-purple-500 bg-purple-500/10", label: "Logic poisoned by ancestor" },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <div className={`w-3 h-3 rounded border ${color}`} />
@@ -404,6 +414,18 @@ export default function TopologyPage() {
           Has anomaly
         </div>
       </div>
+
+      {stats.poisoned > 0 && (
+        <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-start gap-3">
+          <Skull className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+          <div>
+            <div className="text-xs font-mono font-bold text-purple-300">Logic Poisoning Detected in {stats.poisoned} trace{stats.poisoned > 1 ? "s" : ""}</div>
+            <div className="text-[11px] font-mono text-purple-400/70 mt-0.5">
+              Garbage In, Action Out prevention: Sentinel has automatically lowered the trust threshold for these downstream nodes. Click a purple node for details.
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="border-border/60 bg-card/50 p-4">
         {isLoading ? (

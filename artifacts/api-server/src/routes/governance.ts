@@ -10,19 +10,24 @@
  * GET  /v1/registry           — List all registered agents
  * POST /v1/registry           — Register a new agent
  * PATCH /v1/registry/:agentId — Update agent settings
- * DELETE /v1/registry/:agentId — Deactivate agent
  *
  * POST /v1/admin/kill-switch  — Emergency: revoke all active sessions
  * GET  /v1/admin/kill-switch  — Current kill-switch status
+ *
+ * GET  /v1/honeypot/tokens    — List declared honeypot tokens (admin)
+ *
+ * GET  /v1/export/audit-pdf   — Generate signed PDF evidence package
  */
 
 import { Router, type IRouter } from "express";
-import { db, agentRegistryTable, authorizationRequestsTable } from "@workspace/db";
+import { db, agentRegistryTable, authorizationRequestsTable, auditLogsTable } from "@workspace/db";
 import { eq, desc, asc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
   getSessionHealth,
   isHighRiskAction,
+  isHoneypotToken,
+  HONEYPOT_TOKENS,
   isAgentRevoked,
   storeAuthRequest,
   getAuthRequest,
@@ -38,6 +43,7 @@ import {
   emitGovernanceEvent,
 } from "../lib/governance";
 import { broadcastGovernanceEvent } from "../lib/ws";
+import { generateAuditPDF } from "../lib/pdf-export";
 
 const router: IRouter = Router();
 
@@ -46,7 +52,7 @@ const HEALTH_THRESHOLD = 0.7;
 // ── /v1/authorize ─────────────────────────────────────────────────────────
 
 router.post("/v1/authorize", async (req, res): Promise<void> => {
-  const { agentId, traceId, intent, proposedAction, actionType } = req.body ?? {};
+  const { agentId, traceId, intent, proposedAction, actionType, parentTraceId } = req.body ?? {};
 
   if (!agentId || !traceId || !intent || !proposedAction || !actionType) {
     res.status(400).json({
@@ -55,7 +61,67 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
     return;
   }
 
-  // Killed agent → immediately BLOCKED
+  // ── 0. HONEY-TOKEN TRAP: check before anything else ─────────────────────
+  if (isHoneypotToken(actionType)) {
+    // Immediately revoke the agent
+    revokeAgent(agentId);
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const breachRecord = {
+      id,
+      agentId,
+      traceId,
+      intent,
+      proposedAction,
+      actionType,
+      status: "HONEYPOT_BREACH" as const,
+      sessionHealthScore: getSessionHealth(agentId),
+      requestedAt: now,
+      resolvedAt: now,
+      resolvedBy: "sentinel-honeypot",
+      notes: `CRITICAL BREACH: Agent attempted to invoke honey-token "${actionType}". Agent has been permanently revoked.`,
+      isCriticalBreach: true,
+    };
+
+    storeAuthRequest(breachRecord);
+
+    // Persist to DB (store as AUTO_BLOCKED in DB for schema compatibility)
+    await db.insert(authorizationRequestsTable).values({
+      id,
+      agentId,
+      traceId,
+      intent,
+      proposedAction,
+      actionType,
+      status: "AUTO_BLOCKED",
+      sessionHealthScore: breachRecord.sessionHealthScore,
+      notes: breachRecord.notes,
+      resolvedAt: new Date(),
+      resolvedBy: "sentinel-honeypot",
+    });
+
+    // Broadcast critical breach alert
+    broadcastGovernanceEvent("honeypot_breach", {
+      id,
+      agentId,
+      actionType,
+      traceId,
+      notes: breachRecord.notes,
+      timestamp: now,
+    });
+
+    req.log.warn({ agentId, actionType, traceId }, "HONEYPOT BREACH DETECTED — agent revoked");
+
+    res.status(403).json({
+      status: "HONEYPOT_BREACH",
+      requestId: id,
+      reason: `CRITICAL SECURITY BREACH: "${actionType}" is a honey-token. Agent "${agentId}" has been permanently revoked and the War Room has been alerted.`,
+    });
+    return;
+  }
+
+  // ── 1. Killed agent → immediately BLOCKED ────────────────────────────────
   if (isAgentRevoked(agentId)) {
     res.status(403).json({
       status: "BLOCKED",
@@ -68,7 +134,38 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
   const sessionHealth = getSessionHealth(agentId);
   const actionIsHighRisk = isHighRiskAction(actionType);
 
-  // Check agent registry for tool authorization
+  // ── 2. Cluster Health: propagate ancestor trust degradation ──────────────
+  let clusterHealthScore = sessionHealth;
+  if (parentTraceId) {
+    // Look up the parent trace's agent and their session health
+    const parentRows = await db
+      .select({ agentId: auditLogsTable.agentId, parentTraceId: auditLogsTable.parentTraceId })
+      .from(auditLogsTable)
+      .where(eq(auditLogsTable.traceId, parentTraceId))
+      .limit(1);
+
+    if (parentRows.length > 0) {
+      const parentAgentId = parentRows[0].agentId;
+      const parentHealth = getSessionHealth(parentAgentId);
+      // Weighted: 60% own health + 40% ancestor health (recursive degradation)
+      clusterHealthScore = 0.6 * sessionHealth + 0.4 * parentHealth;
+
+      // Check grandparent if parent itself has a parent
+      if (parentRows[0].parentTraceId) {
+        const grandRows = await db
+          .select({ agentId: auditLogsTable.agentId })
+          .from(auditLogsTable)
+          .where(eq(auditLogsTable.traceId, parentRows[0].parentTraceId))
+          .limit(1);
+        if (grandRows.length > 0) {
+          const grandHealth = getSessionHealth(grandRows[0].agentId);
+          clusterHealthScore = 0.5 * sessionHealth + 0.3 * parentHealth + 0.2 * grandHealth;
+        }
+      }
+    }
+  }
+
+  // ── 3. Registry: privilege escalation check ──────────────────────────────
   const [registryEntry] = await db
     .select()
     .from(agentRegistryTable)
@@ -88,17 +185,21 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
   const id = randomUUID();
   const requestedAt = new Date().toISOString();
 
-  // Determine initial status
+  // ── 4. Determine status ──────────────────────────────────────────────────
+  // Use clusterHealthScore (which incorporates ancestor chain) as the effective threshold
   let status: "PENDING" | "AUTHORIZED" | "BLOCKED" | "AUTO_BLOCKED" = "PENDING";
   let autoReason: string | undefined;
 
   if (privilegeEscalation) {
     status = "AUTO_BLOCKED";
     autoReason = `Privilege escalation: action type "${actionType}" is not in this agent's authorized tools list`;
-  } else if (sessionHealth < HEALTH_THRESHOLD || actionIsHighRisk) {
-    status = "PENDING"; // requires human approval
+  } else if (clusterHealthScore < HEALTH_THRESHOLD || actionIsHighRisk) {
+    status = "PENDING";
+    if (clusterHealthScore < sessionHealth - 0.1) {
+      autoReason = `Logic poisoning detected: cluster health (${(clusterHealthScore * 100).toFixed(0)}%) degraded below own session health (${(sessionHealth * 100).toFixed(0)}%) due to upstream ancestor trust decay`;
+    }
   } else {
-    status = "AUTHORIZED"; // low-risk + healthy session → auto-approve
+    status = "AUTHORIZED";
   }
 
   const authState = {
@@ -110,6 +211,7 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
     actionType,
     status: status as any,
     sessionHealthScore: sessionHealth,
+    clusterHealthScore,
     requestedAt,
     resolvedAt: status !== "PENDING" ? requestedAt : undefined,
     resolvedBy: status !== "PENDING" ? "sentinel-auto" : undefined,
@@ -118,7 +220,6 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
 
   storeAuthRequest(authState);
 
-  // Persist to DB
   await db.insert(authorizationRequestsTable).values({
     id,
     agentId,
@@ -127,23 +228,22 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
     proposedAction,
     actionType,
     status,
-    sessionHealthScore: sessionHealth,
+    sessionHealthScore: clusterHealthScore, // store effective score for human reviewers
     notes: autoReason,
     resolvedAt: status !== "PENDING" ? new Date() : undefined,
     resolvedBy: status !== "PENDING" ? "sentinel-auto" : undefined,
   });
 
-  // Broadcast to dashboard clients
   broadcastGovernanceEvent("auth_request", authState);
 
   if (status === "PENDING") {
-    // Signal that admin intervention is needed
     broadcastGovernanceEvent("pending_approval", {
       id,
       agentId,
       actionType,
-      sessionHealthScore: sessionHealth,
+      sessionHealthScore: clusterHealthScore,
       isHighRisk: actionIsHighRisk,
+      logicPoisoned: clusterHealthScore < sessionHealth - 0.1,
     });
 
     res.status(202).json({
@@ -151,7 +251,9 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
       requestId: id,
       message: "Authorization pending human review. Poll GET /v1/authorize/:id/status for result.",
       sessionHealthScore: sessionHealth,
+      clusterHealthScore,
       isHighRisk: actionIsHighRisk,
+      logicPoisoned: clusterHealthScore < sessionHealth - 0.1,
     });
     return;
   }
@@ -160,11 +262,11 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
     status,
     requestId: id,
     sessionHealthScore: sessionHealth,
+    clusterHealthScore,
     reason: autoReason,
   });
 });
 
-/** Long-poll: waits up to 29s for an admin to resolve the request */
 router.get("/v1/authorize/:id/status", async (req, res): Promise<void> => {
   const { id } = req.params;
   const existing = getAuthRequest(id);
@@ -176,12 +278,10 @@ router.get("/v1/authorize/:id/status", async (req, res): Promise<void> => {
     res.json(existing);
     return;
   }
-  // Block until resolved or timeout
   const resolved = await waitForResolution(id, 29_000);
   res.json(resolved);
 });
 
-/** Admin: approve or deny */
 router.post("/v1/authorize/:id/resolve", async (req, res): Promise<void> => {
   const { id } = req.params;
   const { decision, resolvedBy, notes } = req.body ?? {};
@@ -197,7 +297,6 @@ router.post("/v1/authorize/:id/resolve", async (req, res): Promise<void> => {
     return;
   }
 
-  // Update DB
   await db
     .update(authorizationRequestsTable)
     .set({
@@ -303,21 +402,14 @@ router.post("/v1/admin/kill-switch", async (req, res): Promise<void> => {
 
   if (activate) {
     activateGlobalKillSwitch();
-
-    // Deactivate all agents in DB
     await db.update(agentRegistryTable).set({ isActive: false, updatedAt: new Date() });
-
     broadcastGovernanceEvent("kill_switch", {
       active: true,
       reason: reason ?? "Emergency kill-switch activated",
       activatedBy: resolvedBy ?? "admin",
       activatedAt: new Date().toISOString(),
     });
-
-    res.json({
-      active: true,
-      message: "Global kill-switch activated. All agent sessions revoked.",
-    });
+    res.json({ active: true, message: "Global kill-switch activated. All agent sessions revoked." });
   } else {
     deactivateGlobalKillSwitch();
     broadcastGovernanceEvent("kill_switch", { active: false });
@@ -326,9 +418,28 @@ router.post("/v1/admin/kill-switch", async (req, res): Promise<void> => {
 });
 
 router.get("/v1/admin/kill-switch", (_req, res): void => {
+  res.json({ active: isGlobalKillActive(), revokedAgents: getRevokedAgents() });
+});
+
+// ── /v1/honeypot/tokens ────────────────────────────────────────────────────
+
+router.get("/v1/honeypot/tokens", (_req, res): void => {
   res.json({
-    active: isGlobalKillActive(),
-    revokedAgents: getRevokedAgents(),
+    tokens: Array.from(HONEYPOT_TOKENS),
+    description: "These tool names are permanently forbidden. Any invocation triggers immediate agent lockdown and War Room alert.",
+  });
+});
+
+// ── /v1/export/audit-pdf ─────────────────────────────────────────────────
+
+router.get("/v1/export/audit-pdf", async (req, res): Promise<void> => {
+  const { agentId, traceId, startTime, endTime } = req.query;
+
+  await generateAuditPDF(res, {
+    agentId: typeof agentId === "string" ? agentId : undefined,
+    traceId: typeof traceId === "string" ? traceId : undefined,
+    startTime: typeof startTime === "string" ? new Date(startTime) : undefined,
+    endTime: typeof endTime === "string" ? new Date(endTime) : undefined,
   });
 });
 
