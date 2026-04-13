@@ -165,58 +165,273 @@ function LayerChip({ layer }: { layer: string }) {
 // ── Print HTML builder ─────────────────────────────────────────────────────
 
 function buildPrintHTML(r: EQAReport): string {
-  const date = new Date(r.generatedAt);
+  const date    = new Date(r.generatedAt);
   const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
-  const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
-  const arcColor = r.integrityConfidenceScore >= 90 ? "#40B595" : r.integrityConfidenceScore >= 70 ? "#EBC06D" : "#D96161";
-  const riskColor = { LOW: "#40B595", MEDIUM: "#EBC06D", HIGH: "#D96161", CRITICAL: "#D96161" }[r.riskRating];
+  const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short" });
+  // Unique Audit ID: report ID + 6-char entropy suffix so each printout is individually traceable
+  const auditId = `${r.reportId}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const printedAt = new Date().toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+  });
 
-  const anomalyRows = r.interceptedAnomalies.slice(0, 30).map((a) => `
-    <tr style="border-bottom:1px solid #f0f0f0;">
-      <td style="padding:7px 10px;font-size:9px;color:#4A5568;">${new Date(a.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
-      <td style="padding:7px 10px;font-size:9px;font-family:monospace;color:#1a1a2e;">${a.agentId.substring(0, 16)}…</td>
-      <td style="padding:7px 10px;font-size:9px;color:#4A5568;">${a.eventType}</td>
-      <td style="padding:7px 10px;font-size:9px;color:#4A5568;max-width:160px;">${a.anomalyReason.substring(0, 50)}${a.anomalyReason.length > 50 ? "…" : ""}</td>
-      <td style="padding:7px 10px;font-size:9px;"><span style="background:${a.isQuantumProven ? "#40B59515" : "#D9616115"};color:${a.isQuantumProven ? "#40B595" : "#D96161"};padding:2px 6px;border-radius:3px;font-weight:bold;">${a.isQuantumProven ? "✓ PROVEN" : "UNSIGNED"}</span></td>
-      <td style="padding:7px 10px;font-size:8px;font-family:monospace;color:#9AA4B1;word-break:break-all;">${a.quantumSigProof}</td>
+  const arcColor  = r.integrityConfidenceScore >= 90 ? "#40B595" : r.integrityConfidenceScore >= 70 ? "#EBC06D" : "#D96161";
+  const riskColor = { LOW: "#40B595", MEDIUM: "#EBC06D", HIGH: "#D96161", CRITICAL: "#D96161" }[r.riskRating] ?? "#9AA4B1";
+  const anomColor = r.anomalyCount > 0 ? "#EBC06D" : "#40B595";
+
+  const anomalyRows = r.interceptedAnomalies.slice(0, 30).map((a, i) => `
+    <tr class="${i % 2 === 0 ? "row-even" : "row-odd"}" style="border-bottom:1px solid #eef2f7;">
+      <td style="padding:7px 10px;font-size:9px;color:#4A5568;white-space:nowrap;">${new Date(a.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+      <td style="padding:7px 10px;font-size:9px;font-family:monospace;color:#1a1a2e;">${a.agentId.substring(0, 18)}…</td>
+      <td style="padding:7px 10px;font-size:9px;color:#4A5568;max-width:90px;">${a.eventType}</td>
+      <td style="padding:7px 10px;font-size:9px;color:#4A5568;max-width:180px;">${a.anomalyReason.substring(0, 60)}${a.anomalyReason.length > 60 ? "…" : ""}</td>
+      <td style="padding:7px 10px;">
+        <span class="chip chip-${a.isQuantumProven ? "green" : "red"}">${a.isQuantumProven ? "✓ PROVEN" : "UNSIGNED"}</span>
+      </td>
+      <td style="padding:7px 10px;font-size:7.5px;font-family:monospace;color:#9AA4B1;word-break:break-all;max-width:140px;">${a.quantumSigProof ?? "—"}</td>
+      <td style="padding:7px 10px;font-size:9px;">
+        <span class="chip chip-layer">${a.blockLayer}</span>
+      </td>
     </tr>`).join("");
 
   return `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
-<title>EQA — ${r.partnerId} — ${dateStr}</title>
+<title>EQA ${auditId} — ${r.partnerId} — ${dateStr}</title>
 <style>
-  @page { size: A4 landscape; margin: 20mm 18mm; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Courier New',monospace; background:#fff; color:#0a0f13; font-size:10px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2.5px solid #40B595; padding-bottom:12px; margin-bottom:16px; }
-  .logo { font-size:16px; font-weight:bold; } .logo em { color:#40B595; font-style:normal; }
-  .classification { font-size:7.5px; letter-spacing:2px; color:#D96161; font-weight:bold; border:1.5px solid #D96161; padding:3px 8px; }
-  .title { font-size:18px; font-weight:bold; margin-bottom:3px; }
-  .subtitle { font-size:9px; color:#4A5568; margin-bottom:14px; }
-  .meta-row { display:flex; gap:24px; background:#f8fafc; border:1px solid #e2e8f0; padding:8px 12px; margin-bottom:14px; flex-wrap:wrap; }
-  .meta-label { font-size:7px; letter-spacing:2px; color:#9AA4B1; text-transform:uppercase; margin-bottom:1px; }
-  .meta-value { font-size:9.5px; font-weight:700; }
-  .kpi-row { display:grid; grid-template-columns:180px 1fr 1fr 1fr; gap:12px; margin-bottom:14px; }
-  .kpi-card { border:1px solid #e2e8f0; padding:12px 14px; }
-  .kpi-accent { height:3px; margin:-12px -14px 10px; border-radius:0; }
-  .kpi-label { font-size:7px; letter-spacing:2px; color:#9AA4B1; text-transform:uppercase; margin-bottom:6px; }
-  .kpi-val { font-size:32px; font-weight:bold; line-height:1; }
-  .kpi-sub { font-size:8px; color:#4A5568; margin-top:4px; }
-  .section-title { font-size:8px; letter-spacing:2px; text-transform:uppercase; color:#9AA4B1; font-weight:bold; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
-  .section-title::after { content:''; flex:1; height:1px; background:#e2e8f0; }
-  table { width:100%; border-collapse:collapse; margin-bottom:12px; }
-  thead tr { background:#f8fafc; }
-  th { padding:7px 10px; text-align:left; font-size:7.5px; letter-spacing:1.5px; color:#9AA4B1; text-transform:uppercase; font-weight:bold; border-bottom:1px solid #e2e8f0; }
-  .risk-banner { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-left:3.5px solid ${riskColor}; background:${riskColor}0d; margin-bottom:14px; }
-  .footer { display:flex; justify-content:space-between; border-top:1px solid #e2e8f0; padding-top:8px; margin-top:8px; font-size:7.5px; color:#9AA4B1; }
-  .cert { font-size:7.5px; border:1px solid #40B595; color:#40B595; padding:3px 8px; letter-spacing:1px; font-weight:bold; }
+  /* ── Page layout ─────────────────────────────────────────────────────── */
+  @page {
+    size: A4 landscape;
+    margin: 18mm 16mm 22mm;
+    /* Named page numbers in footer via CSS Paged Media */
+    @bottom-center {
+      content: "Audit ID: ${auditId}  ·  Page " counter(page) " of " counter(pages);
+      font-family: 'Courier New', monospace;
+      font-size: 7px;
+      color: #9AA4B1;
+    }
+  }
+
+  /* ── Reset ───────────────────────────────────────────────────────────── */
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  /* ── Base ────────────────────────────────────────────────────────────── */
+  body {
+    font-family: 'Courier New', monospace;
+    background: #ffffff;
+    color: #0a0f13;
+    font-size: 10px;
+    /* Force ALL backgrounds and colours to render on paper */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* ── Screen-only toolbar (hidden on print) ───────────────────────────── */
+  .screen-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0d1117;
+    border-bottom: 2px solid #40B595;
+    padding: 10px 18px;
+    margin-bottom: 20px;
+  }
+  .screen-toolbar span {
+    font-size: 11px;
+    color: #9AA4B1;
+    letter-spacing: 1px;
+  }
+  .print-btn {
+    background: #40B595;
+    color: #0d1117;
+    border: none;
+    padding: 7px 18px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .print-btn:hover { background: #34a07f; }
+
+  /* ── Document wrapper ────────────────────────────────────────────────── */
+  .document { max-width: 960px; margin: 0 auto; padding: 0 8px; }
+
+  /* ── Header ──────────────────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2.5px solid #40B595;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .logo { font-size: 16px; font-weight: bold; }
+  .logo em { color: #40B595; font-style: normal; }
+  .classification {
+    font-size: 7.5px;
+    letter-spacing: 2px;
+    color: #D96161;
+    font-weight: bold;
+    border: 1.5px solid #D96161;
+    padding: 3px 8px;
+    background: #D9616108;
+  }
+
+  /* ── Title block ─────────────────────────────────────────────────────── */
+  .title { font-size: 18px; font-weight: bold; margin-bottom: 3px; }
+  .subtitle { font-size: 9px; color: #4A5568; margin-bottom: 14px; }
+
+  /* ── Meta strip ──────────────────────────────────────────────────────── */
+  .meta-row {
+    display: flex;
+    gap: 24px;
+    background: #f4f7fb;
+    border: 1px solid #dde4ef;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .meta-label { font-size: 7px; letter-spacing: 2px; color: #9AA4B1; text-transform: uppercase; margin-bottom: 1px; }
+  .meta-value { font-size: 9.5px; font-weight: 700; }
+
+  /* ── Risk banner ─────────────────────────────────────────────────────── */
+  .risk-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-left: 3.5px solid ${riskColor};
+    background: ${riskColor}18;
+    margin-bottom: 14px;
+  }
+
+  /* ── KPI cards ───────────────────────────────────────────────────────── */
+  .kpi-row { display: grid; grid-template-columns: 190px 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .kpi-card {
+    border: 1px solid #dde4ef;
+    padding: 12px 14px;
+    background: #f9fbff;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-accent { height: 3px; margin: -12px -14px 10px; }
+  .kpi-label { font-size: 7px; letter-spacing: 2px; color: #9AA4B1; text-transform: uppercase; margin-bottom: 6px; }
+  .kpi-val   { font-size: 32px; font-weight: bold; line-height: 1; }
+  .kpi-sub   { font-size: 8px; color: #4A5568; margin-top: 4px; }
+
+  /* ── Section heading ─────────────────────────────────────────────────── */
+  .section-title {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #9AA4B1;
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: #dde4ef; }
+
+  /* ── Table ───────────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  thead tr { background: #f0f4fa; }
+  th {
+    padding: 7px 10px;
+    text-align: left;
+    font-size: 7.5px;
+    letter-spacing: 1.5px;
+    color: #9AA4B1;
+    text-transform: uppercase;
+    font-weight: bold;
+    border-bottom: 1.5px solid #dde4ef;
+  }
+  .row-even { background: #ffffff; }
+  .row-odd  { background: #f9fbff; }
+
+  /* ── Status chips ────────────────────────────────────────────────────── */
+  .chip {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  .chip-green { background: #40B59522; color: #2d9073; border: 1px solid #40B59540; }
+  .chip-red   { background: #D9616118; color: #c04040; border: 1px solid #D9616135; }
+  .chip-layer { background: #2C313618; color: #4A5568; border: 1px solid #dde4ef; font-size: 7.5px; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid #dde4ef;
+    padding-top: 10px;
+    margin-top: 10px;
+    font-size: 7.5px;
+    color: #9AA4B1;
+    gap: 16px;
+  }
+  .footer-left  { flex: 1; }
+  .footer-mid   { flex: 1; text-align: center; }
+  .footer-right { flex: 1; text-align: right; }
+  .cert {
+    display: inline-block;
+    font-size: 7.5px;
+    border: 1px solid #40B595;
+    color: #40B595;
+    background: #40B59510;
+    padding: 3px 8px;
+    letter-spacing: 1px;
+    font-weight: bold;
+  }
+  .audit-id-block { margin-top: 4px; }
+  .audit-id-block .label { font-size: 6.5px; letter-spacing: 2px; text-transform: uppercase; color: #b0b8c4; }
+  .audit-id-block .value { font-size: 8px; font-weight: 700; color: #6b7a8d; font-family: monospace; letter-spacing: 0.5px; }
+
+  /* ── Print overrides ─────────────────────────────────────────────────── */
+  @media print {
+    /* Hide browser chrome injected elements and screen-only toolbar */
+    .screen-toolbar { display: none !important; }
+    /* Suppress URL/date headers that some browsers print */
+    head title { display: none; }
+    /* Ensure page breaks don't split cards or table rows */
+    .kpi-card   { break-inside: avoid; }
+    tr          { break-inside: avoid; }
+    .risk-banner { break-inside: avoid; }
+    /* Keep footer pinned to bottom of last page */
+    .footer { break-before: avoid; margin-top: auto; }
+    /* Re-assert colour printing — belt & braces */
+    body, .kpi-card, .meta-row, .risk-banner, .row-even, .row-odd,
+    .chip, .chip-green, .chip-red, .chip-layer, .classification, .cert {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
 </style>
 </head><body>
+
+  <!-- Screen-only sticky toolbar: hides on print -->
+  <div class="screen-toolbar">
+    <span>EQA REPORT PREVIEW — ${r.partnerId}</span>
+    <button class="print-btn" onclick="window.print()">⎙ PRINT / SAVE AS PDF</button>
+  </div>
+
+  <div class="document">
+
   <div class="header">
     <div>
       <div class="logo">AGENT-<em>SENTINEL</em></div>
-      <div style="font-size:7.5px;letter-spacing:2px;color:#9AA4B1;margin-top:2px;">ZERO-TRUST AI GOVERNANCE</div>
+      <div style="font-size:7.5px;letter-spacing:2px;color:#9AA4B1;margin-top:2px;">ZERO-TRUST AI GOVERNANCE · v4.0</div>
     </div>
     <div class="classification">${r.classification}</div>
   </div>
@@ -230,6 +445,7 @@ function buildPrintHTML(r: EQAReport): string {
     <div><div class="meta-label">Agents Scoped</div><div class="meta-value">${r.activeAgents} / ${r.agentsScoped} active</div></div>
     <div><div class="meta-label">Anomalies</div><div class="meta-value">${r.anomalyCount}</div></div>
     <div><div class="meta-label">Framework</div><div class="meta-value">${r.complianceFramework}</div></div>
+    <div><div class="meta-label">Printed At</div><div class="meta-value" style="font-size:8.5px;">${printedAt}</div></div>
   </div>
 
   <div class="risk-banner">
@@ -241,47 +457,66 @@ function buildPrintHTML(r: EQAReport): string {
   </div>
 
   <div class="kpi-row">
-    <div class="kpi-card" style="border-color:${arcColor}40;">
+    <div class="kpi-card" style="border-color:${arcColor}55;background:${arcColor}08;">
       <div class="kpi-accent" style="background:${arcColor};"></div>
       <div class="kpi-label">Integrity Confidence Score</div>
       <div class="kpi-val" style="color:${arcColor};">${r.integrityConfidenceScore.toFixed(1)}%</div>
-      <div class="kpi-sub">ML-DSA-87 (FIPS-204) coverage</div>
+      <div class="kpi-sub">ML-DSA-87 · FIPS-204 · Level 5</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" style="background:#40B59508;border-color:#40B59540;">
       <div class="kpi-accent" style="background:#40B595;"></div>
       <div class="kpi-label">Quantum Verified</div>
       <div class="kpi-val" style="color:#40B595;">${r.quantumVerifiedCount.toLocaleString()}</div>
       <div class="kpi-sub">events with ML-DSA-87 signature</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" style="background:#60A5FA08;border-color:#60A5FA40;">
       <div class="kpi-accent" style="background:#60A5FA;"></div>
       <div class="kpi-label">Classical Verified</div>
       <div class="kpi-val" style="color:#60A5FA;">${r.classicalVerifiedCount.toLocaleString()}</div>
       <div class="kpi-sub">events with SHA-512 hash</div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-accent" style="background:${r.anomalyCount > 0 ? "#EBC06D" : "#40B595"};"></div>
+    <div class="kpi-card" style="background:${anomColor}08;border-color:${anomColor}40;">
+      <div class="kpi-accent" style="background:${anomColor};"></div>
       <div class="kpi-label">Intercepted Anomalies</div>
-      <div class="kpi-val" style="color:${r.anomalyCount > 0 ? "#EBC06D" : "#40B595"};">${r.anomalyCount}</div>
+      <div class="kpi-val" style="color:${anomColor};">${r.anomalyCount}</div>
       <div class="kpi-sub">blocked at governance layer</div>
     </div>
   </div>
 
-  <div class="section-title">Intercepted Anomalies — FIPS-204 Cryptographic Evidence (top 30)</div>
+  <div class="section-title">Intercepted Anomalies — FIPS-204 Cryptographic Evidence (up to 30 shown)</div>
   <table>
     <thead><tr>
-      <th>Time</th><th>Agent ID</th><th>Type</th><th>Anomaly Reason</th><th>Quantum Proof</th><th>FIPS-204 Signature Hash</th>
+      <th>Time</th><th>Agent ID</th><th>Type</th><th>Anomaly Reason</th><th>Quantum Proof</th><th>FIPS-204 Sig Hash</th><th>Block Layer</th>
     </tr></thead>
-    <tbody>${anomalyRows || '<tr><td colspan="6" style="padding:12px;text-align:center;color:#9AA4B1;">No anomalies detected in this window.</td></tr>'}</tbody>
+    <tbody>${anomalyRows || '<tr><td colspan="7" style="padding:14px;text-align:center;color:#9AA4B1;background:#f9fbff;">No anomalies detected in this audit window.</td></tr>'}</tbody>
   </table>
 
   <div class="footer">
-    <div>
-      <div>Generated by Agent-Sentinel v4.0 EQA Engine · ${r.reportId}</div>
-      <div style="opacity:0.6;margin-top:2px;">© 2026 Agent-Sentinel. Classified. Unauthorized distribution prohibited.</div>
+    <div class="footer-left">
+      <div>Generated by Agent-Sentinel v4.0 EQA Engine</div>
+      <div style="opacity:0.65;margin-top:2px;">© 2026 Agent-Sentinel. Classified. Unauthorized distribution prohibited.</div>
+      <div class="audit-id-block" style="margin-top:6px;">
+        <div class="label">Audit ID</div>
+        <div class="value">${auditId}</div>
+      </div>
     </div>
-    <div class="cert">QUANTUM-SEALED · QL-2.0</div>
+    <div class="footer-mid">
+      <div class="audit-id-block" style="margin-top:0;">
+        <div class="label">Printed At</div>
+        <div class="value">${printedAt}</div>
+      </div>
+      <div class="audit-id-block" style="margin-top:6px;">
+        <div class="label">Report Generated</div>
+        <div class="value">${dateStr} · ${timeStr}</div>
+      </div>
+    </div>
+    <div class="footer-right">
+      <div class="cert">QUANTUM-SEALED · QL-2.0</div>
+      <div style="margin-top:6px;font-size:7px;color:#b0b8c4;">ML-DSA-87 · FIPS-204 · EU AI Act Art. 12/14</div>
+    </div>
   </div>
+
+  </div><!-- /.document -->
 </body></html>`;
 }
 
