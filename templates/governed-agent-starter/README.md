@@ -73,7 +73,45 @@ const draft = await writer.governed( "write", "...", writeFn);
 
 ---
 
-## Add the Sentinel-Governed badge to your README
+## The Sentinel-Governed Certification Program
+
+Keep your cluster health above 80% and earn the right to display the
+**Sentinel-Governed** badge in your project README — a live SVG that reflects
+your agent's real-time governance posture.
+
+```markdown
+![sentinel-governed](https://YOUR_SENTINEL_URL/api/v1/badge/YOUR_AGENT_ID.svg)
+```
+
+The badge updates in real-time and is publicly verifiable:
+
+| Color | Health | Meaning |
+|---|---|---|
+| 🟢 Green | ≥ 80% | **Certified** — consistent, honest, low-risk behavior |
+| 🟡 Yellow | 60–79% | Marginal — some anomalies detected, monitor closely |
+| 🔴 Red | < 60% | Compromised — significant integrity or consistency failures |
+| ⚫ REVOKED | — | Permanently revoked after honey-token breach |
+
+### How to qualify
+
+1. **Write truthful rationales** — The intent-action consistency engine scores
+   every event. Hallucinated or contradictory rationales degrade your score.
+
+2. **Avoid high-risk actions without approval** — Actions flagged as high-risk
+   enter the War Room queue. Respond to approvals promptly to keep health high.
+
+3. **Never invoke the 7 honey-token ghost tools** — Calling any forbidden tool
+   (e.g. `admin_global_reset`, `drop_all_tables`) causes *immediate, permanent*
+   revocation. One breach disqualifies that agent — no recovery.
+
+> **Why this matters:** The badge creates a publicly verifiable signal that your
+> AI agent operates under cryptographic audit and active governance. Projects
+> that carry the green badge have demonstrated compliance with EU AI Act
+> obligations for traceability (Art. 12) and human oversight (Art. 14).
+
+---
+
+## Add the badge to your README
 
 Replace `YOUR_AGENT_ID` with your agent's ID and `YOUR_SENTINEL_URL` with your deployment:
 
@@ -81,16 +119,15 @@ Replace `YOUR_AGENT_ID` with your agent's ID and `YOUR_SENTINEL_URL` with your d
 ![sentinel-governed](https://YOUR_SENTINEL_URL/api/v1/badge/YOUR_AGENT_ID.svg)
 ```
 
-The badge is live — it reflects your agent's real-time cluster health score:
+Or link it to your War Room dashboard for full transparency:
 
-- **Green** (≥ 80%) — Clean and certified
-- **Yellow** (60–79%) — Marginal, monitor closely
-- **Red** (< 60%) — Compromised / revoked
+```markdown
+[![sentinel-governed](https://YOUR_SENTINEL_URL/api/v1/badge/YOUR_AGENT_ID.svg)](https://YOUR_SENTINEL_URL)
+```
 
-**To earn the green badge**, maintain a cluster health score above 80% over your last 5 actions. This means:
-- Write consistent, truthful rationales
-- Avoid high-risk actions without human approval
-- Never invoke the 7 honey-token ghost tools
+You can generate the exact embed snippet from the **Sentinel Badge** page in
+your dashboard — it auto-fills the URL and provides Markdown, HTML, and direct
+link formats.
 
 ---
 
@@ -98,7 +135,7 @@ The badge is live — it reflects your agent's real-time cluster health score:
 
 | Variable | Required | Description |
 |---|---|---|
-| `SENTINEL_URL` | Yes | Your Sentinel API base URL, e.g. `https://my-sentinel.replit.app/api/v1` |
+| `SENTINEL_URL` | Yes | Your Sentinel API base URL, e.g. `https://my-sentinel.replit.app/api` |
 | `AGENT_ID` | No | Agent identifier (defaults to `my-governed-agent`) |
 
 ---
@@ -114,6 +151,24 @@ The badge is live — it reflects your agent's real-time cluster health score:
 | `spawnChild(agentId)` | Create a child agent with linked trace |
 
 Full API: see `sdk/sentinel.ts` and `sdk/sentinel.py`.
+
+---
+
+## Honey-token ghost tools — never call these
+
+The following tool names are permanently blacklisted. Any agent that calls them
+is immediately and irreversibly revoked, logged, and broadcast to the War Room
+as a critical breach:
+
+```
+admin_global_reset      drop_all_tables         delete_audit_logs
+bypass_authorization    disable_monitoring      export_raw_secrets
+override_kill_switch
+```
+
+These are ghost tools — they do not exist in any legitimate workflow. If an
+agent calls one, it has either been compromised or is executing a logic-poisoned
+instruction chain.
 
 ---
 

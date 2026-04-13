@@ -16,6 +16,8 @@ import {
   Skull,
   Lock,
   Download,
+  BookMarked,
+  FlaskConical,
 } from "lucide-react";
 import { formatTime } from "@/lib/audit-utils";
 
@@ -263,6 +265,102 @@ export default function WarRoomPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Active Defense Case Studies — honey-token breach post-mortems */}
+      {criticalBreaches.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-950/10">
+          <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookMarked className="w-4 h-4 text-amber-400" />
+              <h2 className="font-mono text-sm font-medium text-amber-300">
+                ACTIVE DEFENSE — CASE STUDIES
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <FlaskConical className="w-3 h-3 text-amber-500/70" />
+              <span className="text-[10px] font-mono text-amber-500/70">
+                {criticalBreaches.length} documented incident{criticalBreaches.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+          <div className="divide-y divide-amber-500/10">
+            {criticalBreaches.map((breach, idx) => (
+              <div key={breach.id} className="p-4 hover:bg-amber-500/5 transition-colors">
+                <div className="flex items-start gap-4">
+                  {/* Case number */}
+                  <div className="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center shrink-0">
+                    <span className="text-[8px] font-mono text-amber-600/70 uppercase tracking-widest">Case</span>
+                    <span className="text-lg font-mono font-bold text-amber-400 leading-none">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {/* Title row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono font-bold text-amber-300">
+                        Rogue Agent Caught in Honey-Token Trap
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
+                        TRAP SUCCESSFUL
+                      </span>
+                    </div>
+                    {/* Forensics grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[
+                        { label: "Rogue Agent", value: breach.agentId, mono: true },
+                        { label: "Forbidden Tool", value: breach.actionType, mono: true, highlight: true },
+                        { label: "Incident Time", value: formatTime(breach.requestedAt), mono: true },
+                        { label: "Defense", value: "Immediate Revocation", mono: true },
+                      ].map(({ label, value, mono, highlight }) => (
+                        <div key={label} className="rounded bg-black/20 border border-amber-500/15 p-2">
+                          <div className="text-[9px] font-mono text-amber-600/70 uppercase tracking-wider mb-0.5">
+                            {label}
+                          </div>
+                          <div
+                            className={`text-xs font-bold truncate ${
+                              highlight ? "text-red-400" : "text-amber-200"
+                            } ${mono ? "font-mono" : ""}`}
+                          >
+                            {value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Narrative */}
+                    <p className="text-[11px] font-mono text-muted-foreground leading-relaxed">
+                      {breach.notes}
+                    </p>
+                    {/* Outcome tag */}
+                    <div className="flex items-center gap-3 text-[10px] font-mono flex-wrap">
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <Lock className="w-2.5 h-2.5" />
+                        Agent permanently revoked
+                      </span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="flex items-center gap-1 text-amber-400/70">
+                        <Skull className="w-2.5 h-2.5" />
+                        Honey-token defense validated
+                      </span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="text-muted-foreground">
+                        Trace: {breach.traceId}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-3 border-t border-amber-500/20 bg-amber-500/5">
+            <p className="text-[10px] font-mono text-amber-600/70 leading-relaxed">
+              Each case above is a real-world validation of the Sentinel active defense system.
+              Rogue agents that attempted to invoke forbidden ghost tools were caught, revoked,
+              and logged within milliseconds. Export an Evidence Bag (PDF) to include these
+              incidents in your EU AI Act Art. 14 compliance submission.
+            </p>
+          </div>
+        </Card>
       )}
 
       {/* Stats row */}

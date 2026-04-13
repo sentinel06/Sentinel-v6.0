@@ -11,6 +11,7 @@ import {
   GitBranch,
   ShieldAlert,
   X,
+  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetIntegrityStatus } from "@workspace/api-client-react";
@@ -86,6 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { path: "/registry", label: "Registry", icon: Cpu },
         { path: "/compliance", label: "Compliance", icon: FileCheck },
         { path: "/integrity", label: "Hash Chain", icon: ShieldCheck },
+        { path: "/badge", label: "Sentinel Badge", icon: Award },
       ],
     },
   ];
