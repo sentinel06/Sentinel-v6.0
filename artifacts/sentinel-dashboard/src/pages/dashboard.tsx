@@ -10,7 +10,10 @@ import {
   ShieldAlert,
   ArrowRight,
   Database,
-  BrainCircuit
+  BrainCircuit,
+  GitBranch,
+  Globe,
+  Lock
 } from "lucide-react";
 import { 
   useGetStats, 
@@ -21,6 +24,14 @@ import { isAnomalous, formatTime, truncateHash } from "@/lib/audit-utils";
 type AuditLogWithConsistency = AuditLog & {
   consistencyScore?: number;
   consistencyReasons?: string[];
+  // Swarm Governance fields
+  parentAgentId?: string | null;
+  swarmId?: string | null;
+  // Sovereign log metadata
+  computeOriginRegion?: string;
+  // QSC
+  quantumSig?: string | null;
+  quantumAlgorithm?: string;
 };
 
 function ConsistencyBadge({ score }: { score: number | undefined }) {
@@ -244,6 +255,28 @@ export default function DashboardPage() {
                             {log.anomalyReason}
                           </div>
                         )}
+
+                        {(log.swarmId || log.parentAgentId || (log.computeOriginRegion && log.computeOriginRegion !== "unspecified")) && (
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            {log.swarmId && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border bg-[#40B595]/8 border-[#40B595]/20 text-[#40B595]/80" title={`Swarm: ${log.swarmId}`}>
+                                <GitBranch className="w-2.5 h-2.5" />
+                                {log.swarmId.substring(0, 12)}
+                              </span>
+                            )}
+                            {log.parentAgentId && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border bg-[#9AA4B1]/8 border-[#9AA4B1]/20 text-[#9AA4B1]" title={`Parent Agent: ${log.parentAgentId}`}>
+                                ↖ {log.parentAgentId.substring(0, 10)}
+                              </span>
+                            )}
+                            {log.computeOriginRegion && log.computeOriginRegion !== "unspecified" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border bg-blue-500/8 border-blue-500/20 text-blue-400/80" title="Compute origin region">
+                                <Globe className="w-2.5 h-2.5" />
+                                {log.computeOriginRegion}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       
                       <div className="shrink-0 flex flex-col items-end text-[10px] text-muted-foreground gap-1 w-28">
@@ -329,6 +362,22 @@ export default function DashboardPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground text-xs">Last Verified</span>
                 <span>Just now</span>
+              </div>
+              <div className="border-t border-[#2C3136] my-1" />
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Quantum Integrity
+                </span>
+                <span className="text-[#40B595] font-bold text-[10px] tracking-wider">ACTIVE</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">Crypto Algorithm</span>
+                <span className="text-[10px] text-[#9AA4B1] font-mono bg-[#2C3136] px-1.5 py-0.5 rounded">ML-DSA-87</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">FIPS Standard</span>
+                <span className="text-[10px] text-[#9AA4B1]">FIPS-204</span>
               </div>
             </div>
           </Card>

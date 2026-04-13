@@ -19,6 +19,8 @@ import {
   recordConsistencyScore,
   isAgentRevoked,
 } from "../lib/governance";
+import { signWithMLDSA, getQuantumIntegrityManifest } from "../crypto/pqc";
+import { buildDriftReportFromLogs } from "../lib/driftDetector";
 
 const router: IRouter = Router();
 
@@ -39,6 +41,14 @@ function rowToLog(row: typeof auditLogsTable.$inferSelect) {
     consistencyReasons: row.consistencyReasons,
     parentTraceId: row.parentTraceId ?? null,
     dependencyChain: row.dependencyChain ?? [],
+    // Swarm Governance fields
+    parentAgentId: (row as any).parentAgentId ?? null,
+    swarmId: (row as any).swarmId ?? null,
+    // Sovereign log metadata
+    computeOriginRegion: (row as any).computeOriginRegion ?? "unspecified",
+    // PQC signature fingerprint
+    quantumSig: (row as any).quantumSig ?? null,
+    quantumAlgorithm: "ML-DSA-87",
   };
 }
 
@@ -117,6 +127,14 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   const parentTraceId: string | null = typeof req.body.parentTraceId === "string" ? req.body.parentTraceId : null;
   const dependencyChain: string[] = Array.isArray(req.body.dependencyChain) ? req.body.dependencyChain : [];
 
+  // 4. Swarm Governance fields — parent agent ancestry and swarm membership
+  const parentAgentId: string | null = typeof req.body.parentAgentId === "string" ? req.body.parentAgentId : null;
+  const swarmId: string | null = typeof req.body.swarmId === "string" ? req.body.swarmId : null;
+
+  // 5. Sovereign Logs — geopatriation compliance (2026 AI Act update)
+  const computeOriginRegion: string =
+    typeof req.body.computeOriginRegion === "string" ? req.body.computeOriginRegion : "unspecified";
+
   const timestamp = new Date();
 
   // Count rows before insert to determine block position (append-only table)
@@ -137,6 +155,9 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   // Anomaly detection now incorporates consistency score — low score → High-Risk flag
   const anomaly = detectAnomaly(eventType, rationale, consistency.score, consistency.reasons);
 
+  // QSC: sign the currentHash with ML-DSA-87 abstraction layer
+  const pqcSig = signWithMLDSA(currentHash);
+
   const [inserted] = await db
     .insert(auditLogsTable)
     .values({
@@ -154,11 +175,25 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
       consistencyReasons: consistency.reasons,
       parentTraceId: parentTraceId,
       dependencyChain: dependencyChain,
-    })
+      ...(parentAgentId ? { parentAgentId } : {}),
+      ...(swarmId ? { swarmId } : {}),
+      computeOriginRegion,
+      quantumSig: pqcSig.signature.substring(0, 88),
+    } as any)
     .returning();
 
   // Record this score in the in-memory session health cache for the circuit breaker
   recordConsistencyScore(agentId, consistency.score);
+
+  // Cognitive Drift Detection: query recent events for this agent and analyze
+  const recentAgentLogs = await db
+    .select({ eventType: auditLogsTable.eventType })
+    .from(auditLogsTable)
+    .where(eq(auditLogsTable.agentId, agentId))
+    .orderBy(desc(auditLogsTable.timestamp))
+    .limit(120);
+
+  const driftReport = buildDriftReportFromLogs(recentAgentLogs);
 
   req.log.info(
     { logId: inserted.id, agentId, eventType, traceId, consistencyScore: consistency.score },
@@ -182,7 +217,15 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
 
   const logData = rowToLog(inserted);
   broadcastLog(logData as unknown as Record<string, unknown>);
-  res.status(201).json(logData);
+  res.status(201).json({
+    ...logData,
+    cognitiveDrift: driftReport,
+    quantumSig: {
+      algorithm: pqcSig.algorithm,
+      signature: pqcSig.signature.substring(0, 88),
+      publicKeyFingerprint: pqcSig.publicKeyFingerprint,
+    },
+  });
 });
 
 router.get("/v1/logs", async (req, res): Promise<void> => {
@@ -425,6 +468,10 @@ router.post("/v1/integrity/verify", async (req, res): Promise<void> => {
     ...status,
     lastVerifiedAt: new Date().toISOString(),
   });
+});
+
+router.get("/v1/integrity/quantum", (_req, res): void => {
+  res.json(getQuantumIntegrityManifest());
 });
 
 export default router;

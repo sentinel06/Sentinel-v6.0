@@ -22,6 +22,13 @@ export const auditLogsTable = pgTable(
     // Both MUST have defaults — the immutability trigger blocks any UPDATE on this table
     parentTraceId: text("parent_trace_id").default(null),
     dependencyChain: jsonb("dependency_chain").notNull().default([]),
+    // Swarm Governance: sovereign ancestry tracking (Phase 2 — Swarm & Mesh Governance)
+    parentAgentId: text("parent_agent_id").default(null),
+    swarmId: text("swarm_id").default(null),
+    // Sovereign Logs: compute origin region for geopatriation compliance (2026 AI Act update)
+    computeOriginRegion: text("compute_origin_region").notNull().default("unspecified"),
+    // Quantum-Secure-By-Construction: PQC signature fingerprint of currentHash (ML-DSA-87 abstraction)
+    quantumSig: text("quantum_sig").default(null),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
