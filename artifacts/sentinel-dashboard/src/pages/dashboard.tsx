@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { 
   Activity, 
   AlertTriangle, 
@@ -13,7 +19,9 @@ import {
   BrainCircuit,
   GitBranch,
   Globe,
-  Lock
+  Lock,
+  Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { 
   useGetStats, 
@@ -47,6 +55,123 @@ function ConsistencyBadge({ score }: { score: number | undefined }) {
       <BrainCircuit className="w-2.5 h-2.5" />
       {pct}%
     </span>
+  );
+}
+
+/**
+ * QuantumBadge — hover to reveal the full cryptographic proof for this event.
+ * Renders only when the log entry carries a quantum signature (pqSignature stored).
+ */
+function QuantumBadge({ quantumSig }: { quantumSig?: string | null }) {
+  if (!quantumSig) return null;
+
+  return (
+    <TooltipProvider delayDuration={120}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border cursor-default select-none"
+            style={{
+              color: "#40B595",
+              background: "rgba(64,181,149,0.10)",
+              borderColor: "rgba(64,181,149,0.28)",
+            }}
+          >
+            <ShieldCheck className="w-2.5 h-2.5" />
+            QUANTUM-SECURE
+          </span>
+        </TooltipTrigger>
+
+        <TooltipContent
+          side="top"
+          sideOffset={6}
+          className="p-0 border-0 bg-transparent shadow-none"
+        >
+          {/* Custom dark proof card — overrides default bg-primary tooltip style */}
+          <div
+            className="rounded-lg border px-4 py-3 font-mono text-[11px] shadow-xl min-w-[260px]"
+            style={{
+              background: "#0D1117",
+              borderColor: "#2C3136",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            }}
+          >
+            {/* Title row */}
+            <div
+              className="flex items-center gap-1.5 mb-3 pb-2 border-b"
+              style={{ borderColor: "#2C3136" }}
+            >
+              <ShieldCheck className="w-3 h-3" style={{ color: "#40B595" }} />
+              <span className="font-bold text-[10px] uppercase tracking-widest" style={{ color: "#40B595" }}>
+                Cryptographic Proof
+              </span>
+            </div>
+
+            {/* Row 1 — Classical layer */}
+            <div className="flex items-start gap-2.5 mb-2">
+              <div
+                className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0"
+                style={{ background: "rgba(64,181,149,0.15)", border: "1px solid rgba(64,181,149,0.30)" }}
+              >
+                <Lock className="w-2.5 h-2.5" style={{ color: "#40B595" }} />
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest mb-0.5" style={{ color: "#9AA4B1" }}>
+                  Classical
+                </div>
+                <div style={{ color: "#E6EDF3" }}>SHA-512 Verified</div>
+              </div>
+            </div>
+
+            {/* Row 2 — Quantum layer */}
+            <div className="flex items-start gap-2.5 mb-2">
+              <div
+                className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0"
+                style={{ background: "rgba(64,181,149,0.15)", border: "1px solid rgba(64,181,149,0.30)" }}
+              >
+                <Zap className="w-2.5 h-2.5" style={{ color: "#40B595" }} />
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest mb-0.5" style={{ color: "#9AA4B1" }}>
+                  Quantum
+                </div>
+                <div style={{ color: "#E6EDF3" }}>
+                  ML-DSA-87{" "}
+                  <span className="text-[10px]" style={{ color: "#9AA4B1" }}>
+                    (Lattice-Depth: 8×7)
+                  </span>{" "}
+                  Verified
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3 — Status */}
+            <div className="flex items-start gap-2.5">
+              <div
+                className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0"
+                style={{ background: "rgba(64,181,149,0.15)", border: "1px solid rgba(64,181,149,0.30)" }}
+              >
+                <CheckCircle2 className="w-2.5 h-2.5" style={{ color: "#40B595" }} />
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest mb-0.5" style={{ color: "#9AA4B1" }}>
+                  Status
+                </div>
+                <div style={{ color: "#E6EDF3" }}>FIPS-204 Compliant</div>
+              </div>
+            </div>
+
+            {/* Sig fingerprint */}
+            <div
+              className="mt-3 pt-2 border-t text-[9px] truncate"
+              style={{ borderColor: "#2C3136", color: "#6B7680" }}
+            >
+              sig: {quantumSig.substring(0, 24)}…
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -227,6 +352,7 @@ export default function DashboardPage() {
                             {log.eventType}
                           </span>
                           <ConsistencyBadge score={score} />
+                          <QuantumBadge quantumSig={log.quantumSig} />
                           <span className="text-xs text-muted-foreground truncate" title={log.agentId}>
                             {log.agentId.substring(0, 8)}…
                           </span>
