@@ -17,6 +17,7 @@ import TopologyPage from "@/pages/topology";
 import BadgePage from "@/pages/badge";
 import SwarmMapPage from "@/pages/swarmmap";
 import PartnerPortalPage from "@/pages/partnerportal";
+import EQAPage from "@/pages/eqa";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ function Router() {
         <Route path="/badge" component={BadgePage} />
         <Route path="/swarmmap" component={SwarmMapPage} />
         <Route path="/partner" component={PartnerPortalPage} />
+        <Route path="/eqa" component={EQAPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
