@@ -1,11 +1,13 @@
 /**
  * Governance-as-a-Service (GaaS) Partner Routes
  *
- * GET  /v1/partner/whitepaper        — Download WHITE_PAPER.md as a file
- * POST /v1/partner/keys              — Generate a new scoped API key
- * GET  /v1/partner/keys              — List all keys (optionally filter by partnerId)
- * PATCH /v1/partner/keys/:keyId/revoke — Revoke a key
- * GET  /v1/partner/health            — Aggregate trust-score feed per partner
+ * GET  /v1/partner/whitepaper            — Download WHITE_PAPER.md as a file
+ * POST /v1/partner/keys                  — Generate a new scoped API key
+ * GET  /v1/partner/keys                  — List all keys (optionally filter by partnerId)
+ * PATCH /v1/partner/keys/:keyId/revoke   — Revoke a key
+ * GET  /v1/partner/health                — Aggregate trust-score feed per partner
+ * GET  /v1/compliance/executive-summary  — 24h executive audit (board-level report)
+ * GET  /v1/compliance/audit-report       — Partner-scoped time-windowed audit report
  */
 
 import { Router, type IRouter } from "express";
@@ -120,6 +122,176 @@ router.patch("/v1/partner/keys/:keyId/revoke", async (req, res): Promise<void> =
   }
 
   res.json({ success: true, keyId, status: "revoked" });
+});
+
+// ── generate_executive_summary (core function) ────────────────────────────
+//
+// Aggregates last N hours of audit logs into three board-level metrics:
+//   1. Trust Velocity      — rate of verified (non-anomalous) actions per hour
+//   2. Quantum Integrity   — FIPS-204 ML-DSA-87 signature coverage %
+//   3. Intervention Success — drift/circuit-triggered autonomous blocks
+
+async function generate_executive_summary(
+  partnerId: string | null,
+  hours = 24,
+) {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - hours * 60 * 60 * 1000);
+
+  // Determine which agents to scope
+  let agentScope: string[] | null = null;
+  let agentsGovernedCount = 0;
+  let activeAgentsCount = 0;
+
+  if (partnerId) {
+    const agents = await db
+      .select()
+      .from(agentRegistryTable)
+      .where(eq(agentRegistryTable.ownerEmail, partnerId));
+    agentScope = agents.map((a) => a.agentId);
+    agentsGovernedCount = agents.length;
+    activeAgentsCount = agents.filter((a) => a.isActive).length;
+  } else {
+    const all = await db.select().from(agentRegistryTable);
+    agentsGovernedCount = all.length;
+    activeAgentsCount = all.filter((a) => a.isActive).length;
+  }
+
+  // Fetch logs in the time window
+  const logConditions: Parameters<typeof and>[0][] = [
+    gte(auditLogsTable.timestamp, windowStart),
+    lte(auditLogsTable.timestamp, now),
+  ];
+  if (agentScope && agentScope.length > 0) {
+    logConditions.push(inArray(auditLogsTable.agentId, agentScope));
+  }
+
+  const logs = await db
+    .select()
+    .from(auditLogsTable)
+    .where(and(...logConditions));
+
+  const totalEvents = logs.length;
+
+  // ── 1. Trust Velocity ──────────────────────────────────────────────────
+  // Verified = non-anomalous events; rate = verified events per hour
+  const verified = logs.filter((l) => !l.isAnomalous);
+  const totalVerified = verified.length;
+  const verifiedPct = totalEvents > 0 ? Math.round((totalVerified / totalEvents) * 1000) / 10 : 100;
+  const trustVelocityRate = Math.round((totalVerified / hours) * 10) / 10; // actions/hr
+
+  // Velocity trend: compare first vs last 12h within the window
+  const midpoint = new Date(windowStart.getTime() + (hours / 2) * 60 * 60 * 1000);
+  const firstHalf  = verified.filter((l) => l.timestamp < midpoint).length;
+  const secondHalf = verified.filter((l) => l.timestamp >= midpoint).length;
+  const velocityTrend: "ACCELERATING" | "STABLE" | "DECELERATING" =
+    secondHalf > firstHalf * 1.1 ? "ACCELERATING"
+    : secondHalf < firstHalf * 0.9 ? "DECELERATING"
+    : "STABLE";
+
+  // ── 2. Quantum Integrity Score (FIPS-204) ─────────────────────────────
+  const quantumSigned = logs.filter((l) => l.pqSignature !== null).length;
+  const quantumScore = totalEvents > 0 ? Math.round((quantumSigned / totalEvents) * 1000) / 10 : 0;
+  let fipsCertification: string;
+  if (quantumScore === 0)        fipsCertification = "NON-COMPLIANT";
+  else if (quantumScore < 50)    fipsCertification = "PARTIAL";
+  else if (quantumScore < 90)    fipsCertification = "COMPLIANT — QL-1.0";
+  else if (quantumScore < 100)   fipsCertification = "COMPLIANT — QL-2.0";
+  else                           fipsCertification = "FULLY SOVEREIGN — QL-2.0";
+
+  // ── 3. Intervention Success ────────────────────────────────────────────
+  // Drift-triggered blocks = anomalous events where the governance engine
+  // intercepted due to cognitive drift, circuit-breaker, or kill-switch
+  const driftKeywords = /drift|cognitive|lockout/i;
+  const circuitKeywords = /circuit|kill.switch|blocked|revoked/i;
+  const anomalous = logs.filter((l) => l.isAnomalous);
+  const driftTriggered    = anomalous.filter((l) => l.anomalyReason && driftKeywords.test(l.anomalyReason)).length;
+  const circuitTriggered  = anomalous.filter((l) => l.anomalyReason && circuitKeywords.test(l.anomalyReason)).length;
+  const totalInterventions = driftTriggered + circuitTriggered;
+  const successRate = anomalous.length > 0
+    ? Math.round((totalInterventions / anomalous.length) * 1000) / 10
+    : 100;
+
+  // ── Risk Rating ────────────────────────────────────────────────────────
+  const anomalyRate = totalEvents > 0 ? anomalous.length / totalEvents : 0;
+  let riskRating: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  if (verifiedPct >= 95 && anomalyRate < 0.02)      riskRating = "LOW";
+  else if (verifiedPct >= 80 && anomalyRate < 0.10) riskRating = "MEDIUM";
+  else if (verifiedPct >= 60 && anomalyRate < 0.25) riskRating = "HIGH";
+  else                                                riskRating = "CRITICAL";
+
+  // ── Narrative ──────────────────────────────────────────────────────────
+  const narrative = [
+    `In the past ${hours} hours, ${agentsGovernedCount} governed agent${agentsGovernedCount !== 1 ? "s" : ""} generated ${totalEvents.toLocaleString()} auditable events.`,
+    `Trust Velocity stands at ${trustVelocityRate} verified actions per hour (${verifiedPct}% of all events), with a ${velocityTrend.toLowerCase()} trend over the reporting window.`,
+    quantumScore > 0
+      ? `Quantum Integrity: ${quantumScore}% of events carry ML-DSA-87 (FIPS-204, Level 5) hybrid signatures — certification status: ${fipsCertification}.`
+      : "Quantum signature migration has not yet commenced for this portfolio. Recommend immediate QL-2.0 onboarding.",
+    totalInterventions > 0
+      ? `The Sentinel governance engine executed ${totalInterventions} autonomous intervention${totalInterventions !== 1 ? "s" : ""} — ${driftTriggered} via Cognitive Drift Detection and ${circuitTriggered} via Circuit Breaker. Intervention success rate: ${successRate}%.`
+      : "No autonomous interventions were required in the reporting window.",
+    `Overall risk classification: ${riskRating}.`,
+  ].join(" ");
+
+  return {
+    reportId: `SENT-EXEC-${Date.now()}`,
+    generatedAt: now.toISOString(),
+    timeWindow: `${hours}h`,
+    windowStart: windowStart.toISOString(),
+    windowEnd: now.toISOString(),
+    organization: partnerId ?? "ALL PARTNERS",
+    agentsGovernedCount,
+    activeAgentsCount,
+    totalEvents,
+    metrics: {
+      trustVelocity: {
+        label: "Trust Velocity",
+        rate: trustVelocityRate,
+        verifiedPct,
+        totalVerified,
+        totalEvents,
+        trend: velocityTrend,
+        unit: "actions / hr",
+      },
+      quantumIntegrityScore: {
+        label: "Quantum Integrity Score",
+        score: quantumScore,
+        fipsLevel: "FIPS-204",
+        fipsStandard: "ML-DSA-87 (NIST FIPS-204)",
+        signedEvents: quantumSigned,
+        totalEvents,
+        certification: fipsCertification,
+      },
+      interventionSuccess: {
+        label: "Intervention Success",
+        count: totalInterventions,
+        driftTriggered,
+        circuitTriggered,
+        totalAnomalies: anomalous.length,
+        successRate,
+        unit: "autonomous blocks",
+      },
+    },
+    riskRating,
+    complianceFramework: "EU AI Act Art. 12/14 · NIST AI RMF · FIPS-204 (QL-2.0)",
+    narrative,
+    classification: "BOARD OF DIRECTORS — CONFIDENTIAL",
+  };
+}
+
+// ── GET /v1/compliance/executive-summary ──────────────────────────────────
+
+router.get("/v1/compliance/executive-summary", async (req, res): Promise<void> => {
+  const { partnerId, hours } = req.query;
+  try {
+    const summary = await generate_executive_summary(
+      partnerId ? String(partnerId) : null,
+      hours ? Math.max(1, Math.min(168, Number(hours))) : 24,
+    );
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to generate executive summary" });
+  }
 });
 
 // ── GET /v1/compliance/audit-report ──────────────────────────────────────

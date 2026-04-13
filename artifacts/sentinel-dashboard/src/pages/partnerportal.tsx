@@ -21,6 +21,7 @@ import {
   FileDown,
   BookOpen,
 } from "lucide-react";
+import ExecutiveSummaryPDF from "@/components/ExecutiveSummaryPDF";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -714,9 +715,12 @@ export default function PartnerPortalPage() {
             Enterprise governance infrastructure for AI agent swarms — powered by Agent-Sentinel
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-          <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.sage }} />
-          All sessions quantum-sealed
+        <div className="flex items-center gap-3">
+          <ExecutiveSummaryPDF />
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.sage }} />
+            All sessions quantum-sealed
+          </div>
         </div>
       </div>
 
