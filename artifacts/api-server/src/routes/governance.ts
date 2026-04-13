@@ -40,6 +40,7 @@ import {
   isGlobalKillActive,
   getRevokedAgents,
   revokeAgent,
+  recursiveRevokeTree,
   emitGovernanceEvent,
 } from "../lib/governance";
 import { broadcastGovernanceEvent } from "../lib/ws";
@@ -63,8 +64,10 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
 
   // ── 0. HONEY-TOKEN TRAP: check before anything else ─────────────────────
   if (isHoneypotToken(actionType)) {
-    // Immediately revoke the agent
+    // Immediately revoke the agent AND recursively revoke all ancestors
+    // (a compromised child implies a potentially compromised parent lineage)
     revokeAgent(agentId);
+    recursiveRevokeTree(agentId, `Honey-token breach: attempted to invoke "${actionType}"`).catch(() => {});
 
     const id = randomUUID();
     const now = new Date().toISOString();

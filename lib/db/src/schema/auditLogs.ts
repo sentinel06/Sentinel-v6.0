@@ -29,6 +29,9 @@ export const auditLogsTable = pgTable(
     computeOriginRegion: text("compute_origin_region").notNull().default("unspecified"),
     // Quantum-Secure-By-Construction: PQC signature fingerprint of currentHash (ML-DSA-87 abstraction)
     quantumSig: text("quantum_sig").default(null),
+    // QL-2.0 Hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
+    // Stores a HybridSignatureEnvelope as JSONB. Null for pre-QL-2.0 entries.
+    pqSignature: jsonb("pq_signature").default(null),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
@@ -98,6 +101,37 @@ export const archiveSealsTable = pgTable(
 );
 
 export type ArchiveSeal = typeof archiveSealsTable.$inferSelect;
+
+// ── Swarm Ancestry Engine ─────────────────────────────────────────────────
+// Tracks parent/child relationships between agent sessions.
+// Enables recursive ancestry tracing and recursive revocation up the tree.
+
+export const agentSessionsTable = pgTable(
+  "agent_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    /** agentId of the agent that spawned this one (null = root) */
+    parentUid: text("parent_uid").default(null),
+    /** The root swarm's identifier, propagated down the ancestry chain */
+    rootSwarmId: text("root_swarm_id").default(null),
+    /** Peer-level swarm membership (may differ from rootSwarmId) */
+    swarmId: text("swarm_id").default(null),
+    /** active | revoked | drift-locked */
+    status: text("status").notNull().default("active"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }).default(null),
+    revokedReason: text("revoked_reason").default(null),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("agent_sessions_agent_id_idx").on(table.agentId),
+    index("agent_sessions_parent_uid_idx").on(table.parentUid),
+    index("agent_sessions_root_swarm_id_idx").on(table.rootSwarmId),
+    index("agent_sessions_status_idx").on(table.status),
+  ],
+);
+
+export type AgentSession = typeof agentSessionsTable.$inferSelect;
 
 // ── Governed Agent Registry ────────────────────────────────────────────────
 // Each agent must be registered before its logs are accepted (or logs are

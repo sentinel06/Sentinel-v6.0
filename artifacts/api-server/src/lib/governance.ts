@@ -11,6 +11,8 @@
  */
 
 import { EventEmitter } from "events";
+import { db, agentSessionsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 // ── Session Health Cache ───────────────────────────────────────────────────
 
@@ -105,6 +107,52 @@ export function isGlobalKillActive(): boolean {
 
 export function getRevokedAgents(): string[] {
   return Array.from(revokedAgents);
+}
+
+// ── Swarm Ancestry Recursive Revocation ───────────────────────────────────
+//
+// When a honey-token breach or explicit revocation targets a child agent,
+// this function walks UP the ancestry chain, revoking every ancestor all the
+// way to the root session (where parentUid is null). This enforces the
+// principle that a compromised child implies a potentially compromised parent
+// lineage.
+
+export async function recursiveRevokeTree(
+  agentId: string,
+  reason: string = "Recursive revocation triggered by child breach",
+): Promise<string[]> {
+  const revokedChain: string[] = [];
+  const visited = new Set<string>();
+  let currentId: string | null = agentId;
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+
+    // In-memory revocation (synchronous — takes effect immediately)
+    revokeAgent(currentId);
+    revokedChain.push(currentId);
+
+    // Persist revocation status into agent_sessions
+    await db
+      .update(agentSessionsTable)
+      .set({
+        status: "revoked",
+        revokedAt: new Date(),
+        revokedReason: reason,
+      })
+      .where(eq(agentSessionsTable.agentId, currentId));
+
+    // Walk up — find the parent of currentId
+    const [session] = await db
+      .select({ parentUid: agentSessionsTable.parentUid })
+      .from(agentSessionsTable)
+      .where(eq(agentSessionsTable.agentId, currentId))
+      .limit(1);
+
+    currentId = session?.parentUid ?? null;
+  }
+
+  return revokedChain;
 }
 
 // ── Honey-Token Trap ───────────────────────────────────────────────────────

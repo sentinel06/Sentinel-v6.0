@@ -369,15 +369,25 @@ export default function DashboardPage() {
                   <Lock className="w-3 h-3" />
                   Quantum Integrity
                 </span>
-                <span className="text-[#40B595] font-bold text-[10px] tracking-wider">ACTIVE</span>
+                <span className={`font-bold text-[10px] tracking-wider px-1.5 py-0.5 rounded border ${
+                  stats?.integrityOk !== false
+                    ? "text-[#40B595] border-[#40B595]/40 bg-[#40B595]/10"
+                    : "text-[#EBC06D] border-[#EBC06D]/40 bg-[#EBC06D]/10"
+                }`}>
+                  {stats?.integrityOk !== false ? "QUANTUM-SECURE" : "VERIFY-FAILED"}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-xs">Crypto Algorithm</span>
-                <span className="text-[10px] text-[#9AA4B1] font-mono bg-[#2C3136] px-1.5 py-0.5 rounded">ML-DSA-87</span>
+                <span className="text-muted-foreground text-xs">Dual-Layer Protocol</span>
+                <span className="text-[10px] text-[#9AA4B1] font-mono bg-[#2C3136] px-1.5 py-0.5 rounded">SHA-512 + ML-DSA-87</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground text-xs">FIPS Standard</span>
                 <span className="text-[10px] text-[#9AA4B1]">FIPS-204</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">Ledger Version</span>
+                <span className="text-[10px] text-[#9AA4B1]">QL-2.0</span>
               </div>
             </div>
           </Card>

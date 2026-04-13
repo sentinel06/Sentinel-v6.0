@@ -15,6 +15,7 @@ import IntegrityPage from "@/pages/integrity";
 import WarRoomPage from "@/pages/warroom";
 import TopologyPage from "@/pages/topology";
 import BadgePage from "@/pages/badge";
+import SwarmMapPage from "@/pages/swarmmap";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ function Router() {
         <Route path="/compliance" component={CompliancePage} />
         <Route path="/integrity" component={IntegrityPage} />
         <Route path="/badge" component={BadgePage} />
+        <Route path="/swarmmap" component={SwarmMapPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

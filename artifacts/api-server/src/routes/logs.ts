@@ -23,6 +23,7 @@ import {
   getDriftLockInfo,
 } from "../lib/governance";
 import { signWithMLDSA, getQuantumIntegrityManifest } from "../crypto/pqc";
+import { quantumSigner } from "../crypto/quantum_ledger";
 import { buildDriftReportFromLogs } from "../lib/driftDetector";
 
 const router: IRouter = Router();
@@ -49,9 +50,11 @@ function rowToLog(row: typeof auditLogsTable.$inferSelect) {
     swarmId: (row as any).swarmId ?? null,
     // Sovereign log metadata
     computeOriginRegion: (row as any).computeOriginRegion ?? "unspecified",
-    // PQC signature fingerprint
+    // PQC signature fingerprint (legacy text field)
     quantumSig: (row as any).quantumSig ?? null,
     quantumAlgorithm: "ML-DSA-87",
+    // QL-2.0 dual-signature envelope (JSONB — SHA-512 + ML-DSA-87)
+    pqSignature: (row as any).pqSignature ?? null,
   };
 }
 
@@ -171,7 +174,9 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   // Anomaly detection now incorporates consistency score — low score → High-Risk flag
   const anomaly = detectAnomaly(eventType, rationale, consistency.score, consistency.reasons);
 
-  // QSC: sign the currentHash with ML-DSA-87 abstraction layer
+  // QL-2.0: produce hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
+  const pqEnvelope = quantumSigner.sign(currentHash);
+  // Legacy single-field for backward-compat with older dashboard queries
   const pqcSig = signWithMLDSA(currentHash);
 
   const [inserted] = await db
@@ -195,6 +200,7 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
       ...(swarmId ? { swarmId } : {}),
       computeOriginRegion,
       quantumSig: pqcSig.signature.substring(0, 88),
+      pqSignature: pqEnvelope,
     } as any)
     .returning();
 
