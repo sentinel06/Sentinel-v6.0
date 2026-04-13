@@ -1,0 +1,17 @@
+{
+  "name": "governed-agent-starter",
+  "version": "1.0.0",
+  "description": "EU AI Act compliant LLM agent starter kit powered by Agent-Sentinel",
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx index.ts",
+    "start:py": "python index.py"
+  },
+  "keywords": ["ai-agent", "eu-ai-act", "audit", "governance", "sentinel", "llm"],
+  "dependencies": {
+    "tsx": "^4.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
