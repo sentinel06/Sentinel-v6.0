@@ -146,56 +146,65 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255,255,255, .08);
+  --badge-outline: rgba(255,255,255, .04);
 
   --opaque-button-border-intensity: 9;
 
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .07);
 
-  --background: 222.2 47.4% 6.2%;
-  --foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --card: 222.2 47.4% 7.5%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217.2 32.6% 17.5%;
-  
-  --sidebar: 222.2 47.4% 6.2%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217.2 32.6% 17.5%;
-  --sidebar-primary: 199 89% 48%; /* Cyan */
+  /* ── Sentinel Zen Palette ─────────────────────────────────────────────── */
+  --background: 213 12% 12%;       /* #1A1D21 soft off-black */
+  --foreground: 212 26% 90%;       /* #E0E6ED off-white */
+  --border: 213 9% 21%;
+  --card: 214 9% 15%;              /* #222529 card background */
+  --card-foreground: 212 26% 90%;
+  --card-border: 213 9% 21%;
+
+  --sidebar: 213 12% 12%;
+  --sidebar-foreground: 212 26% 90%;
+  --sidebar-border: 213 9% 21%;
+  --sidebar-primary: 162 47% 47%;  /* #40B595 sage green */
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 217.2 32.6% 17.5%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 199 89% 48%;
+  --sidebar-accent: 213 9% 19%;
+  --sidebar-accent-foreground: 212 26% 90%;
+  --sidebar-ring: 162 47% 47%;
 
-  --popover: 222.2 47.4% 6.2%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217.2 32.6% 17.5%;
-  
-  --primary: 199 89% 48%; /* Cyan */
+  --popover: 214 9% 15%;
+  --popover-foreground: 212 26% 90%;
+  --popover-border: 213 9% 21%;
+
+  --primary: 162 47% 47%;          /* #40B595 sage green */
   --primary-foreground: 0 0% 100%;
-  
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  
-  --accent: 38 92% 50%; /* Amber for anomalies */
-  --accent-foreground: 0 0% 10%;
-  
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  
-  --input: 217.2 32.6% 17.5%;
-  --ring: 199 89% 48%;
-  --chart-1: 199 89% 48%;
-  --chart-2: 38 92% 50%;
-  --chart-3: 160 84% 39%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
+
+  --secondary: 213 9% 19%;
+  --secondary-foreground: 212 26% 90%;
+
+  --muted: 213 9% 19%;
+  --muted-foreground: 214 13% 65%; /* #9AA4B1 desaturated gray */
+
+  --accent: 38 68% 67%;            /* #EBC06D honey gold — warnings */
+  --accent-foreground: 38 30% 15%;
+
+  --destructive: 0 55% 55%;        /* #D96161 dusty terracotta — errors */
+  --destructive-foreground: 0 0% 98%;
+
+  --input: 213 9% 19%;
+  --ring: 162 47% 47%;
+
+  /* Zen semantic chart palette */
+  --chart-1: 162 47% 47%;          /* sage green */
+  --chart-2: 38 68% 67%;           /* honey gold */
+  --chart-3: 127 45% 57%;          /* mint green #60C96E */
+  --chart-4: 275 38% 60%;          /* soft purple */
+  --chart-5: 340 44% 60%;          /* dusty rose */
+
+  /* ── Zen semantic tokens (use as arbitrary values) ────────────────────── */
+  --zen-success: #60C96E;          /* soft mint green */
+  --zen-warning: #EBC06D;          /* honey gold */
+  --zen-error: #D96161;            /* dusty terracotta */
+  --zen-stream-bg: #1F2226;        /* live stream card bg */
 }
 
 @layer base {

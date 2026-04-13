@@ -27,8 +27,8 @@ function ConsistencyBadge({ score }: { score: number | undefined }) {
   if (score === undefined || score === null) return null;
   const pct = Math.round(score * 100);
   const color =
-    pct >= 80 ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
-    pct >= 50 ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/20" :
+    pct >= 80 ? "text-[#60C96E] bg-[#60C96E]/10 border-[#60C96E]/20" :
+    pct >= 50 ? "text-[#EBC06D] bg-[#EBC06D]/10 border-[#EBC06D]/20" :
                 "text-destructive bg-destructive/10 border-destructive/20";
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${color}`}
@@ -179,10 +179,10 @@ export default function DashboardPage() {
               <Badge variant="destructive" className="font-mono text-[10px]">INTEGRITY BREACH</Badge>
             )}
             {stats?.integrityOk === true && (
-              <Badge variant="outline" className="text-emerald-500 border-emerald-500/20 bg-emerald-500/10 font-mono text-[10px]">CHAIN VERIFIED</Badge>
+              <Badge variant="outline" className="text-[#60C96E] border-[#60C96E]/25 bg-[#60C96E]/10 font-mono text-[10px]">CHAIN VERIFIED</Badge>
             )}
           </div>
-          <div className="p-0 overflow-y-auto max-h-[600px] flex-1 bg-[#0A0F1C]/50">
+          <div className="p-0 overflow-y-auto max-h-[600px] flex-1 bg-[#1F2226]">
             {liveLogs.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground font-mono text-sm">Waiting for incoming packets...</div>
             ) : (
@@ -208,10 +208,10 @@ export default function DashboardPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
-                            log.eventType === 'Error' ? 'bg-destructive/20 text-destructive' :
-                            log.eventType === 'Intent' ? 'bg-blue-500/20 text-blue-400' :
-                            log.eventType === 'Action' ? 'bg-primary/20 text-primary' :
-                            'bg-emerald-500/20 text-emerald-400'
+                            log.eventType === 'Error' ? 'bg-[#D96161]/15 text-[#D96161]' :
+                            log.eventType === 'Intent' ? 'bg-blue-500/15 text-blue-400' :
+                            log.eventType === 'Action' ? 'bg-primary/15 text-primary' :
+                            'bg-[#60C96E]/15 text-[#60C96E]'
                           }`}>
                             {log.eventType}
                           </span>
@@ -226,20 +226,20 @@ export default function DashboardPage() {
                         </div>
                         
                         {log.rationale && (
-                          <div className={`mt-1.5 text-xs leading-relaxed ${isHallucination ? 'text-destructive/80' : anomalous ? 'text-accent/90' : 'text-foreground/80'}`}>
+                          <div className={`mt-1.5 text-xs leading-relaxed ${isHallucination ? 'text-[#D96161]/80' : anomalous ? 'text-[#EBC06D]/80' : 'text-foreground/75'}`}>
                             {log.rationale}
                           </div>
                         )}
 
                         {isHallucination && log.consistencyReasons && (log.consistencyReasons as string[]).length > 0 && (
-                          <div className="mt-2 text-[10px] text-destructive bg-destructive/10 px-2 py-1.5 rounded flex items-start gap-1.5 border border-destructive/20">
+                          <div className="mt-2 text-[10px] text-[#D96161] bg-[#D96161]/10 px-2 py-1.5 rounded flex items-start gap-1.5 border border-[#D96161]/20">
                             <BrainCircuit className="w-3 h-3 mt-0.5 shrink-0" />
                             <span>{(log.consistencyReasons as string[])[0]}</span>
                           </div>
                         )}
                         
                         {!isHallucination && anomalous && log.anomalyReason && (
-                          <div className="mt-2 text-[10px] text-accent bg-accent/10 px-2 py-1 rounded inline-flex items-center gap-1 border border-accent/20">
+                          <div className="mt-2 text-[10px] text-[#EBC06D] bg-[#EBC06D]/10 px-2 py-1 rounded inline-flex items-center gap-1 border border-[#EBC06D]/20">
                             <AlertTriangle className="w-3 h-3" />
                             {log.anomalyReason}
                           </div>
@@ -280,9 +280,9 @@ export default function DashboardPage() {
                 const percentage = Math.round((count / total) * 100);
                 
                 let colorClass = "bg-primary";
-                if (type === "Error") colorClass = "bg-destructive";
-                if (type === "Result") colorClass = "bg-emerald-500";
-                if (type === "Intent") colorClass = "bg-blue-500";
+                if (type === "Error") colorClass = "bg-[#D96161]";
+                if (type === "Result") colorClass = "bg-[#60C96E]";
+                if (type === "Intent") colorClass = "bg-blue-400";
                 
                 return (
                   <div key={type}>
@@ -304,9 +304,9 @@ export default function DashboardPage() {
           }`}>
             <h3 className="font-mono text-sm font-medium mb-4 flex items-center gap-2 text-muted-foreground">
               {stats?.integrityOk === false ? (
-                <ShieldAlert className="w-4 h-4 text-destructive" />
+                <ShieldAlert className="w-4 h-4 text-[#D96161]" />
               ) : (
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <ShieldCheck className="w-4 h-4 text-[#60C96E]" />
               )}
               LEDGER STATUS
             </h3>
@@ -317,9 +317,9 @@ export default function DashboardPage() {
                 {isLoading ? (
                   <span className="animate-pulse">Checking...</span>
                 ) : stats?.integrityOk === false ? (
-                  <span className="text-destructive font-bold">COMPROMISED</span>
+                  <span className="text-[#D96161] font-bold">COMPROMISED</span>
                 ) : (
-                  <span className="text-emerald-500 font-bold">VERIFIED</span>
+                  <span className="text-[#60C96E] font-bold">VERIFIED</span>
                 )}
               </div>
               <div className="flex justify-between">
