@@ -1,6 +1,7 @@
 /**
  * Governance-as-a-Service (GaaS) Partner Routes
  *
+ * GET  /v1/partner/whitepaper        — Download WHITE_PAPER.md as a file
  * POST /v1/partner/keys              — Generate a new scoped API key
  * GET  /v1/partner/keys              — List all keys (optionally filter by partnerId)
  * PATCH /v1/partner/keys/:keyId/revoke — Revoke a key
@@ -9,10 +10,29 @@
 
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
+import path from "path";
+import fs from "fs";
 import { db, partnerKeysTable, agentRegistryTable, auditLogsTable } from "@workspace/db";
 import { eq, desc, avg, count, and } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+// ── White Paper download path ─────────────────────────────────────────────
+// process.cwd() = /home/runner/workspace/artifacts/api-server (where `node dist/index.mjs` runs)
+// So ../../WHITE_PAPER.md resolves to the monorepo root.
+const WHITE_PAPER_PATH = path.resolve(process.cwd(), "../../WHITE_PAPER.md");
+
+// ── GET /v1/partner/whitepaper ────────────────────────────────────────────
+
+router.get("/v1/partner/whitepaper", (_req, res): void => {
+  if (!fs.existsSync(WHITE_PAPER_PATH)) {
+    res.status(404).json({ error: "White paper not found" });
+    return;
+  }
+  res.setHeader("Content-Disposition", 'attachment; filename="Agent-Sentinel-White-Paper.md"');
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+  res.sendFile(WHITE_PAPER_PATH);
+});
 
 // ── Tier config (controls features available behind each key) ──────────────
 
