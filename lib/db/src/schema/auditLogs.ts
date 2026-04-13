@@ -133,6 +133,38 @@ export const agentSessionsTable = pgTable(
 
 export type AgentSession = typeof agentSessionsTable.$inferSelect;
 
+// ── Governance-as-a-Service: Partner API Keys ──────────────────────────────
+// Enterprise partners generate scoped API keys for their agent swarms.
+// Each key carries a tier (Core | Pro | Enterprise) that gates feature access.
+
+export const partnerKeysTable = pgTable(
+  "partner_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Displayed as sk_sent_{tier_prefix}_{random} */
+    keyValue: text("key_value").notNull().unique(),
+    partnerId: text("partner_id").notNull(),
+    partnerEmail: text("partner_email").notNull(),
+    /** Human-readable label for this key */
+    label: text("label").notNull().default("Unnamed Key"),
+    /** Core | Pro | Enterprise */
+    tier: text("tier").notNull().default("Core"),
+    /** Optional swarm scope — if set, key only accepts logs for this swarmId */
+    swarmScope: text("swarm_scope").default(null),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).default(null),
+  },
+  (table) => [
+    index("partner_keys_partner_id_idx").on(table.partnerId),
+    index("partner_keys_partner_email_idx").on(table.partnerEmail),
+    index("partner_keys_tier_idx").on(table.tier),
+    index("partner_keys_is_active_idx").on(table.isActive),
+  ],
+);
+
+export type PartnerKey = typeof partnerKeysTable.$inferSelect;
+
 // ── Governed Agent Registry ────────────────────────────────────────────────
 // Each agent must be registered before its logs are accepted (or logs are
 // accepted with an "UNREGISTERED" warning). The registry defines what tools
