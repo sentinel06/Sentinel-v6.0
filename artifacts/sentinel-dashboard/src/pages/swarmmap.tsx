@@ -52,6 +52,13 @@ interface SwarmNodeData {
 }
 interface SwarmLink { source: string | SwarmNodeData; target: string | SwarmNodeData; }
 
+// Compact telemetry packet from StreamManager (50 ms batched)
+interface StreamPacket {
+  t: string; a: string; e: string; d: number; h: string;
+  q: boolean; p: string | null; x: boolean; r: boolean;
+  s: string | null; tid: string; lid: string;
+}
+
 // ── Color helpers ─────────────────────────────────────────────────────────────
 function nodeColor(node: SwarmNodeData): string {
   if (node.status === "revoked") return P.terra;
@@ -241,6 +248,33 @@ function NodeInfoPanel({ node, onClose }: { node: SwarmNodeData; onClose: () => 
   );
 }
 
+// ── Drift Sparkline ───────────────────────────────────────────────────────────
+function DriftSparkline({ history, current, color }: {
+  history: number[]; current: number; color: string;
+}) {
+  const vals = history.length > 0 ? history : [current];
+  const max  = Math.max(...vals, 20);
+  const W = 40; const H = 16;
+  const pts = vals.map((v, i) => {
+    const x = (i / Math.max(vals.length - 1, 1)) * W;
+    const y = H - (v / max) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+
+  return (
+    <svg width={W} height={H} style={{ display: "block", overflow: "visible", flexShrink: 0 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.2" opacity="0.8"
+        strokeLinecap="round" strokeLinejoin="round" />
+      {/* Latest value dot */}
+      {vals.length > 0 && (() => {
+        const lastX = W;
+        const lastY = H - (vals[vals.length - 1] / max) * H;
+        return <circle cx={lastX} cy={lastY} r="1.5" fill={color} opacity="0.9" />;
+      })()}
+    </svg>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SwarmMapPage() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -258,6 +292,14 @@ export default function SwarmMapPage() {
   const [ctxMenu, setCtxMenu] = useState<{ node: SwarmNodeData; x: number; y: number } | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeResult, setRevokeResult] = useState<string | null>(null);
+
+  // ── Live Stream Feed ───────────────────────────────────────────────────────
+  const [streamEvents, setStreamEvents] = useState<StreamPacket[]>([]);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [focusedStreamId, setFocusedStreamId] = useState<string | null>(null);
+  // Per-agent drift history: agentId → last 10 drift readings
+  const driftHistoryRef = useRef<Map<string, number[]>>(new Map());
+  const feedRef = useRef<HTMLDivElement>(null);
 
   const [, navigate] = useLocation();
 
@@ -297,6 +339,71 @@ export default function SwarmMapPage() {
     const id = setInterval(fetchData, 12_000);
     return () => clearInterval(id);
   }, [fetchData]);
+
+  // ── Seed feed from recent REST history on mount ───────────────────────────
+  useEffect(() => {
+    fetch(`${BASE}/api/v1/logs?limit=30`)
+      .then(r => r.ok ? r.json() : { logs: [] })
+      .then(({ logs = [] }) => {
+        const hist = driftHistoryRef.current;
+        const packets: StreamPacket[] = (logs as any[]).map((l: any) => {
+          const drift = Math.round((1 - (l.consistencyScore ?? 1)) * 100);
+          const prev = hist.get(l.agentId) ?? [];
+          hist.set(l.agentId, [...prev.slice(-9), drift]);
+          return {
+            t: l.timestamp, a: l.agentId, e: l.eventType,
+            d: drift, h: (l.currentHash ?? "").substring(0, 8),
+            q: !!l.pqSignature || !!l.quantumSig,
+            p: l.parentAgentId ?? null, x: l.isAnomalous ?? false,
+            r: ["HONEY_TOKEN_BREACH","HONEY_TOKEN_TRIGGERED","REVOCATION",
+                "KILL_SWITCH","DRIFT_LOCKOUT","CIRCUIT_BREAKER_OPEN"].includes(l.eventType),
+            s: l.swarmId ?? null, tid: l.traceId, lid: l.id,
+          };
+        });
+        setStreamEvents(packets); // already newest-first from desc(timestamp)
+      })
+      .catch(() => {});
+  }, []);
+
+  // ── WebSocket Live Stream ──────────────────────────────────────────────────
+  useEffect(() => {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl  = `${proto}://${window.location.host}${BASE}/api/v1/ws`;
+    let ws: WebSocket;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+      ws.onopen  = () => setWsConnected(true);
+      ws.onclose = () => {
+        setWsConnected(false);
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => ws.close();
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data as string);
+          if (msg.type === "stream_batch" && Array.isArray(msg.data?.packets)) {
+            const packets: StreamPacket[] = msg.data.packets;
+            // Update per-agent drift history
+            const hist = driftHistoryRef.current;
+            for (const p of packets) {
+              const prev = hist.get(p.a) ?? [];
+              hist.set(p.a, [...prev.slice(-9), p.d]);
+            }
+            // Prepend to feed (newest first), cap at 150
+            setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
+          }
+        } catch { /* ignore malformed frames */ }
+      };
+    }
+
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, []);
 
   // ── d3 Simulation ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -734,86 +841,199 @@ export default function SwarmMapPage() {
           </svg>
         </div>
 
-        {/* ── Side panel: Node info ── */}
-        {selectedNode && (
-          <div className="w-72 shrink-0 flex flex-col gap-3">
-            <NodeInfoPanel
-              node={selectedNode}
-              onClose={() => setSelectedNode(null)}
-            />
+        {/* ── Right panel: always-visible live feed + node info ── */}
+        <div className="w-80 shrink-0 flex flex-col gap-2 min-h-0">
 
-            {/* Quick actions */}
-            <div className="rounded-xl overflow-hidden" style={{
-              border: `1px solid ${P.border}`,
-              background: "rgba(13,17,23,0.7)",
-            }}>
-              <div className="px-4 py-2.5 border-b" style={{ borderColor: P.border }}>
-                <div className="text-[9px] font-mono uppercase tracking-widest" style={{ color: P.dim }}>
-                  Quick Actions
+          {/* Node info card — slides in when a node is selected */}
+          {selectedNode && (
+            <div className="shrink-0 flex flex-col gap-2 animate-in slide-in-from-right-4">
+              <NodeInfoPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+              <div className="rounded-xl overflow-hidden" style={{
+                border: `1px solid ${P.border}`,
+                background: "rgba(13,17,23,0.85)",
+              }}>
+                <div className="p-2 space-y-1">
+                  <button onClick={() => handleTrace(selectedNode)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-mono transition-colors hover:bg-white/5">
+                    <Activity className="w-3 h-3 shrink-0" style={{ color: P.blue }} />
+                    <span style={{ color: "#e0e6ed" }}>Open Trace Explorer</span>
+                    <ChevronRight className="w-2.5 h-2.5 ml-auto opacity-40" />
+                  </button>
+                  {selectedNode.status === "active" && (
+                    <button onClick={() => handleRevoke(selectedNode)} disabled={revoking}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-mono transition-colors hover:bg-red-500/10 disabled:opacity-40">
+                      <Skull className="w-3 h-3 shrink-0" style={{ color: P.terra }} />
+                      <span style={{ color: P.terra }}>{revoking ? "Revoking…" : "Recursive Revoke"}</span>
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="p-2 space-y-1">
-                <button
-                  onClick={() => handleTrace(selectedNode)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-mono transition-colors hover:bg-white/5"
-                >
-                  <Activity className="w-3.5 h-3.5" style={{ color: P.blue }} />
-                  <span style={{ color: "#e0e6ed" }}>Open Trace Explorer</span>
-                  <ChevronRight className="w-3 h-3 ml-auto opacity-40" />
-                </button>
+            </div>
+          )}
 
-                {selectedNode.status === "active" && (
-                  <button
-                    onClick={() => handleRevoke(selectedNode)}
-                    disabled={revoking}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-mono transition-colors hover:bg-red-500/10 disabled:opacity-40"
-                  >
-                    <Skull className="w-3.5 h-3.5" style={{ color: P.terra }} />
-                    <span style={{ color: P.terra }}>
-                      {revoking ? "Revoking…" : "Recursive Revoke"}
-                    </span>
-                  </button>
-                )}
+          {/* ── Terminal Live Feed ── */}
+          <div className="flex-1 min-h-0 flex flex-col rounded-xl overflow-hidden" style={{
+            border: `1px solid ${P.border}`,
+            background: "#080c12",
+          }}>
+            {/* Feed header */}
+            <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b"
+              style={{ borderColor: P.border + "88", background: "#0a0e17" }}>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${wsConnected ? "animate-ping" : ""}`}
+                    style={{ background: wsConnected ? P.sage : P.terra }} />
+                  <span className="relative inline-flex h-2 w-2 rounded-full"
+                    style={{ background: wsConnected ? P.sage : P.terra }} />
+                </span>
+                <span className="text-[9px] font-mono font-bold tracking-widest uppercase"
+                  style={{ color: P.sage }}>
+                  LATTICE TELEMETRY
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-mono" style={{ color: P.dim }}>
+                  {streamEvents.length} events
+                </span>
+                <button onClick={() => setStreamEvents([])}
+                  className="text-[9px] font-mono opacity-40 hover:opacity-100 transition-opacity"
+                  style={{ color: P.dim }}>CLR</button>
               </div>
             </div>
 
-            {/* Trust velocity */}
-            <div className="rounded-xl p-4" style={{
-              border: `1px solid ${P.border}`,
-              background: "rgba(13,17,23,0.7)",
-            }}>
-              <div className="text-[9px] font-mono uppercase tracking-widest mb-3" style={{ color: P.dim }}>
-                Trust Velocity
-              </div>
-              <div className="space-y-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-mono" style={{ color: P.dim }}>Cognitive Drift</span>
-                    <span className="text-[10px] font-mono font-bold"
-                      style={{ color: (selectedNode.drift ?? 0) > 15 ? P.amber : P.sage }}>
-                      {(selectedNode.drift ?? 0).toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="h-1 rounded-full" style={{ background: P.border }}>
-                    <div className="h-full rounded-full transition-all" style={{
-                      width: `${Math.min(100, selectedNode.drift ?? 0)}%`,
-                      background: (selectedNode.drift ?? 0) > 50 ? P.terra
-                        : (selectedNode.drift ?? 0) > 15 ? P.amber : P.sage,
-                    }} />
+            {/* Feed body — scrollable, newest events at top */}
+            <div ref={feedRef} className="flex-1 overflow-y-auto overflow-x-hidden"
+              style={{ scrollbarWidth: "thin", scrollbarColor: `${P.border} transparent` }}>
+
+              {streamEvents.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4"
+                  style={{ color: P.dim }}>
+                  <Activity className="w-6 h-6 mb-2 opacity-20" />
+                  <div className="text-[10px] font-mono opacity-60">
+                    {wsConnected ? "Waiting for telemetry…" : "Connecting to stream…"}
                   </div>
                 </div>
-                <div className="text-[9px] font-mono" style={{ color: P.dim }}>
-                  {selectedNode.isRoot
-                    ? "Sovereign root — tether anchor for child agents"
-                    : selectedNode.parentUid
-                    ? `Tethered to parent: ${selectedNode.parentUid.slice(0, 14)}…`
-                    : "Unrooted agent"}
-                </div>
-              </div>
+              )}
+
+              {streamEvents.map((ev, idx) => {
+                const isBreach  = ev.r;
+                const isDrift   = ev.d > 15 && !isBreach;
+                const isHealthy = !isBreach && !isDrift && !ev.x;
+                const color     = isBreach ? P.terra : isDrift ? P.amber : P.sage;
+                const isFocused = focusedStreamId === ev.lid;
+                const driftHist = driftHistoryRef.current.get(ev.a) ?? [];
+                const agentNode = nodeMap.get(ev.a);
+
+                return (
+                  <button
+                    key={`${ev.lid}-${idx}`}
+                    className="w-full text-left px-2.5 py-1.5 border-b transition-all"
+                    style={{
+                      borderColor: P.border + "44",
+                      background: isFocused ? color + "18"
+                        : isBreach ? P.terra + "0a"
+                        : "transparent",
+                      animation: isBreach
+                        ? "sentinel-glitch 0.4s ease-out 1"
+                        : "sentinel-scanline 0.18s ease-out 1",
+                      animationFillMode: "both",
+                    }}
+                    onClick={() => {
+                      setFocusedStreamId(ev.lid);
+                      // Focus the corresponding node
+                      if (agentNode) {
+                        setSelectedNode(agentNode);
+                        simRef.current?.alphaTarget(0.1).restart();
+                        setTimeout(() => simRef.current?.alphaTarget(0), 500);
+                      }
+                    }}
+                  >
+                    {/* Top row: time + eventType + quantum badge */}
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[9px] font-mono shrink-0" style={{ color: P.dim }}>
+                        {new Date(ev.t).toLocaleTimeString("en", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                      <span className="text-[9px] font-mono font-bold truncate flex-1" style={{ color }}>
+                        {ev.e}
+                      </span>
+                      {/* ⚡ Integrity Pulse — ML-DSA-87 verified */}
+                      {ev.q && (
+                        <span className="text-[9px] shrink-0" title="ML-DSA-87 verified"
+                          style={{ color: P.sage }}>⚡</span>
+                      )}
+                    </div>
+
+                    {/* Agent ID + hash fragment */}
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[9px] font-mono truncate" style={{
+                        color: agentNode ? color : P.dim,
+                        maxWidth: "100px",
+                      }}>
+                        {ev.a.length > 14 ? ev.a.substring(0, 12) + "…" : ev.a}
+                      </span>
+                      <span className="text-[9px] font-mono opacity-40 shrink-0">·</span>
+                      <span className="text-[9px] font-mono shrink-0" style={{ color: P.dim + "99" }}>
+                        0x{ev.h}
+                      </span>
+                    </div>
+
+                    {/* Bottom row: drift sparkline + ancestry tag */}
+                    <div className="flex items-center gap-2">
+                      {/* Drift sparkline — 10-point polyline */}
+                      <DriftSparkline history={driftHist} current={ev.d} color={color} />
+
+                      {/* Drift % */}
+                      {ev.d > 0 && (
+                        <span className="text-[9px] font-mono font-bold shrink-0"
+                          style={{ color: ev.d > 15 ? P.amber : P.dim }}>
+                          {ev.d.toFixed(0)}%
+                        </span>
+                      )}
+
+                      {/* Ancestry tag */}
+                      {ev.p && (
+                        <span className="text-[9px] font-mono shrink-0 truncate"
+                          style={{
+                            color: P.blue + "bb",
+                            maxWidth: "64px",
+                          }}
+                          title={`Spawned by: ${ev.p}`}>
+                          [{ev.p.substring(0, 8)}]
+                        </span>
+                      )}
+
+                      {/* Anomaly / breach indicator */}
+                      {(ev.x || isBreach) && (
+                        <span className="ml-auto text-[8px] font-mono font-bold shrink-0"
+                          style={{ color }}>
+                          {isBreach ? "BREACH" : "ANOM"}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
+        </div>
       </div>
+
+      {/* ── CSS animations (scanline + glitch) ── */}
+      <style>{`
+        @keyframes sentinel-scanline {
+          from { opacity: 0; transform: translateX(8px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes sentinel-glitch {
+          0%   { opacity: 0; transform: translateX(12px) skewX(-2deg); }
+          20%  { opacity: 1; transform: translateX(-3px) skewX(1deg);
+                 background: rgba(217,97,97,0.22); }
+          40%  { transform: translateX(2px) skewX(-1deg); }
+          60%  { transform: translateX(-1px); }
+          80%  { background: rgba(217,97,97,0.10); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
 
       {/* ── Right-click context menu ── */}
       {ctxMenu && (

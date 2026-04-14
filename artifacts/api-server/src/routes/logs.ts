@@ -11,6 +11,7 @@ import {
 import { getLastHash, computeHash, detectAnomaly } from "../lib/hash";
 import { verifyHashChain, sealMerkleBlock } from "../lib/integrity";
 import { broadcastLog } from "../lib/ws";
+import { streamManager } from "../services/streaming";
 import { BLOCK_SIZE } from "../lib/merkle";
 import { computeConsistencyScore } from "../lib/consistency";
 import { logRateLimiter, getRateLimitStats } from "../lib/rateLimit";
@@ -248,6 +249,23 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
 
   const logData = rowToLog(inserted);
   broadcastLog(logData as unknown as Record<string, unknown>);
+
+  // Enqueue compact telemetry packet for the 50 ms stream buffer
+  streamManager.enqueue({
+    id:               inserted.id,
+    timestamp:        inserted.timestamp,
+    agentId:          inserted.agentId,
+    traceId:          inserted.traceId,
+    eventType:        inserted.eventType,
+    currentHash:      inserted.currentHash,
+    consistencyScore: inserted.consistencyScore,
+    isAnomalous:      inserted.isAnomalous,
+    anomalyReason:    inserted.anomalyReason,
+    pqSignature:      (inserted as any).pqSignature,
+    parentAgentId:    (inserted as any).parentAgentId ?? null,
+    swarmId:          (inserted as any).swarmId ?? null,
+  });
+
   res.status(201).json({
     ...logData,
     cognitiveDrift: driftReport,

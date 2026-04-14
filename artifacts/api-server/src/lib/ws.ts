@@ -52,3 +52,11 @@ export function broadcastLog(log: Record<string, unknown>): void {
 export function broadcastGovernanceEvent(type: string, payload: object): void {
   broadcast(type, payload);
 }
+
+/**
+ * Broadcast a batch of compact stream telemetry packets.
+ * Called by StreamManager after the 50 ms collection window closes.
+ */
+export function broadcastStreamBatch(packets: unknown[]): void {
+  broadcast("stream_batch", { packets });
+}
