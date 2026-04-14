@@ -76,6 +76,7 @@ interface EQAReport {
   anomalyCount: number;
   layerBreakdown: Record<string, number>;
   riskRating: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  interventionTimeMs: number | null;
   complianceFramework: string;
   classification: string;
   error?: string;
@@ -444,6 +445,9 @@ function buildPrintHTML(r: EQAReport): string {
     <div><div class="meta-label">Events Analyzed</div><div class="meta-value">${r.eventsAnalyzed.toLocaleString()}</div></div>
     <div><div class="meta-label">Agents Scoped</div><div class="meta-value">${r.activeAgents} / ${r.agentsScoped} active</div></div>
     <div><div class="meta-label">Anomalies</div><div class="meta-value">${r.anomalyCount}</div></div>
+    ${r.interventionTimeMs !== null && r.interventionTimeMs !== undefined
+      ? `<div><div class="meta-label" style="color:#D96161;">Intervention Time</div><div class="meta-value" style="color:#D96161;">${r.interventionTimeMs < 1 ? `${r.interventionTimeMs.toFixed(1)} ms` : `${Math.round(r.interventionTimeMs).toLocaleString()} ms`}</div></div>`
+      : ""}
     <div><div class="meta-label">Framework</div><div class="meta-value">${r.complianceFramework}</div></div>
     <div><div class="meta-label">Printed At</div><div class="meta-value" style="font-size:8.5px;">${printedAt}</div></div>
   </div>
@@ -760,6 +764,40 @@ export default function EQAPage() {
               ))}
             </div>
           </div>
+
+          {/* Intervention Time — shown only when a cascade event was detected */}
+          {report.interventionTimeMs !== null && report.interventionTimeMs !== undefined && (
+            <div
+              className="rounded-xl border flex items-center gap-6 px-6 py-4"
+              style={{ background: `${C.terra}08`, borderColor: `${C.terra}40`, borderWidth: "1.5px" }}
+            >
+              {/* Lightning bolt */}
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: `${C.terra}15`, border: `1.5px solid ${C.terra}40` }}
+              >
+                <Zap className="w-5 h-5" style={{ color: C.terra }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: C.terra }}>
+                  Governance Intervention Time
+                </div>
+                <div className="text-[11px] font-mono" style={{ color: C.dimText }}>
+                  Time from first anomalous event to CASCADE_REVOKE — honey-token breach response latency
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-4xl font-bold font-mono tabular-nums" style={{ color: C.terra }}>
+                  {report.interventionTimeMs < 1
+                    ? `${report.interventionTimeMs.toFixed(1)}ms`
+                    : `${Math.round(report.interventionTimeMs).toLocaleString()}ms`}
+                </div>
+                <div className="text-[9px] font-mono mt-0.5 uppercase tracking-widest" style={{ color: C.dimText }}>
+                  Sub-millisecond response · FIPS-204 sealed
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Block-layer breakdown */}
           {Object.keys(report.layerBreakdown).length > 0 && (

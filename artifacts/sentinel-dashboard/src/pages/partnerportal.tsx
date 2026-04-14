@@ -20,6 +20,8 @@ import {
   Cpu,
   FileDown,
   BookOpen,
+  Rocket,
+  Loader2,
 } from "lucide-react";
 import ExecutiveSummaryPDF from "@/components/ExecutiveSummaryPDF";
 
@@ -692,12 +694,36 @@ export default function PartnerPortalPage() {
   const [activeTab, setActiveTab] = useState<"tiers" | "keys">("tiers");
   const [selectedTier, setSelectedTier] = useState<string | undefined>();
   const [keyRefresh, setKeyRefresh] = useState(0);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<string | null>(null);
 
   const handleSelectTier = (tier: string) => {
     setSelectedTier(tier);
     setActiveTab("keys");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const handleLaunchDemo = useCallback(async () => {
+    setDemoLoading(true);
+    setDemoStatus("Seeding Apex-Fintech environment…");
+    try {
+      const r = await fetch(`${BASE}/api/v1/partner/demo/seed`, { method: "POST" });
+      const data = await r.json();
+      if (!r.ok) {
+        setDemoStatus(`Error: ${data.error ?? "Unknown error"}`);
+        setDemoLoading(false);
+        return;
+      }
+      setDemoStatus(`✓ ${data.eventsInserted} events seeded — redirecting to EQA…`);
+      // Short delay so the user reads the confirmation, then navigate
+      setTimeout(() => {
+        window.location.href = `${BASE}/eqa?partnerId=${encodeURIComponent("Apex-Fintech")}`;
+      }, 900);
+    } catch {
+      setDemoStatus("Network error — check the API server");
+      setDemoLoading(false);
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -716,6 +742,31 @@ export default function PartnerPortalPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Launch Demo Environment */}
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              size="sm"
+              onClick={handleLaunchDemo}
+              disabled={demoLoading}
+              className="font-mono text-xs gap-2 whitespace-nowrap"
+              style={{
+                background: demoLoading ? `${C.honey}80` : C.honey,
+                color: "#0a0f13",
+                border: "none",
+              }}
+            >
+              {demoLoading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Rocket className="w-3.5 h-3.5" />}
+              {demoLoading ? "Seeding…" : "Launch Demo Environment"}
+            </Button>
+            {demoStatus && (
+              <div className="text-[10px] font-mono max-w-[220px] text-right leading-tight" style={{ color: demoStatus.startsWith("✓") ? C.sage : demoStatus.startsWith("Error") ? C.terra : C.dimText }}>
+                {demoStatus}
+              </div>
+            )}
+          </div>
+
           <ExecutiveSummaryPDF />
           <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.sage }} />
