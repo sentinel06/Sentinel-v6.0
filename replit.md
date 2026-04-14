@@ -61,18 +61,20 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - If `SENTINEL_KEY` is not set, all POST requests are allowed (dev mode)
 - Sensitive headers redacted from logs
 
-## Swarm Map: Evolutionary Prosperity Engine (v2)
+## Swarm Map: Project Darwin — Evolutionary Prosperity Engine (v3)
 
 `artifacts/sentinel-dashboard/src/pages/swarmmap.tsx` — Major upgrade from "Spatial Swarm Map" to "Evolutionary Prosperity Engine":
 
-- **Phylogenetic Physics**: LUCA (Sovereign Root) at center with gold ◆ crown and dual dashed sovereignty rings. `forceRadial` positions each generation in concentric rings (Ring = generationDepth × RING_SPACING). High-fitness nodes orbit closer to LUCA; low-fitness drift outward. `fitness_score = (1 - drift/100) / (1 + drift/100)` drives node radius and glow brightness.
-- **Mutation Overlay**: drift > 15% → amber "Maladaptive Mutation" with warp/vibration of mutation vines. drift > 30% → violet `#C084FC` "Genetic Distortion" — organic cell shape generated via 8-point sin/cos oscillating `mutationPath()`. Mutating nodes show `⚡` icon and `Δ{drift}%` badge.
-- **Extinction & Pruning**: Revoke/Honey-Token triggers "Cellular Collapse" — 8 burst particles radiate outward + expanding extinction ring + vine turns brittle (dashed `3,5` strokeDasharray) and fades to 35% opacity. Telemetry feed shows "EXTINCT" badge.
-- **Prosperity Pulse**: 3 concentric breath rings expanding from LUCA center, amplitude synced to `swarmFertility` metric, phase offset per ring (4-6s oscillation via sin). Radial prosperity aura fills the canvas with subtle sage gradient. LUCA inner golden nucleus pulses independently.
-- **Lineage Hover**: Hovering any phylogenetic vine triggers `computeLineageSuccess()` BFS (parent → all descendants avg fitness). Shows tooltip with "Lineage Success Rate" bar in green/amber/red. Link highlights gold on hover.
-- **Evolutionary KPI Bar**: Swarm Fertility (delegation efficiency × avg fitness), Apex Fitness (population avg), Genetic Drift (avg % across drifting agents), Natural Selection (revoked count), Active Population.
-- **Generation Ring Guides**: Faint dashed concentric circles marking Gen 1, 2, 3… orbits.
-- **CRISPR context menu**: "Cellular Collapse", "Flag Genetic Drift", "Audit Phylogenetic Chain" — right-click = CRISPR for Logic.
+- **Radial Vessel Physics**: LUCA nucleus at center; generations orbit on concentric rings driven by `forceRadial(generationDepth × RING_SPACING)`. Phylogenetic vines use `radialVine()` — polar-arc curved paths (not straight beziers) so arcs naturally wrap around LUCA. High-fitness = tight bond to LUCA; low-fitness = loose, drifting outward.
+- **Fitness Gradient (1.5× scale)**: `fitnessRadius(f, isRoot)` = base * (1.0 + f × 0.5) — max 1.5× growth. `fitness_score = (1 − drift/100)/(1 + drift/100)`. Bio-luminescent sage glow (#4EC9A5) for <5% drift nodes. Inner nucleus brightness = 0.55 + f × 0.35.
+- **feTurbulence Maladaptive Mutation**: drift >15% → `#mutation-warp` SVG filter (feTurbulence fractalNoise baseFreq=0.065 + feDisplacementMap scale=8 + violet tint). drift >30% → `#mutation-warp-severe` (turbulence scale=14, more octaves). Turbulence seed updates every 8 ticks for organic animation.
+- **Calcification Shader**: Agents idle >300s → `#calcify` SVG filter (feColorMatrix saturate=0.08, 20% opacity), grey ❄ icon, "CALCIFIED" badge. 6th KPI card tracks count.
+- **Cellular Dissolution**: Revoke triggers 10-particle radial burst + expanding extinction ring over 1s, vine withers to grey dashed `2,5` line.
+- **Prosperity Pulse**: 4 concentric breath rings, amplitude = swarmFertility, 5s oscillation cycle. Darwin background radial gradient aura.
+- **CRISPR White-Gold Surge**: Right-click → "Apply CRISPR White-Gold Surge" dispatches `recursiveFixVerified` event. BFS enumerates all descendants. Gold/white-gold particle animates along each vine arc using `bezierPt()` interpolation. Surging nodes display "RECODING" badge + #fg-white filter.
+- **Spawn Sparks**: New offspring nodes trigger gold spark travelling from parent → child along vine arc over 1.6s.
+- **Lineage Hover**: Hovering vine → BFS avg fitness tooltip. Vine turns gold on hover.
+- **6-KPI Board**: Swarm Fertility · Apex Fitness · Genetic Drift · Natural Selection · Active Population · Calcification.
 
 ## Technical White Paper Engine
 
