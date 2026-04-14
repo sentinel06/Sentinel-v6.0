@@ -15,6 +15,7 @@ import {
   Network,
   Building2,
   Zap,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetIntegrityStatus } from "@workspace/api-client-react";
@@ -82,6 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { path: "/traces", label: "Traces", icon: ListTree },
         { path: "/topology", label: "Topology", icon: GitBranch },
         { path: "/swarmmap", label: "Swarm Map", icon: Network },
+        { path: "/pulse", label: "Live Pulse", icon: Radio },
       ],
     },
     {

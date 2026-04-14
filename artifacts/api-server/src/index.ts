@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { setupWebSocket } from "./lib/ws";
 import { startIntegrityScheduler } from "./lib/integrity";
+import { startPulseScheduler } from "./services/pulse";
 
 const rawPort = process.env["PORT"];
 
@@ -21,6 +22,7 @@ if (Number.isNaN(port) || port <= 0) {
 const server = http.createServer(app);
 setupWebSocket(server);
 startIntegrityScheduler();
+startPulseScheduler();
 
 server.listen(port, () => {
   logger.info({ port }, "Agent-Sentinel server listening");

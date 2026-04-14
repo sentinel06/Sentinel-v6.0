@@ -5,6 +5,7 @@ import logsRouter from "./logs";
 import governanceRouter from "./governance";
 import swarmRouter from "./swarm";
 import partnerRouter from "./partner";
+import pulseRouter from "./pulse";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(logsRouter);
 router.use(governanceRouter);
 router.use(swarmRouter);
 router.use(partnerRouter);
+router.use(pulseRouter);
 
 export default router;

@@ -225,3 +225,39 @@ export const authorizationRequestsTable = pgTable(
 );
 
 export type AuthorizationRequest = typeof authorizationRequestsTable.$inferSelect;
+
+// ── System Pulse Log ───────────────────────────────────────────────────────
+// Stores each automated 6-hour "System Trust Velocity" pulse.
+// Includes the formatted tweet text, computed metrics, and (if posted)
+// the Twitter/X post ID for deep-linking.
+
+export const pulseLogsTable = pgTable(
+  "pulse_logs",
+  {
+    id:             uuid("id").primaryKey().defaultRandom(),
+    firedAt:        timestamp("fired_at",        { withTimezone: true }).notNull().defaultNow(),
+    /** 0–100 — percentage of events with ML-DSA-87 quantum sig in the window */
+    trustVelocity:  real("trust_velocity").notNull(),
+    totalEvents:    integer("total_events").notNull(),
+    verifiedEvents: integer("verified_events").notNull(),
+    anomalyCount:   integer("anomaly_count").notNull(),
+    /** NOMINAL | ELEVATED | CRITICAL */
+    status:         text("status").notNull().default("NOMINAL"),
+    /** The full formatted pulse text (tweet body) */
+    message:        text("message").notNull(),
+    /** Twitter/X post URL if successfully published — null if keys not configured */
+    tweetUrl:       text("tweet_url").default(null),
+    /** Raw Twitter API response ID */
+    tweetId:        text("tweet_id").default(null),
+    /** Error message if the Twitter post failed */
+    tweetError:     text("tweet_error").default(null),
+    /** Window in hours that was aggregated (default 6) */
+    windowHours:    integer("window_hours").notNull().default(6),
+  },
+  (table) => [
+    index("pulse_logs_fired_at_idx").on(table.firedAt),
+    index("pulse_logs_status_idx").on(table.status),
+  ],
+);
+
+export type PulseLog = typeof pulseLogsTable.$inferSelect;
