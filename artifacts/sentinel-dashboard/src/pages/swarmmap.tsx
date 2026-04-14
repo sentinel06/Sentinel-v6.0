@@ -576,6 +576,20 @@ export default function SwarmMapPage() {
         segmentCps,
         totalMs,
       }]);
+
+      // ── CRISPR_RECODE Gateway Broadcast ──────────────────────────────
+      // Notify all connected SDK clients via the Sovereign Gateway so they
+      // can reset their internal drift accumulators after a CRISPR heal.
+      fetch(`${BASE}/api/v1/gateway/crispr_recode`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          rootId,
+          targets:  ordered,
+          healedAt: new Date().toISOString(),
+          source:   "WAR_ROOM_CRISPR_SURGE",
+        }),
+      }).catch(() => {}); // fire-and-forget; WS broadcast is authoritative
     };
     window.addEventListener("recursiveFixVerified", h);
     return () => window.removeEventListener("recursiveFixVerified", h);
@@ -683,11 +697,10 @@ export default function SwarmMapPage() {
             }
           }
 
-          // ── Project Genesis: GATEWAY_MUTATION (drift > threshold) ──────
-          if (msg.type === "GATEWAY_MUTATION") {
+          // ── Project Genesis: GATEWAY_MUTATION / MUTATION_DETECTED ─────
+          if (msg.type === "GATEWAY_MUTATION" || msg.type === "MUTATION_DETECTED") {
             const { agentId: gAgentId, driftScore } = msg.data ?? {};
             if (gAgentId) {
-              // Update node status to mutant + raise drift score for violet jitter
               setNodes(prev => prev.map(n =>
                 n.id === gAgentId
                   ? { ...n, status: "mutant" as const, drift: typeof driftScore === "number" ? driftScore : 50, driftScore: typeof driftScore === "number" ? driftScore : 50 }
@@ -697,10 +710,24 @@ export default function SwarmMapPage() {
                 ...(driftHistoryRef.current.get(gAgentId) ?? []).slice(-8),
                 typeof driftScore === "number" ? driftScore : 50,
               ]);
-              // Kick the sim so the violet jitter propagates visually
               simRef.current?.alphaTarget(0.08).restart();
               setTimeout(() => simRef.current?.alphaTarget(0), 400);
             }
+          }
+
+          // ── Project Genesis: CRISPR_RECODE (drift reset from War Room) ─
+          // Fired by the Gateway when a RECURSIVE_FIX_VERIFIED surge heals the swarm.
+          // On the War Room side: un-mutant all healed nodes and re-nudge the sim.
+          if (msg.type === "CRISPR_RECODE") {
+            const { targets } = (msg.data ?? {}) as { targets?: string[] };
+            const targetSet = targets ? new Set(targets) : null;
+            setNodes(prev => prev.map(n => {
+              if (targetSet && !targetSet.has(n.id)) return n;
+              if (n.status !== "mutant" && n.status !== "drift-locked") return n;
+              return { ...n, status: "active" as const, drift: Math.min(n.drift ?? 0, 8) };
+            }));
+            simRef.current?.alphaTarget(0.15).restart();
+            setTimeout(() => simRef.current?.alphaTarget(0), 900);
           }
         } catch {}
       };
@@ -1178,25 +1205,26 @@ export default function SwarmMapPage() {
               ))}
 
               {/* ── Maladaptive Mutation distortion (feTurbulence warp) ── */}
+              {/* Mobile ART: numOctaves reduced 3→1 to maintain 60 FPS on GPU-constrained devices */}
               <filter id="mutation-warp" x="-30%" y="-30%" width="160%" height="160%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves="3"
+                <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves={isMobile ? 1 : 3}
                   seed={turbSeed} result="noise" />
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale="8"
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale={isMobile ? 5 : 8}
                   xChannelSelector="R" yChannelSelector="G" result="warped" />
                 <feFlood floodColor={P.mutation} result="flood" />
                 <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                <feGaussianBlur in="tintMask" stdDeviation="3" result="tintBlur" />
+                <feGaussianBlur in="tintMask" stdDeviation={isMobile ? 2 : 3} result="tintBlur" />
                 <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
               </filter>
-              {/* Severe mutation — more extreme turbulence */}
+              {/* Severe mutation — more extreme turbulence (Mobile ART: 4→2 octaves) */}
               <filter id="mutation-warp-severe" x="-40%" y="-40%" width="180%" height="180%">
-                <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves="4"
+                <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves={isMobile ? 2 : 4}
                   seed={turbSeed} result="noise" />
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale="14"
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale={isMobile ? 8 : 14}
                   xChannelSelector="R" yChannelSelector="G" result="warped" />
                 <feFlood floodColor={P.mutation} result="flood" />
                 <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                <feGaussianBlur in="tintMask" stdDeviation="5" result="tintBlur" />
+                <feGaussianBlur in="tintMask" stdDeviation={isMobile ? 3 : 5} result="tintBlur" />
                 <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
               </filter>
 
