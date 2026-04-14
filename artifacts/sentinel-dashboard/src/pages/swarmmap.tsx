@@ -441,10 +441,15 @@ export default function SwarmMapPage() {
 
   const [, navigate] = useLocation();
 
-  // ── SVG canvas dimensions ─────────────────────────────────────────────────
-  const [svgDims, setSvgDims] = useState({ W: 900, H: 540 });
+  // ── Mobile detection + SVG canvas dimensions ──────────────────────────────
+  const [isMobile, setIsMobile]   = useState(false);
+  const [svgDims, setSvgDims]     = useState({ W: 900, H: 540 });
+  const [vitalityOpen, setVitalityOpen] = useState(false);   // bottom-sheet toggle
+
   useEffect(() => {
     const update = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
       const svg = svgRef.current;
       if (!svg) return;
       const r = svg.getBoundingClientRect();
@@ -453,10 +458,19 @@ export default function SwarmMapPage() {
     update();
     const ro = new ResizeObserver(update);
     if (svgRef.current) ro.observe(svgRef.current);
-    return () => ro.disconnect();
+    window.addEventListener("resize", update, { passive: true });
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
   const cx = svgDims.W / 2;
   const cy = svgDims.H / 2;
+
+  // ── Touch interaction refs ─────────────────────────────────────────────────
+  const longPressRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Pinch-to-zoom state
+  const [zoom,    setZoom]    = useState(1);
+  const [panXY,   setPanXY]   = useState({ x: 0, y: 0 });
+  const pinchRef  = useRef<{ dist: number; scale: number; midX: number; midY: number } | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -643,16 +657,31 @@ export default function SwarmMapPage() {
     const { W, H } = svgDims;
     const RING = Math.min(85, W / 8);
 
+    // ── Initial positions ────────────────────────────────────────────────────
+    const maxDepth = Math.max(...nodes.map(n => n.generationDepth ?? 0), 1);
+    const VERT_SPACING = Math.min((H - 80) / Math.max(maxDepth, 1), 120);
+    const TOP_Y = isMobile ? 60 : cy;
+
     nodes.filter(n => n.isRoot).forEach(n => {
-      if (n.x == null) { n.x = cx + (Math.random() - 0.5) * 20; n.y = cy + (Math.random() - 0.5) * 20; }
+      if (n.x == null) { n.x = cx; n.y = isMobile ? TOP_Y : cy; }
+      if (isMobile) { n.fx = cx; n.fy = TOP_Y; }
     });
     nodes.filter(n => !n.isRoot).forEach(n => {
       if (n.x == null) {
-        const angle = Math.random() * Math.PI * 2;
-        const ring  = (n.generationDepth ?? 1) * RING;
-        n.x = cx + ring * Math.cos(angle); n.y = cy + ring * Math.sin(angle);
+        if (isMobile) {
+          n.x = cx + (Math.random() - 0.5) * 120;
+          n.y = TOP_Y + (n.generationDepth ?? 1) * VERT_SPACING;
+        } else {
+          const angle = Math.random() * Math.PI * 2;
+          const ring  = (n.generationDepth ?? 1) * RING;
+          n.x = cx + ring * Math.cos(angle); n.y = cy + ring * Math.sin(angle);
+        }
       }
     });
+
+    // ── Mobile force multipliers: +40% link strength, +50% charge ───────────
+    const linkStrMult  = isMobile ? 1.4 : 1.0;
+    const chargeMult   = isMobile ? 1.5 : 1.0;
 
     simRef.current?.stop();
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
@@ -661,28 +690,21 @@ export default function SwarmMapPage() {
         .distance(d => {
           const src = d.source as SwarmNodeData; const tgt = d.target as SwarmNodeData;
           const drift = Math.max(src.drift ?? 0, tgt.drift ?? 0);
-          // High-drift = looser, longer tethers (maladaptive sprawl)
-          return RING * 0.9 + drift * 0.85;
+          return isMobile
+            ? VERT_SPACING * 0.85 + drift * 0.4
+            : RING * 0.9 + drift * 0.85;
         })
         .strength(d => {
           const src = d.source as SwarmNodeData; const tgt = d.target as SwarmNodeData;
           const f = ((src.fitnessScore ?? 0.5) + (tgt.fitnessScore ?? 0.5)) / 2;
-          return 0.12 + f * 0.48; // high-fitness = tight bond
+          return (0.12 + f * 0.48) * linkStrMult;
         })
       )
       .force("charge", d3.forceManyBody<SwarmNodeData>()
-        .strength(d => d.status === "revoked" ? -600 : d.isRoot ? -800 : -200 - (d.fitnessScore ?? 0.5) * 60)
+        .strength(d => (d.status === "revoked" ? -600 : d.isRoot ? -800 : -200 - (d.fitnessScore ?? 0.5) * 60) * chargeMult)
       )
-      .force("center", d3.forceCenter(cx, cy).strength(0.015))
-      .force("collide", d3.forceCollide<SwarmNodeData>().radius(d => (d.radius ?? 14) + 10))
-      .force("phylo_radial", d3.forceRadial<SwarmNodeData>(
-        d => {
-          if (d.isRoot) return 0;
-          const gen = d.generationDepth ?? 1;
-          const expansionFromLowFitness = (1 - (d.fitnessScore ?? 0.5)) * 22;
-          return gen * RING + expansionFromLowFitness;
-        }, cx, cy
-      ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25))
+      .force("center", d3.forceCenter(cx, cy).strength(isMobile ? 0.0 : 0.015))
+      .force("collide", d3.forceCollide<SwarmNodeData>().radius(d => (d.radius ?? 14) + (isMobile ? 16 : 10)))
       .alphaDecay(0.010)
       .velocityDecay(0.44)
       .on("tick", () => {
@@ -691,10 +713,27 @@ export default function SwarmMapPage() {
         for (const n of nodes) {
           const r = n.radius ?? 14;
           n.x = Math.max(r + margin, Math.min(W - r - margin, n.x ?? cx));
-          n.y = Math.max(r + margin, Math.min(H - r - margin, n.y ?? cy));
+          n.y = Math.max(r + margin, Math.min(H - r - margin, n.y ?? (isMobile ? TOP_Y : cy)));
         }
         setRenderTick(t => t + 1);
       });
+
+    // ── Layout strategy: Vertical Orchard (mobile) vs Radial Phylogeny (desktop) ──
+    if (isMobile) {
+      sim.force("phylo_x", d3.forceX<SwarmNodeData>(cx).strength(0.18));
+      sim.force("phylo_y", d3.forceY<SwarmNodeData>(d => {
+        if (d.isRoot) return TOP_Y;
+        return TOP_Y + (d.generationDepth ?? 1) * VERT_SPACING;
+      }).strength(0.55));
+    } else {
+      sim.force("phylo_radial", d3.forceRadial<SwarmNodeData>(
+        d => {
+          if (d.isRoot) return 0;
+          const gen = d.generationDepth ?? 1;
+          return gen * RING + (1 - (d.fitnessScore ?? 0.5)) * 22;
+        }, cx, cy
+      ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25));
+    }
 
     simRef.current = sim;
 
@@ -818,88 +857,215 @@ export default function SwarmMapPage() {
     return lineageAvgFitness(selectedNode.id, nodeMap, links);
   }, [selectedNode, nodeMap, links]);
 
+  // ── Smart Culling — Swarm Cluster aggregation (mobile only) ──────────────
+  // Groups of >5 healthy (sage) siblings → single proxy cluster node.
+  // Mutant (drift>15 or drift-locked) and Calcified nodes are NEVER collapsed.
+  const { clusterMap, clusteredIds } = useMemo(() => {
+    if (!isMobile) return { clusterMap: new Map<string, string[]>(), clusteredIds: new Set<string>() };
+    const now     = Date.now();
+    const cMap    = new Map<string, string[]>();   // parentId → [childIds eligible to cluster]
+    const cIds    = new Set<string>();
+
+    const childMap = buildChildMap(links);
+    for (const [parentId, children] of childMap) {
+      const healthy = children.filter(cid => {
+        const n = nodeMap.get(cid);
+        if (!n) return false;
+        const drift   = n.drift ?? 0;
+        const last    = lastActivityRef.current.get(cid);
+        const calcif  = last != null && now - last > 300_000;
+        const mutant  = drift > 15 || n.status === "drift-locked";
+        const revoked = n.status === "revoked";
+        return !mutant && !calcif && !revoked;
+      });
+      if (healthy.length > 5) {
+        cMap.set(parentId, healthy);
+        healthy.forEach(id => cIds.add(id));
+      }
+    }
+    return { clusterMap: cMap, clusteredIds: cIds };
+  }, [isMobile, nodes, links, renderTick]);
+
+  // ── Long-press handlers (mobile) ──────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent, node: SwarmNodeData) => {
+    if (!isMobile) return;
+    const t = e.touches[0];
+    if (!t) return;
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    longPressRef.current = setTimeout(() => {
+      navigator.vibrate?.(40); // haptic feedback if available
+      setCtxMenu({ node, x: touchStartRef.current?.x ?? 0, y: (touchStartRef.current?.y ?? 0) - 10 });
+      setSelectedNode(null);
+    }, 500);
+  }, [isMobile]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!longPressRef.current || !touchStartRef.current) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 10) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }, []);
+
+  // ── Pinch-to-Zoom handlers ────────────────────────────────────────────────
+  const getPinchDist = (touches: React.TouchList) => {
+    const t0 = touches[0]; const t1 = touches[1];
+    if (!t0 || !t1) return 0;
+    return Math.sqrt((t0.clientX - t1.clientX) ** 2 + (t0.clientY - t1.clientY) ** 2);
+  };
+
+  const handleSvgTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    const t0 = e.touches[0]!; const t1 = e.touches[1]!;
+    pinchRef.current = {
+      dist:  getPinchDist(e.touches),
+      scale: zoom,
+      midX:  (t0.clientX + t1.clientX) / 2,
+      midY:  (t0.clientY + t1.clientY) / 2,
+    };
+  }, [zoom]);
+
+  const handleSvgTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length !== 2 || !pinchRef.current) return;
+    e.preventDefault();
+    const newDist  = getPinchDist(e.touches);
+    const ratio    = newDist / Math.max(pinchRef.current.dist, 1);
+    const newScale = Math.max(0.5, Math.min(4, pinchRef.current.scale * ratio));
+    setZoom(newScale);
+  }, []);
+
+  const handleSvgTouchEnd = useCallback(() => {
+    pinchRef.current = null;
+  }, []);
+
   // ── Turbulence seed (slow drift so animation feels organic) ───────────────
   const turbSeed = Math.floor(tickRef.current / 8) % 512;
 
+  // ── KPI data (shared by desktop bar + mobile vitality sheet) ────────────
+  const kpiCards = [
+    { label: "Swarm Fertility",   value: `${(stats.fertility * 100).toFixed(0)}%`,  sub: "Delegation × fitness",    color: stats.fertility > 0.6 ? P.sage : stats.fertility > 0.3 ? P.amber : P.terra, Icon: Zap },
+    { label: "Apex Fitness",      value: `${(stats.avgFitness * 100).toFixed(0)}%`, sub: "Population avg",          color: stats.avgFitness > 0.7 ? P.sage : stats.avgFitness > 0.4 ? P.amber : P.terra, Icon: Flame },
+    { label: "Genetic Drift",     value: `${stats.avgDrift.toFixed(1)}%`,            sub: `${stats.drifting} agents`,color: stats.drifting === 0 ? P.sage : stats.drifting < 3 ? P.amber : P.mutation,    Icon: Dna },
+    { label: "Natural Selection", value: stats.revoked,                               sub: "Dissolved agents",        color: stats.revoked === 0 ? P.sage : P.terra,                                         Icon: Skull },
+    { label: "Active Population", value: stats.active,                                sub: `of ${stats.total} total`,color: P.blue,                                                                          Icon: Network },
+    { label: "Calcification",     value: stats.calcifiedCount,                        sub: ">300s idle",              color: stats.calcifiedCount === 0 ? P.sage : P.calcite,                               Icon: () => <span style={{ color: P.calcite, fontSize: 12 }}>❄</span> },
+  ];
+
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 animate-in fade-in duration-500">
+    <div className={`flex flex-col animate-in fade-in duration-500 ${isMobile ? "h-screen" : "h-[calc(100vh-6rem)] gap-4"}`}>
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className={`flex items-center justify-between shrink-0 ${isMobile ? "px-3 pt-3 pb-1" : ""}`}>
         <div>
-          <h1 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
-            <Dna className="w-6 h-6" style={{ color: P.sage }} />
+          <h1 className={`font-bold font-mono tracking-tight flex items-center gap-2 ${isMobile ? "text-lg" : "text-2xl"}`}>
+            <Dna className="w-5 h-5 shrink-0" style={{ color: P.sage }} />
             Project Darwin
-            <span className="text-sm font-normal px-2 py-0.5 rounded ml-1"
+            <span className="text-xs font-normal px-2 py-0.5 rounded ml-1"
               style={{ color: P.gold, background: P.gold + "18", border: `1px solid ${P.gold}33` }}>
-              Evolutionary Prosperity Engine
+              {isMobile ? "Darwin" : "Evolutionary Prosperity Engine"}
             </span>
           </h1>
-          <p className="text-sm font-mono mt-1" style={{ color: P.dim }}>
-            Radial phylogeny · Vessel physics · Fitness gradient · CRISPR recoding · Natural selection
-          </p>
+          {!isMobile && (
+            <p className="text-sm font-mono mt-1" style={{ color: P.dim }}>
+              Radial phylogeny · Vessel physics · Fitness gradient · CRISPR recoding · Natural selection
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-3">
-          {revokeResult && (
+        <div className="flex items-center gap-2">
+          {revokeResult && !isMobile && (
             <span className="text-[10px] font-mono px-2 py-1 rounded border"
               style={{ color: P.terra, borderColor: P.terra + "44", background: P.terra + "10" }}>
               💀 {revokeResult}
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="font-mono text-xs gap-2">
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}
+            className={`font-mono gap-1.5 ${isMobile ? "text-[10px] px-2 py-1 h-7" : "text-xs"}`}>
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            {!isMobile && "Refresh"}
           </Button>
         </div>
       </div>
 
-      {/* ── KPI Bar ── */}
-      <div className="grid grid-cols-6 gap-3 shrink-0">
-        {[
-          { label: "Swarm Fertility",  value: `${(stats.fertility * 100).toFixed(0)}%`,  sub: "Delegation × fitness",   color: stats.fertility > 0.6 ? P.sage : stats.fertility > 0.3 ? P.amber : P.terra, Icon: Zap },
-          { label: "Apex Fitness",     value: `${(stats.avgFitness * 100).toFixed(0)}%`, sub: "Population avg",         color: stats.avgFitness > 0.7 ? P.sage : stats.avgFitness > 0.4 ? P.amber : P.terra, Icon: Flame },
-          { label: "Genetic Drift",    value: `${stats.avgDrift.toFixed(1)}%`,            sub: `${stats.drifting} agents`,color: stats.drifting === 0 ? P.sage : stats.drifting < 3 ? P.amber : P.mutation,    Icon: Dna },
-          { label: "Natural Selection",value: stats.revoked,                              sub: "Dissolved agents",       color: stats.revoked === 0 ? P.sage : P.terra,                                         Icon: Skull },
-          { label: "Active Population",value: stats.active,                               sub: `of ${stats.total} total`,color: P.blue,                                                                         Icon: Network },
-          { label: "Calcification",    value: stats.calcifiedCount,                       sub: ">300s idle",             color: stats.calcifiedCount === 0 ? P.sage : P.calcite,                               Icon: () => <span style={{ color: P.calcite, fontSize: 12 }}>❄</span> },
-        ].map(({ label, value, sub, color, Icon }) => (
-          <Card key={label} className="p-3 border-border/60 bg-card/50">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
-              <Icon className="w-3.5 h-3.5" style={{ color }} />
-            </div>
-            <div className="text-xl font-bold font-mono" style={{ color }}>{value}</div>
-            <div className="text-[8px] font-mono mt-0.5" style={{ color: P.dim }}>{sub}</div>
-          </Card>
-        ))}
-      </div>
+      {/* ── KPI Bar (desktop only — mobile uses Vitality Sheet) ── */}
+      {!isMobile && (
+        <div className="grid grid-cols-6 gap-3 shrink-0">
+          {kpiCards.map(({ label, value, sub, color, Icon }) => (
+            <Card key={label} className="p-3 border-border/60 bg-card/50">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
+                <Icon className="w-3.5 h-3.5" style={{ color }} />
+              </div>
+              <div className="text-xl font-bold font-mono" style={{ color }}>{value}</div>
+              <div className="text-[8px] font-mono mt-0.5" style={{ color: P.dim }}>{sub}</div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* ── Main layout ── */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className={`flex flex-1 min-h-0 ${isMobile ? "flex-col" : "gap-4"}`}>
 
         {/* ── SVG Canvas ── */}
-        <div className="flex-1 rounded-xl overflow-hidden relative"
+        <div className={`rounded-xl overflow-hidden relative ${isMobile ? "flex-1" : "flex-1"}`}
           style={{ border: `1px solid ${P.border}`, background: P.bg }}>
 
-          {/* Legend */}
-          <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-3 text-[9px] font-mono px-3 py-1.5 rounded-lg"
+          {/* Legend — compact on mobile */}
+          <div className={`absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2 font-mono px-2 py-1.5 rounded-lg ${isMobile ? "text-[8px]" : "text-[9px] gap-3 px-3"}`}
             style={{ background: "rgba(13,17,23,0.88)", border: `1px solid ${P.border}` }}>
             {[
-              { color: P.sage,     label: "Bio-luminescent" },
-              { color: P.amber,    label: "Drift >15%" },
-              { color: P.mutation, label: "Maladaptive >30%" },
+              { color: P.sage,     label: "Healthy" },
+              { color: P.amber,    label: "Drift" },
+              { color: P.mutation, label: "Mutant" },
               { color: P.terra,    label: "Dissolved" },
-              { color: P.calcite,  label: "Calcified (idle)" },
-              { color: P.gold,     label: "LUCA nucleus" },
+              { color: P.calcite,  label: "Calcified" },
+              { color: P.gold,     label: "LUCA" },
             ].map(({ color, label }) => (
-              <span key={label} className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full inline-block" style={{ background: color }} />
+              <span key={label} className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: color }} />
                 <span style={{ color: P.dim }}>{label}</span>
               </span>
             ))}
-            <span className="opacity-30 mx-1">|</span>
-            <span style={{ color: P.dim }}>hover vine = lineage · right-click = CRISPR</span>
+            {!isMobile && (
+              <>
+                <span className="opacity-30 mx-1">|</span>
+                <span style={{ color: P.dim }}>hover vine = lineage · right-click = CRISPR</span>
+              </>
+            )}
+            {isMobile && (
+              <span style={{ color: P.dim + "99" }}>long-press = CRISPR</span>
+            )}
           </div>
+
+          {/* Mobile: Vitality Sheet toggle pill ── */}
+          {isMobile && (
+            <button
+              onClick={() => setVitalityOpen(v => !v)}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full font-mono text-[10px] font-bold"
+              style={{
+                background: P.panel,
+                border: `1px solid ${P.sage}55`,
+                color: P.sage,
+                boxShadow: `0 0 16px ${P.sage}22`,
+              }}>
+              <Activity className="w-3 h-3" />
+              {vitalityOpen ? "▾ Close Vitality" : "▴ Vitality Sheet"}
+              <span className="ml-1 font-mono text-[9px]" style={{ color: P.amber }}>
+                {(stats.fertility * 100).toFixed(0)}%
+              </span>
+            </button>
+          )}
 
           {nodes.length === 0 && !loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ color: P.dim }}>
@@ -921,8 +1087,11 @@ export default function SwarmMapPage() {
             </div>
           )}
 
-          <svg ref={svgRef} className="w-full h-full" style={{ display: "block" }}
-            onClick={() => { setSelectedNode(null); setCtxMenu(null); setLineageTip(null); }}>
+          <svg ref={svgRef} className="w-full h-full" style={{ display: "block", touchAction: "none" }}
+            onClick={() => { setSelectedNode(null); setCtxMenu(null); setLineageTip(null); }}
+            onTouchStart={handleSvgTouchStart}
+            onTouchMove={handleSvgTouchMove}
+            onTouchEnd={handleSvgTouchEnd}>
             <defs>
               {/* Prosperity radial fill */}
               <radialGradient id="darwin-bg" cx="50%" cy="50%">
@@ -1005,8 +1174,15 @@ export default function SwarmMapPage() {
               </pattern>
             </defs>
 
+            {/* ── Pinch-to-Zoom transform wrapper ── */}
+            <g transform={`translate(${panXY.x},${panXY.y}) scale(${zoom})`}
+               style={{ transformOrigin: `${cx}px ${cy}px` }}>
+
             {/* Base fills */}
-            <rect width="100%" height="100%" fill={P.bg} />
+            <rect x={-panXY.x / zoom} y={-panXY.y / zoom}
+              width={svgDims.W / zoom + Math.abs(panXY.x) / zoom * 2}
+              height={svgDims.H / zoom + Math.abs(panXY.y) / zoom * 2}
+              fill={P.bg} />
             <rect width="100%" height="100%" fill="url(#eco-grid)" />
 
             {/* ── Prosperity Pulse — background radial breath ── */}
@@ -1152,16 +1328,18 @@ export default function SwarmMapPage() {
                 py = pt.y;
               }
 
+              // 2× particle size on mobile for thumb-visibility
+              const pR = isMobile ? 2 : 1;
               return (
                 <g key={`surge-${surge.rootId}-${surge.startedAt}`}>
                   {/* Outer aura */}
-                  <circle cx={px} cy={py} r={16} fill={P.whiteGold} fillOpacity="0.12" filter="url(#fg-white)" />
+                  <circle cx={px} cy={py} r={16 * pR} fill={P.whiteGold} fillOpacity="0.12" filter="url(#fg-white)" />
                   {/* White-gold halo ring */}
-                  <circle cx={px} cy={py} r={9}  fill="none" stroke={P.gold} strokeWidth="1.5" opacity="0.55" />
+                  <circle cx={px} cy={py} r={9 * pR}  fill="none" stroke={P.gold} strokeWidth={1.5 * pR} opacity="0.55" />
                   {/* Core surge particle */}
-                  <circle cx={px} cy={py} r={5}  fill={P.gold} fillOpacity="0.98" filter="url(#fg-gold)" />
+                  <circle cx={px} cy={py} r={5 * pR}  fill={P.gold} fillOpacity="0.98" filter="url(#fg-gold)" />
                   {/* Hot white center */}
-                  <circle cx={px} cy={py} r={2}  fill="#ffffff" fillOpacity="0.95" />
+                  <circle cx={px} cy={py} r={2 * pR}  fill="#ffffff" fillOpacity="0.95" />
                 </g>
               );
             })}
@@ -1217,6 +1395,9 @@ export default function SwarmMapPage() {
             <g className="organisms">
               {nodes.map(node => {
                 if (!node.x || !node.y) return null;
+                // Mobile: skip clustered healthy nodes — rendered as proxy below
+                if (isMobile && clusteredIds.has(node.id)) return null;
+
                 const calc        = isCalcified(node.id);
                 const metamorphed = isMetamorphosed(node.id);
                 const afterglow   = afterglowIntensity(node.id);
@@ -1276,7 +1457,10 @@ export default function SwarmMapPage() {
                 return (
                   <g key={node.id} style={{ cursor: "pointer" }}
                     onClick={e => { e.stopPropagation(); handleNodeClick(e, node); }}
-                    onContextMenu={e => handleNodeRightClick(e, node)}>
+                    onContextMenu={e => handleNodeRightClick(e, node)}
+                    onTouchStart={e => { e.stopPropagation(); handleTouchStart(e, node); }}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}>
 
                     {/* Selection ring */}
                     {isSelected && (
@@ -1399,12 +1583,53 @@ export default function SwarmMapPage() {
                   </g>
                 );
               })}
+
+              {/* ── Swarm Cluster proxy nodes (mobile aggregation) ── */}
+              {isMobile && Array.from(clusterMap.entries()).map(([parentId, memberIds]) => {
+                const parent = nodeMap.get(parentId);
+                if (!parent?.x || !parent?.y) return null;
+                // Centroid of cluster members
+                const members = memberIds.map(id => nodeMap.get(id)).filter(Boolean) as SwarmNodeData[];
+                if (!members.length) return null;
+                const cx2 = members.reduce((s, n) => s + (n.x ?? 0), 0) / members.length;
+                const cy2 = members.reduce((s, n) => s + (n.y ?? 0), 0) / members.length;
+                const cr  = 18; // cluster radius
+
+                return (
+                  <g key={`cluster-${parentId}`} style={{ cursor: "pointer" }}
+                    onClick={e => { e.stopPropagation(); }}>
+                    {/* Outer ring */}
+                    <circle cx={cx2} cy={cy2} r={cr + 6}
+                      fill="none" stroke={P.sage} strokeWidth="1" strokeDasharray="3,4" opacity="0.4" />
+                    {/* Cluster body */}
+                    <circle cx={cx2} cy={cy2} r={cr}
+                      fill={P.sage} fillOpacity="0.18"
+                      stroke={P.sage} strokeWidth="1.5" strokeOpacity="0.7"
+                      filter="url(#fg-sage)" />
+                    {/* Count badge */}
+                    <text x={cx2} y={cy2 - 3}
+                      textAnchor="middle" dominantBaseline="central"
+                      fontSize="9" fontWeight="bold" fill={P.sage}
+                      style={{ userSelect: "none", pointerEvents: "none" }}>
+                      +{memberIds.length}
+                    </text>
+                    <text x={cx2} y={cy2 + 9}
+                      textAnchor="middle" fontSize="7" fill={P.dim}
+                      style={{ userSelect: "none", pointerEvents: "none" }}>
+                      Agents
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+
+            {/* Close pinch-to-zoom group */}
             </g>
           </svg>
         </div>
 
-        {/* ── Right panel ── */}
-        <div className="w-80 shrink-0 flex flex-col gap-2 min-h-0">
+        {/* ── Right panel (desktop only) ── */}
+        <div className={`shrink-0 flex flex-col gap-2 min-h-0 ${isMobile ? "hidden" : "w-80"}`}>
 
           {/* Node info */}
           {selectedNode && (() => {
@@ -1527,7 +1752,90 @@ export default function SwarmMapPage() {
           50%  { transform: translateX(2px) scaleX(0.98); background: rgba(217,97,97,0.12); }
           100% { opacity: 1; transform: translateX(0) scaleX(1); }
         }
+        @keyframes vitality-slide-up {
+          from { transform: translateY(100%); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+        @keyframes whiteGoldRecode {
+          0%   { box-shadow: 0 0 0 0 rgba(255,215,0,0); }
+          40%  { box-shadow: 0 0 0 8px rgba(255,215,0,0.35); }
+          100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); }
+        }
       `}</style>
+
+      {/* ── Vitality Sheet — mobile bottom drawer ── */}
+      {isMobile && (
+        <div
+          style={{
+            position: "fixed",
+            left: 0, right: 0, bottom: 0,
+            zIndex: 200,
+            background: P.panel,
+            borderTop: `1px solid ${P.border}`,
+            borderRadius: "16px 16px 0 0",
+            boxShadow: "0 -4px 32px rgba(0,0,0,0.55)",
+            animation: vitalityOpen ? "vitality-slide-up 0.28s cubic-bezier(0.22,1,0.36,1) both" : undefined,
+            transform: vitalityOpen ? "translateY(0)" : "translateY(100%)",
+            transition: vitalityOpen ? undefined : "transform 0.22s cubic-bezier(0.4,0,1,1)",
+            maxHeight: "58vh",
+            overflowY: "auto",
+          }}>
+          {/* Drag handle */}
+          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: P.border }} />
+          </div>
+          {/* Title row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "0 16px 10px", borderBottom: `1px solid ${P.border}44` }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: P.sage, letterSpacing: "0.06em" }}>
+              ◈ VITALITY MATRIX
+            </span>
+            <button onClick={() => setVitalityOpen(false)}
+              style={{ fontSize: 16, color: P.dim, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          </div>
+          {/* KPI cards grid — 2 columns */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "12px 14px 20px" }}>
+            {kpiCards.map((k, i) => (
+              <div key={i} style={{
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.035)",
+                border: `1px solid ${k.color}33`,
+                padding: "10px 12px",
+                animation: "whiteGoldRecode 2s ease-in-out infinite",
+                animationDelay: `${i * 0.3}s`,
+              }}>
+                <div style={{ fontSize: 9, color: P.dim, marginBottom: 4, letterSpacing: "0.07em" }}>
+                  {k.label}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: k.color }}>
+                  {k.value}
+                </div>
+                {k.sub && (
+                  <div style={{ fontSize: 9, color: P.dim, marginTop: 3 }}>{k.sub}</div>
+                )}
+              </div>
+            ))}
+          </div>
+          {/* Selected node mini-info */}
+          {selectedNode && (
+            <div style={{ margin: "0 14px 16px", padding: "10px 12px", borderRadius: 10,
+              background: `${P.sage}12`, border: `1px solid ${P.sage}33` }}>
+              <div style={{ fontSize: 9, color: P.dim, marginBottom: 4 }}>SELECTED ORGANISM</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: P.sage, marginBottom: 2 }}>
+                {selectedNode.id.length > 22 ? selectedNode.id.substring(0, 20) + "…" : selectedNode.id}
+              </div>
+              <div style={{ fontSize: 9, color: P.dim }}>
+                Status: <span style={{ color: selectedNode.status === "healthy" ? P.sage : selectedNode.status === "mutant" ? P.violet : P.terra }}>
+                  {selectedNode.status?.toUpperCase()}
+                </span>
+                {" · "} Drift: <span style={{ color: (selectedNode.driftScore ?? 0) > 15 ? P.amber : P.dim }}>
+                  {(selectedNode.driftScore ?? 0).toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Context menu ── */}
       {ctxMenu && (
