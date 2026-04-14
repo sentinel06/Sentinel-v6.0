@@ -394,6 +394,34 @@ export default function CausalTopologyMap({
   const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
 
+  // White-Gold surge state — fired by RECURSIVE_FIX_VERIFIED
+  const [surgeAgentId, setSurgeAgentId] = useState<string | null>(null);
+  const [surgePhase, setSurgePhase] = useState<"idle" | "surge" | "restore">("idle");
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { agentId } = (e as CustomEvent).detail ?? {};
+      if (!agentId) return;
+      setSurgeAgentId(agentId);
+      setSurgePhase("surge");
+      // Hold surge 1.2s → fade to "restore" state → edges stay sage
+      setTimeout(() => setSurgePhase("restore"), 1200);
+      // Reload topology after fix so edges reflect the new RECURSIVE_FIX_VERIFIED event
+      setTimeout(() => {
+        setSurgePhase("idle");
+        setSurgeAgentId(null);
+        // Re-fetch graph to show updated chain state
+        setGraph(null);
+        fetch(`${BASE}/api/v1/topology/${traceId}`)
+          .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+          .then(d => setGraph(d.graph))
+          .catch(() => {});
+      }, 3000);
+    };
+    window.addEventListener("recursiveFixVerified", handler);
+    return () => window.removeEventListener("recursiveFixVerified", handler);
+  }, [traceId]);
+
   // Fetch topology
   useEffect(() => {
     setLoading(true); setError(null); setGraph(null);
@@ -561,6 +589,14 @@ export default function CausalTopologyMap({
               })}
             </defs>
 
+            {/* ── White-Gold surge overlay ── */}
+            <style>{`
+              @keyframes wg-flash { 0%{opacity:0} 15%{opacity:0.7} 60%{opacity:0.5} 100%{opacity:0} }
+              @keyframes wg-edges-restore { from{opacity:0.3} to{opacity:1} }
+              .wg-surge-rect { animation: wg-flash 1.2s ease forwards; }
+              .wg-restore-rect { animation: wg-edges-restore 0.8s ease forwards; }
+            `}</style>
+
             {/* ── Swimlane backgrounds ── */}
             {agentIds.map((agentId, laneIdx) => (
               <g key={agentId}>
@@ -584,6 +620,43 @@ export default function CausalTopologyMap({
                   x2={svgW} y2={HDR_H + laneIdx * LANE_H}
                   stroke={P.border} strokeWidth="1" opacity="0.5"
                 />
+
+                {/* White-Gold surge overlay for this lane */}
+                {surgeAgentId === agentId && surgePhase === "surge" && (
+                  <g>
+                    <rect
+                      key={`wg-surge-${Date.now()}`}
+                      x={0} y={HDR_H + laneIdx * LANE_H}
+                      width={svgW} height={LANE_H}
+                      className="wg-surge-rect"
+                      style={{
+                        fill: `url(#wg-grad-${laneIdx})`,
+                        pointerEvents: "none",
+                      }}
+                    />
+                    <defs>
+                      <linearGradient id={`wg-grad-${laneIdx}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%"   stopColor="#FFFBE8" stopOpacity="0.1" />
+                        <stop offset="40%"  stopColor="#FFD700" stopOpacity="0.55" />
+                        <stop offset="60%"  stopColor="#FFFBE8" stopOpacity="0.6" />
+                        <stop offset="100%" stopColor="#FFD700" stopOpacity="0.1" />
+                      </linearGradient>
+                    </defs>
+                  </g>
+                )}
+                {/* "Restored" gold border for the lane post-surge */}
+                {surgeAgentId === agentId && surgePhase === "restore" && (
+                  <rect
+                    x={1} y={HDR_H + laneIdx * LANE_H + 1}
+                    width={svgW - 2} height={LANE_H - 2}
+                    fill="none"
+                    stroke="#FFD700" strokeWidth="2"
+                    strokeDasharray="8,4"
+                    opacity="0.5"
+                    className="wg-restore-rect"
+                    style={{ pointerEvents: "none" }}
+                  />
+                )}
               </g>
             ))}
 
@@ -597,7 +670,13 @@ export default function CausalTopologyMap({
               const isHovered = hoveredEdge === edge.id;
               const isSelected = selectedEdge?.id === edge.id;
               const path = buildEdgePath(src, tgt);
-              const stroke = edgeStroke(edge);
+              // During surge restore phase: force edge to sage (restored state)
+              const isSurgedAgent =
+                surgePhase !== "idle" &&
+                (edge.sourceAgent === surgeAgentId || edge.targetAgent === surgeAgentId);
+              const stroke = isSurgedAgent && surgePhase === "restore"
+                ? P.sage
+                : edgeStroke(edge);
               const markerId = !edge.chainIntact ? "ctm-terra"
                 : edge.driftBleed > 0.15 ? "ctm-amber"
                 : "ctm-sage";

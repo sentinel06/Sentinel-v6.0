@@ -22,6 +22,7 @@ import {
   TriangleAlert, Eye, Pen, Network, GitBranch, Share2,
 } from "lucide-react";
 import CausalTopologyMap from "@/components/CausalTopologyMap";
+import SovereignMultiSigModal from "@/components/SovereignMultiSigModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -526,8 +527,9 @@ function ActiveInterdictionPanel({ event, onClose, onCommitted }: {
     } catch { return ""; }
   });
   const [toolParamsError, setToolParamsError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [committed, setCommitted] = useState<InterdictionResult | null>(null);
+  const [committed, setCommitted]   = useState<InterdictionResult | null>(null);
+  const [showMultiSig, setShowMultiSig] = useState(false);
+  const [killState, setKillState]   = useState<"idle" | "loading" | "done">("idle");
 
   const validateTP = useCallback((raw: string) => {
     if (!raw.trim()) { setToolParamsError(null); return true; }
@@ -535,134 +537,219 @@ function ActiveInterdictionPanel({ event, onClose, onCommitted }: {
     catch (e: any) { setToolParamsError(e.message); return false; }
   }, []);
 
-  const applyFix = async () => {
-    if (!intentText.trim() || (toolParams.trim() && !validateTP(toolParams))) return;
-    setLoading(true);
+  // ── Kill Switch — single-click, logs EMERGENCY_SOLO_REVOKE ──────────────
+  const handleKillSwitch = useCallback(async () => {
+    if (killState !== "idle") return;
+    setKillState("loading");
     try {
-      const body: Record<string, unknown> = {
-        logId: event.id, newRationale: intentText.trim(),
-        operatorId: `operator-${Date.now().toString(36)}`,
-      };
-      if (toolParams.trim()) body.newToolParams = JSON.parse(toolParams);
-      const r = await fetch(`${BASE}/api/v1/forensic/override`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Override failed");
-      const result: InterdictionResult = {
-        forensicAuditId: d.forensicAuditId, committedAt: d.committedAt,
-        quantumProof: d.quantumProof,
-      };
-      setCommitted(result); onCommitted(result);
-    } catch (e: any) { alert(`Apply Fix failed: ${e.message}`); }
-    finally { setLoading(false); }
-  };
+      const agentId  = (event as any).agentId ?? "unknown";
+      const traceId  = (event as any).traceId ?? undefined;
+      const operatorId = `op-${Date.now().toString(36)}`;
+      await Promise.all([
+        fetch(`${BASE}/api/v1/admin/kill-switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: true, reason: `Emergency Kill Switch — Trace Interdiction: ${event.id}` }),
+        }),
+        fetch(`${BASE}/api/v1/forensic/kill-switch-log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentId, traceId, operatorId,
+            reason: `Emergency Kill Switch from Trace Interdiction Panel. EventID: ${event.id}` }),
+        }),
+      ]);
+      setKillState("done");
+    } catch { setKillState("idle"); }
+  }, [event, killState]);
+
+  const canOpenMultiSig =
+    !!intentText.trim() &&
+    !toolParamsError &&
+    intentText.trim() !== (event.rationale ?? "");
 
   return (
-    <div className="rounded-xl overflow-hidden animate-in slide-in-from-right-4"
-      style={{ border: `1px solid ${P.blue}44`, background: "#0d111a" }}>
-      <div className="px-4 py-3 flex items-center justify-between border-b"
-        style={{ borderColor: P.blue + "33", background: P.blue + "0f" }}>
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4" style={{ color: P.blue }} />
-          <span className="text-xs font-mono font-bold" style={{ color: P.blue }}>ACTIVE INTERDICTION</span>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-            style={{ color: P.dim, background: P.border + "88", border: `1px solid ${P.border}` }}>
-            HUMAN_IN_THE_LOOP_OVERRIDE
-          </span>
+    <>
+      <div className="rounded-xl overflow-hidden animate-in slide-in-from-right-4"
+        style={{ border: `1px solid ${P.blue}44`, background: "#0d111a" }}>
+        <div className="px-4 py-3 flex items-center justify-between border-b"
+          style={{ borderColor: P.blue + "33", background: P.blue + "0f" }}>
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4" style={{ color: P.blue }} />
+            <span className="text-xs font-mono font-bold" style={{ color: P.blue }}>ACTIVE INTERDICTION</span>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded"
+              style={{ color: P.dim, background: P.border + "88", border: `1px solid ${P.border}` }}>
+              TWO-MAN RULE
+            </span>
+          </div>
+          <button onClick={onClose} className="opacity-50 hover:opacity-100">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
-        <button onClick={onClose} className="opacity-50 hover:opacity-100">
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-      <div className="p-4 space-y-4">
-        <div className="rounded px-3 py-2 flex items-center gap-2"
-          style={{ background: P.panel, border: `1px solid ${P.border}` }}>
-          <Hash className="w-3 h-3 shrink-0" style={{ color: P.dim }} />
-          <div className="flex-1 min-w-0">
-            <div className="text-[9px] font-mono uppercase tracking-widest" style={{ color: P.dim }}>Target Event</div>
-            <div className="text-[10px] font-mono truncate" style={{ color: "#cdd5e0" }}>
-              {event.id} · {event.eventType} · {formatTime(event.timestamp)}
+        <div className="p-4 space-y-4">
+          {/* Target event */}
+          <div className="rounded px-3 py-2 flex items-center gap-2"
+            style={{ background: P.panel, border: `1px solid ${P.border}` }}>
+            <Hash className="w-3 h-3 shrink-0" style={{ color: P.dim }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[9px] font-mono uppercase tracking-widest" style={{ color: P.dim }}>Target Event</div>
+              <div className="text-[10px] font-mono truncate" style={{ color: "#cdd5e0" }}>
+                {event.id} · {event.eventType} · {formatTime(event.timestamp)}
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <Pen className="w-3 h-3" style={{ color: P.amber }} />
-            <label className="text-[10px] font-mono uppercase tracking-widest" style={{ color: P.amber }}>
-              Corrected Intent / Rationale
-            </label>
+
+          {/* Intent textarea */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Pen className="w-3 h-3" style={{ color: P.amber }} />
+              <label className="text-[10px] font-mono uppercase tracking-widest" style={{ color: P.amber }}>
+                Corrected Intent / Rationale
+              </label>
+            </div>
+            <textarea
+              className="w-full rounded-lg p-3 text-xs font-mono resize-none focus:outline-none"
+              style={{
+                background: "#0a0e17", color: "#e0e6ed",
+                border: `1px solid ${intentText.trim() !== (event.rationale ?? "") ? P.blue + "88" : P.border}`,
+                minHeight: "80px",
+              }}
+              placeholder="Corrected intent — will require Sovereign co-signature…"
+              value={intentText} onChange={e => setIntentText(e.target.value)}
+              disabled={!!committed} />
           </div>
-          <textarea
-            className="w-full rounded-lg p-3 text-xs font-mono resize-none focus:outline-none"
-            style={{
-              background: "#0a0e17", color: "#e0e6ed",
-              border: `1px solid ${intentText.trim() !== (event.rationale ?? "") ? P.blue + "88" : P.border}`,
-              minHeight: "80px",
-            }}
-            placeholder="Corrected intent to be re-signed…"
-            value={intentText} onChange={e => setIntentText(e.target.value)}
-            disabled={!!committed} />
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <Activity className="w-3 h-3" style={{ color: P.blue }} />
-            <label className="text-[10px] font-mono uppercase tracking-widest" style={{ color: P.blue }}>
-              Tool Parameters (JSON — optional)
-            </label>
+
+          {/* Tool params */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Activity className="w-3 h-3" style={{ color: P.blue }} />
+              <label className="text-[10px] font-mono uppercase tracking-widest" style={{ color: P.blue }}>
+                Tool Parameters (JSON — optional)
+              </label>
+            </div>
+            <textarea
+              className="w-full rounded-lg p-3 text-xs font-mono resize-none focus:outline-none"
+              style={{
+                background: "#0a0e17", minHeight: "48px",
+                color: toolParamsError ? P.terra : "#9aa4b1",
+                border: `1px solid ${toolParamsError ? P.terra + "88" : toolParams.trim() ? P.blue + "44" : P.border}`,
+              }}
+              placeholder='{"key": "value"}'
+              value={toolParams}
+              onChange={e => { setToolParams(e.target.value); validateTP(e.target.value); }}
+              disabled={!!committed} />
+            {toolParamsError && (
+              <div className="text-[9px] font-mono mt-1 flex items-center gap-1" style={{ color: P.terra }}>
+                <AlertTriangle className="w-2.5 h-2.5" />JSON error: {toolParamsError}
+              </div>
+            )}
           </div>
-          <textarea
-            className="w-full rounded-lg p-3 text-xs font-mono resize-none focus:outline-none"
-            style={{
-              background: "#0a0e17", minHeight: "48px",
-              color: toolParamsError ? P.terra : "#9aa4b1",
-              border: `1px solid ${toolParamsError ? P.terra + "88" : toolParams.trim() ? P.blue + "44" : P.border}`,
-            }}
-            placeholder='{"key": "value"}'
-            value={toolParams}
-            onChange={e => { setToolParams(e.target.value); validateTP(e.target.value); }}
-            disabled={!!committed} />
-          {toolParamsError && (
-            <div className="text-[9px] font-mono mt-1 flex items-center gap-1" style={{ color: P.terra }}>
-              <AlertTriangle className="w-2.5 h-2.5" />JSON error: {toolParamsError}
+
+          {!committed && (
+            <div className="flex items-center gap-3">
+              {/* Apply Fix → opens Two-Man Rule Modal */}
+              <button
+                data-testid="apply-fix-btn"
+                onClick={() => setShowMultiSig(true)}
+                disabled={!canOpenMultiSig}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-xs font-bold disabled:opacity-40 transition-all"
+                style={{ background: P.blue, color: "#0d1117", boxShadow: canOpenMultiSig ? `0 0 16px ${P.blue}44` : "none" }}>
+                <ShieldCheck className="w-3 h-3" />
+                Apply Fix (Two-Man Rule)
+              </button>
+
+              {/* Kill Switch — bypasses multi-sig */}
+              <button
+                data-testid="kill-switch-btn"
+                onClick={handleKillSwitch}
+                disabled={killState !== "idle"}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-xs font-bold disabled:opacity-60 transition-all"
+                style={{
+                  background: killState === "done" ? P.terra + "22" : "transparent",
+                  border: `1px solid ${P.terra}66`,
+                  color: killState === "done" ? P.terra : P.terra + "cc",
+                }}>
+                {killState === "loading"
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : killState === "done"
+                  ? <><ShieldAlert className="w-3 h-3" /> KILL ACTIVE</>
+                  : <><ShieldAlert className="w-3 h-3" /> Kill Switch</>}
+              </button>
+            </div>
+          )}
+
+          {/* Kill switch status note */}
+          {killState === "done" && (
+            <div className="rounded-lg px-3 py-2 text-[9px] font-mono"
+              style={{ background: P.terra + "12", border: `1px solid ${P.terra}44`, color: P.terra }}>
+              ⚡ EMERGENCY_SOLO_REVOKE logged · Kill switch activated · All agent sessions revoked
+            </div>
+          )}
+
+          {/* Committed confirmation */}
+          {committed && (
+            <div className="rounded-xl overflow-hidden"
+              style={{ border: `1px solid ${P.sage}55`, background: P.sage + "0a" }}>
+              <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: P.sage + "33" }}>
+                <ShieldCheck className="w-4 h-4" style={{ color: P.sage }} />
+                <span className="text-xs font-mono font-bold" style={{ color: P.sage }}>
+                  DUAL-SIG COMMITTED — FIX VERIFIED
+                </span>
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="rounded-lg px-3 py-2" style={{ background: P.sage + "0f", border: `1px solid ${P.sage}33` }}>
+                  <div className="text-[9px] font-mono uppercase tracking-widest mb-1" style={{ color: P.dim }}>Forensic Audit ID</div>
+                  <div className="text-sm font-mono font-bold" style={{ color: P.sage }}>{committed.forensicAuditId}</div>
+                </div>
+                <div className="text-[9px] font-mono" style={{ color: P.dim }}>
+                  {committed.quantumProof?.algorithm ?? "ML-DSA-87"} · SL{committed.quantumProof?.securityLevel ?? 5} ·
+                  {new Date(committed.committedAt).toLocaleString()}
+                </div>
+              </div>
             </div>
           )}
         </div>
-        {!committed && (
-          <button onClick={applyFix}
-            disabled={loading || !intentText.trim() || !!toolParamsError || intentText.trim() === (event.rationale ?? "")}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-xs font-bold disabled:opacity-40"
-            style={{ background: P.blue, color: "#0d1117", boxShadow: `0 0 16px ${P.blue}44` }}>
-            {loading
-              ? <><Loader2 className="w-3 h-3 animate-spin" /> Re-signing with ML-DSA-87…</>
-              : <><ShieldCheck className="w-3 h-3" /> Apply Fix & Commit to Ledger</>}
-          </button>
-        )}
-        {committed && (
-          <div className="rounded-xl overflow-hidden" style={{
-            border: `1px solid ${P.sage}55`, background: P.sage + "0a",
-          }}>
-            <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: P.sage + "33" }}>
-              <ShieldCheck className="w-4 h-4" style={{ color: P.sage }} />
-              <span className="text-xs font-mono font-bold" style={{ color: P.sage }}>
-                QUANTUM PROOF — COMMITTED
-              </span>
-            </div>
-            <div className="p-3 space-y-2">
-              <div className="rounded-lg px-3 py-2" style={{ background: P.sage + "0f", border: `1px solid ${P.sage}33` }}>
-                <div className="text-[9px] font-mono uppercase tracking-widest mb-1" style={{ color: P.dim }}>Forensic Audit ID</div>
-                <div className="text-sm font-mono font-bold" style={{ color: P.sage }}>{committed.forensicAuditId}</div>
-              </div>
-              <div className="text-[9px] font-mono" style={{ color: P.dim }}>
-                {committed.quantumProof?.algorithm ?? "ML-DSA-87"} · SL{committed.quantumProof?.securityLevel ?? 5} ·
-                {new Date(committed.committedAt).toLocaleString()}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+
+      {/* ── Sovereign Multi-Sig Modal ── */}
+      {showMultiSig && !committed && (
+        <SovereignMultiSigModal
+          event={{
+            id: event.id,
+            eventType: event.eventType,
+            rationale: event.rationale,
+            agentId: (event as any).agentId,
+            traceId: (event as any).traceId,
+            timestamp: event.timestamp,
+          }}
+          newRationale={intentText}
+          newToolParams={toolParams.trim() || undefined}
+          onSuccess={(res) => {
+            setCommitted({
+              forensicAuditId: res.forensicAuditId,
+              committedAt: res.committedAt,
+              quantumProof: {
+                ...res.quantumProof,
+                securityLevel: 5,
+                fipsStandard: "FIPS-204",
+                domainSeparator: "HUMAN_IN_THE_LOOP_OVERRIDE",
+              } as QuantumProof,
+            });
+            onCommitted({
+              forensicAuditId: res.forensicAuditId,
+              committedAt: res.committedAt,
+              quantumProof: {
+                ...res.quantumProof,
+                securityLevel: 5,
+                fipsStandard: "FIPS-204",
+                domainSeparator: "HUMAN_IN_THE_LOOP_OVERRIDE",
+              } as QuantumProof,
+            });
+            setShowMultiSig(false);
+          }}
+          onClose={() => setShowMultiSig(false)}
+        />
+      )}
+    </>
   );
 }
 
