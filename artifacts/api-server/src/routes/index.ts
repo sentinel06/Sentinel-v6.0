@@ -10,6 +10,7 @@ import statusRouter from "./status";
 import forensicRouter from "./forensic";
 import topologyRouter from "./topology";
 import whitepaperRouter from "./whitepaper";
+import gatewayRouter from "./gateway";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(statusRouter);
 router.use(forensicRouter);
 router.use(topologyRouter);
 router.use(whitepaperRouter);
+router.use(gatewayRouter);
 
 export default router;

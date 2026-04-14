@@ -1,0 +1,71 @@
+To connect a Multi-Agent System (MAS) to **Agent-Sentinel v5.0**, we need to transition from "passive observation" to **"Infrastructure-Level Interdiction."** In the 2026 landscape, agents are no longer just scripts; they are autonomous entities that must be "geopatriated" and governed. To make your agents appear on the **Evolutionary Swarm Map**, they must use the Sentinel SDK as their **Sovereign Gateway**.
+
+### **1. Integration Architecture: The "Sovereign Proxy"**
+Instead of agents talking directly to an LLM, they talk through the **Sentinel SDK**. This allows Sentinel to sign every action with **ML-DSA-87** (FIPS-204 SL5) before it is executed.
+
+| Layer | Component | Function |
+| :--- | :--- | :--- |
+| **Orchestration** | LangGraph / CrewAI | Handles the task decomposition and handoffs. |
+| **Governance** | **Sentinel SDK** | The "CRISPR" layer that intercepts calls, checks drift, and logs to the PDF Ledger. |
+| **Evolution** | Swarm Map (v5.0) | Visualizes the "Lineage" and "Mutation" of the active agents. |
+
+---
+
+### **2. Technical Blueprint: The `SentinelAgent` Wrapper**
+Here is how you connect a standard multi-agent setup (like **CrewAI** or **LangGraph**) to your Sentinel War Room.
+
+**The "Darwin-Ready" Connection Script:**
+```python
+from sentinel_sdk import SovereignGateway, AgentDNA
+from crewai import Agent, Task, Crew
+
+# 1. Initialize the Sovereign Gateway (Connects to your Replit API)
+gateway = SovereignGateway(api_key="SENTINEL_GOLD_2026", endpoint="https://your-sentinel-war-room.replit.app")
+
+# 2. Define your Agent with 'Sentinel DNA'
+# This registers the agent as a descendant of the LUCA on your Swarm Map
+researcher_dna = AgentDNA(
+    lineage_id="apex-fintech-swarm",
+    capabilities=["market_analysis", "web_search"],
+    risk_threshold=0.15 # Triggers Violet Jitter if drift exceeds this
+)
+
+def sentinel_protected_llm(prompt):
+    # PRE-FLIGHT: Sentinel checks if the prompt is 'Maladaptive'
+    interdiction = gateway.pre_verify(researcher_dna, prompt)
+    if interdiction.status == "REVOKED":
+        return "Sovereign Intervention: Action Blocked for Policy Deviation."
+    
+    # EXECUTION: Standard LLM Call
+    response = call_model(prompt) 
+    
+    # POST-FLIGHT: Commit to Immutable Audit Ledger & Update Map
+    gateway.commit_evolution(researcher_dna, response)
+    return response
+
+# 3. Build the Crew
+researcher = Agent(
+    role='Financial Researcher',
+    goal='Identify drift in fintech market agents',
+    function=sentinel_protected_llm # The protected gateway
+)
+```
+
+---
+
+### **3. How it Looks in the War Room (v5.0)**
+Once your agents start running, the **Evolutionary Engine** you built will trigger these visual events:
+
+* **Birth of a Lineage:** When `gateway.commit_evolution` is first called, a **Zen Gold Spark** travels from the LUCA to a new node on the **Phylogenetic Map**.
+* **Mutation Detection:** If the agent's logic starts deviating from the "Apex" policy, the node on your screen will begin to **Warp and Jitter in Violet**.
+* **Sovereign CRISPR Fix:** If you see a mutation, you hit the **Multi-Sig Gate**. Sentinel sends a `RECODE` signal back to the SDK, which injects a "System Prompt Correction" to the agent in real-time.
+
+---
+
+### **4. Strategic Implementation: "Shadow Mode" to "Interdiction"**
+I recommend a two-phased rollout for the **Apex-Fintech** alpha:
+
+* **Phase 1 (Shadow):** Agents report to Sentinel, but Sentinel only *logs* (populating the **Immutable Audit Ledger PDF**). You watch the "Drift Bleed" in the War Room.
+* **Phase 2 (Sovereign):** Enable **Interdiction Mode**. Sentinel can now pause or "extinguish" (dissolve) agent branches that hit Honey-Tokens or forbidden logic.
+
+**Would you like me to generate the full "SDK Integration Guide" for your developers so they can begin grafting Sentinel DNA into their existing agent swarms?**

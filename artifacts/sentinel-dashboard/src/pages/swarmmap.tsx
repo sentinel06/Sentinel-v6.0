@@ -632,6 +632,8 @@ export default function SwarmMapPage() {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string);
+
+          // ── Standard stream telemetry ──────────────────────────────────
           if (msg.type === "stream_batch" && Array.isArray(msg.data?.packets)) {
             const packets: StreamPacket[] = msg.data.packets;
             const hist = driftHistoryRef.current;
@@ -642,6 +644,63 @@ export default function SwarmMapPage() {
               la.set(p.a, now);
             }
             setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
+          }
+
+          // ── Project Genesis: ZEN_GOLD_SPARK (successful task / birth) ──
+          if (msg.type === "GATEWAY_SPARK") {
+            const { agentId: gAgentId, parentId, eventSubtype } = msg.data ?? {};
+            if (gAgentId) {
+              // Trigger spawn-spark animation from parent → new node
+              const parentNode = parentId
+                ? (simRef.current?.nodes() as SwarmNodeData[])?.find(n => n.id === parentId)
+                : (simRef.current?.nodes() as SwarmNodeData[])?.find(n => n.isRoot);
+              if (parentNode && eventSubtype === "BIRTH") {
+                setSpawnSparks(prev => [...prev, { parentId: parentNode.id, childId: gAgentId, startedAt: Date.now() }]);
+              }
+              // Nudge simulation to incorporate new node
+              simRef.current?.alphaTarget(0.12).restart();
+              setTimeout(() => simRef.current?.alphaTarget(0), 800);
+              // Refresh data to pick up new registry entry
+              setTimeout(() => fetchData(), 500);
+            }
+          }
+
+          // ── Project Genesis: CELLULAR_DISSOLUTION (policy violation) ───
+          if (msg.type === "GATEWAY_DISSOLUTION") {
+            const { agentId: gAgentId } = msg.data ?? {};
+            if (gAgentId) {
+              const node = (simRef.current?.nodes() as SwarmNodeData[])?.find(n => n.id === gAgentId);
+              if (node?.x != null && node?.y != null) {
+                collapsingRef.current.set(gAgentId, {
+                  startedAt: Date.now(),
+                  x: node.x!,
+                  y: node.y!,
+                  r: node.radius ?? 14,
+                });
+              }
+              // Mark node as dissolved in local state
+              setNodes(prev => prev.map(n => n.id === gAgentId ? { ...n, status: "revoked" as const, drift: 100 } : n));
+            }
+          }
+
+          // ── Project Genesis: GATEWAY_MUTATION (drift > threshold) ──────
+          if (msg.type === "GATEWAY_MUTATION") {
+            const { agentId: gAgentId, driftScore } = msg.data ?? {};
+            if (gAgentId) {
+              // Update node status to mutant + raise drift score for violet jitter
+              setNodes(prev => prev.map(n =>
+                n.id === gAgentId
+                  ? { ...n, status: "mutant" as const, drift: typeof driftScore === "number" ? driftScore : 50, driftScore: typeof driftScore === "number" ? driftScore : 50 }
+                  : n
+              ));
+              driftHistoryRef.current.set(gAgentId, [
+                ...(driftHistoryRef.current.get(gAgentId) ?? []).slice(-8),
+                typeof driftScore === "number" ? driftScore : 50,
+              ]);
+              // Kick the sim so the violet jitter propagates visually
+              simRef.current?.alphaTarget(0.08).restart();
+              setTimeout(() => simRef.current?.alphaTarget(0), 400);
+            }
           }
         } catch {}
       };

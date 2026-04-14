@@ -60,3 +60,11 @@ export function broadcastGovernanceEvent(type: string, payload: object): void {
 export function broadcastStreamBatch(packets: unknown[]): void {
   broadcast("stream_batch", { packets });
 }
+
+/**
+ * Broadcast a Project Genesis Gateway event to all connected Swarm Map clients.
+ * eventType is one of: GATEWAY_SPARK | GATEWAY_MUTATION | GATEWAY_DISSOLUTION
+ */
+export function broadcastGatewayEvent(eventType: string, payload: object): void {
+  broadcast(eventType, payload);
+}

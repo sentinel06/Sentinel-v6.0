@@ -91,6 +91,37 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - **`docs/partner_onboarding_guide.md`** — Full Apex-Fintech alpha partner documentation (9 sections, EU AI Act compliance guide, sovereign key provisioning, breach scenario walkthrough).
 - **`pnpm --filter @workspace/scripts run breach`** — Runs 3-stage Apex-Fintech breach simulation script (cognitive drift, honey-token vault breach, causal chain break).
 
+## Project Genesis — Sentinel-Bridge SDK (v5.0)
+
+The infrastructure-level governance layer that connects any external Multi-Agent System to Agent-Sentinel.
+
+### Sovereign Gateway API (`artifacts/api-server/src/routes/gateway.ts`)
+
+- **`POST /api/v1/gateway/register`** — Register an external agent. Upserts `agent_registry` + `agent_sessions` (appears on Swarm Map), issues an ML-DSA-87 Signed Identity Token (24 h expiry), commits `GATEWAY_REGISTRATION` to immutable ledger, broadcasts `GATEWAY_SPARK` birth event to Swarm Map.
+- **`POST /api/v1/gateway/preflight`** — Sovereign Interceptor pre-flight clearance. Returns `403 SOVEREIGN_INTERDICTION` if agent is revoked or drift-locked. Returns `CLEARED` + `clearanceId` otherwise.
+- **`POST /api/v1/gateway/telemetry`** — Ingest agent action packet. Computes consistency/drift score, commits hash-chained entry to immutable ledger, broadcasts `GATEWAY_SPARK` (success), `GATEWAY_MUTATION` (drift > threshold → Violet/Mutant node), or `GATEWAY_DISSOLUTION` (policy violation → Cellular Dissolution). Sovereign mode auto-locks drifting agents.
+- **`POST /api/v1/gateway/heartbeat`** — Liveness ping; returns current governance status (ACTIVE | REVOKED | DRIFT_LOCKED).
+- **`GET /api/v1/gateway/agents`** — List all Gateway-registered agents with token metadata.
+- **`GET /api/v1/gateway/token/:tokenId`** — Verify and inspect an Identity Token.
+
+### Sentinel-Bridge Python SDK (`sdk/sentinel_bridge.py`)
+
+- **`SovereignGateway`** — Synchronous client. Methods: `register(dna)`, `pre_verify(dna, prompt)`, `commit_evolution(dna, result, ...)`, `heartbeat(dna)`.
+- **`AsyncSovereignGateway`** — Async variant for LangGraph / FastAPI agents. Full async/await with httpx.
+- **`@gateway.sovereign_interceptor(dna)`** — Decorator implementing the full Sovereign Proxy: pre-flight → execute → commit. Raises `SovereignInterdictionError` (403) if blocked.
+- **`gateway.build_protected_llm(dna, llm_fn)`** — Wraps a bare `str → str` LLM function with the full interceptor.
+- **`SovereignInterdictionError`** — Carries `status`, `agent_id`, `reason` from the War Room.
+- **`AgentDNA`** — Dataclass holding agent identity + governance profile (risk_threshold, interdiction_mode).
+- **`connect(api_key, endpoint)`** — Module-level factory shortcut.
+- Works with `httpx` (preferred) or `requests` — auto-detected at runtime.
+
+### Swarm Map Gateway Animations (`artifacts/sentinel-dashboard/src/pages/swarmmap.tsx`)
+
+Three new WS message handlers in the swarm map:
+- **`GATEWAY_SPARK`** → `ZEN_GOLD_SPARK`: triggers spawn-spark arc animation from parent → new node on agent birth, or nudges sim on successful task completion.
+- **`GATEWAY_DISSOLUTION`** → `CELLULAR_DISSOLUTION`: triggers the 10-particle radial burst + extinction ring animation, marks node as revoked.
+- **`GATEWAY_MUTATION`** → Violet/Mutant jitter: updates node status to `mutant`, raises drift score to trigger `feTurbulence` filter and violet node color.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
