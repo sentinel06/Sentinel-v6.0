@@ -340,6 +340,30 @@ export default function SwarmMapPage() {
     return () => clearInterval(id);
   }, [fetchData]);
 
+  // ── HUD Sync: listen for sentinelFocusAgent from Topology or other views ──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { agentId, eventId } = (e as CustomEvent<{ agentId: string; eventId?: string }>).detail ?? {};
+      if (!agentId) return;
+
+      // Find the matching node in our simulation nodes
+      const nodesNow = simRef.current?.nodes() as SwarmNodeData[] | undefined;
+      const match = nodesNow?.find(n => n.id === agentId || n.label === agentId);
+      if (match) {
+        // Select and pan: give sim a small kick to animate focus
+        setSelectedNode(match);
+        simRef.current?.alpha(0.18).restart();
+        // Highlight matching stream event
+        if (eventId) setFocusedStreamId(eventId);
+      } else {
+        // Agent not on map yet — highlight any matching stream event
+        if (eventId) setFocusedStreamId(eventId);
+      }
+    };
+    window.addEventListener("sentinelFocusAgent", handler);
+    return () => window.removeEventListener("sentinelFocusAgent", handler);
+  }, []);
+
   // ── Seed feed from recent REST history on mount ───────────────────────────
   useEffect(() => {
     fetch(`${BASE}/api/v1/logs?limit=30`)
