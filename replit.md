@@ -61,6 +61,19 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - If `SENTINEL_KEY` is not set, all POST requests are allowed (dev mode)
 - Sensitive headers redacted from logs
 
+## Swarm Map: Evolutionary Prosperity Engine (v2)
+
+`artifacts/sentinel-dashboard/src/pages/swarmmap.tsx` — Major upgrade from "Spatial Swarm Map" to "Evolutionary Prosperity Engine":
+
+- **Phylogenetic Physics**: LUCA (Sovereign Root) at center with gold ◆ crown and dual dashed sovereignty rings. `forceRadial` positions each generation in concentric rings (Ring = generationDepth × RING_SPACING). High-fitness nodes orbit closer to LUCA; low-fitness drift outward. `fitness_score = (1 - drift/100) / (1 + drift/100)` drives node radius and glow brightness.
+- **Mutation Overlay**: drift > 15% → amber "Maladaptive Mutation" with warp/vibration of mutation vines. drift > 30% → violet `#C084FC` "Genetic Distortion" — organic cell shape generated via 8-point sin/cos oscillating `mutationPath()`. Mutating nodes show `⚡` icon and `Δ{drift}%` badge.
+- **Extinction & Pruning**: Revoke/Honey-Token triggers "Cellular Collapse" — 8 burst particles radiate outward + expanding extinction ring + vine turns brittle (dashed `3,5` strokeDasharray) and fades to 35% opacity. Telemetry feed shows "EXTINCT" badge.
+- **Prosperity Pulse**: 3 concentric breath rings expanding from LUCA center, amplitude synced to `swarmFertility` metric, phase offset per ring (4-6s oscillation via sin). Radial prosperity aura fills the canvas with subtle sage gradient. LUCA inner golden nucleus pulses independently.
+- **Lineage Hover**: Hovering any phylogenetic vine triggers `computeLineageSuccess()` BFS (parent → all descendants avg fitness). Shows tooltip with "Lineage Success Rate" bar in green/amber/red. Link highlights gold on hover.
+- **Evolutionary KPI Bar**: Swarm Fertility (delegation efficiency × avg fitness), Apex Fitness (population avg), Genetic Drift (avg % across drifting agents), Natural Selection (revoked count), Active Population.
+- **Generation Ring Guides**: Faint dashed concentric circles marking Gen 1, 2, 3… orbits.
+- **CRISPR context menu**: "Cellular Collapse", "Flag Genetic Drift", "Audit Phylogenetic Chain" — right-click = CRISPR for Logic.
+
 ## Technical White Paper Engine
 
 - **`GET /v1/whitepaper`** — Dynamically generates a full Technical White Paper from live system state. Returns JSON with `markdown`, `pulseSeal`, `quantumManifest`, and `hmacSeal` fields.
