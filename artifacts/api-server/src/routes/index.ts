@@ -7,6 +7,7 @@ import swarmRouter from "./swarm";
 import partnerRouter from "./partner";
 import pulseRouter from "./pulse";
 import statusRouter from "./status";
+import forensicRouter from "./forensic";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(swarmRouter);
 router.use(partnerRouter);
 router.use(pulseRouter);
 router.use(statusRouter);
+router.use(forensicRouter);
 
 export default router;
