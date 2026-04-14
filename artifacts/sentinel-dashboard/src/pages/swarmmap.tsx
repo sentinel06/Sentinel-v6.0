@@ -63,12 +63,14 @@ interface StreamPacket {
   s: string | null; tid: string; lid: string;
 }
 
-// Surge animation: CRISPR white-gold wave propagating down a lineage
+// Surge animation: CRISPR white-gold wave propagating down a lineage at 800 px/s
 interface SurgeAnim {
-  rootId:    string;          // node where surge originates
-  startedAt: number;          // ms timestamp
-  targets:   string[];        // ordered BFS list of node IDs to illuminate
-  duration:  number;          // total ms for the surge to reach last node
+  rootId:      string;               // node where surge originates
+  startedAt:   number;               // ms timestamp
+  targets:     string[];             // ordered BFS list of node IDs (root → leaves)
+  arrivalMs:   number[];             // cumulative ms when surge reaches each target
+  segmentCps:  [number, number][];   // bezier control point per vine segment
+  totalMs:     number;               // ms when last node is reached
 }
 // Spawn spark: gold dot travelling from parent → new offspring node
 interface SpawnSpark { parentId: string; childId: string; startedAt: number; }
@@ -159,6 +161,66 @@ function bezierPt(sx: number, sy: number, cpx: number, cpy: number, tx: number, 
     x: mt * mt * sx + 2 * mt * t * cpx + t * t * tx,
     y: mt * mt * sy + 2 * mt * t * cpy + t * t * ty,
   };
+}
+
+/** Approximate quadratic bezier arc length by sampling at N points (px). */
+function bezierLength(sx: number, sy: number, cpx: number, cpy: number, tx: number, ty: number, samples = 24): number {
+  let len = 0;
+  let prev = { x: sx, y: sy };
+  for (let i = 1; i <= samples; i++) {
+    const pt = bezierPt(sx, sy, cpx, cpy, tx, ty, i / samples);
+    len += Math.sqrt((pt.x - prev.x) ** 2 + (pt.y - prev.y) ** 2);
+    prev = pt;
+  }
+  return Math.max(len, 1);
+}
+
+/**
+ * Radial vine control point for a given source/target pair.
+ * Returns [cpx, cpy] for the quadratic bezier.
+ */
+function radialVineCp(sx: number, sy: number, tx: number, ty: number, cx: number, cy: number): [number, number] {
+  const saA = Math.atan2(sy - cy, sx - cx);
+  const taA = Math.atan2(ty - cy, tx - cx);
+  let midA  = (saA + taA) / 2;
+  if (Math.abs(taA - saA) > Math.PI) midA += Math.PI;
+  const midR = (Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2) + Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2)) / 2 * 0.7;
+  return [cx + midR * Math.cos(midA), cy + midR * Math.sin(midA)];
+}
+
+/**
+ * Build per-segment timing for the CRISPR White-Gold surge at 800 px/s.
+ * Returns cumulative arrival timestamps (ms from surge start) for each target node,
+ * plus the bezier control point per segment for accurate particle interpolation.
+ */
+function buildSurgeTimings(
+  targets: string[],
+  nodeMap: Map<string, SwarmNodeData>,
+  _links: SwarmLink[],
+  cx: number, cy: number,
+): { arrivalMs: number[]; segmentCps: [number, number][]; totalMs: number } {
+  const PX_PER_MS = 800 / 1000;   // 800 px/s → 0.8 px/ms
+  const arrivalMs: number[]          = [0];
+  const segmentCps: [number, number][] = [];
+
+  for (let i = 0; i < targets.length - 1; i++) {
+    const src = nodeMap.get(targets[i]!);
+    const tgt = nodeMap.get(targets[i + 1]!);
+    const prev = arrivalMs[i] ?? 0;
+
+    if (!src?.x || !src?.y || !tgt?.x || !tgt?.y) {
+      arrivalMs.push(prev + 400);          // fallback: 400ms per hop
+      segmentCps.push([cx, cy]);
+      continue;
+    }
+    const [cpx, cpy] = radialVineCp(src.x, src.y, tgt.x, tgt.y, cx, cy);
+    segmentCps.push([cpx, cpy]);
+    const len = bezierLength(src.x, src.y, cpx, cpy, tgt.x, tgt.y);
+    arrivalMs.push(prev + len / PX_PER_MS);
+  }
+
+  const totalMs = arrivalMs[arrivalMs.length - 1] ?? 0;
+  return { arrivalMs, segmentCps, totalMs };
 }
 
 // ── Node color ────────────────────────────────────────────────────────────────
@@ -364,6 +426,9 @@ export default function SwarmMapPage() {
   // CRISPR White-Gold surges
   const [surges, setSurges] = useState<SurgeAnim[]>([]);
 
+  // Afterglow: nodeId → timestamp when CRISPR surge first contacted node (60s window)
+  const afterglowRef = useRef<Map<string, number>>(new Map());
+
   // Spawn sparks (new offspring budding from parent)
   const [spawnSparks, setSpawnSparks] = useState<SpawnSpark[]>([]);
 
@@ -462,30 +527,56 @@ export default function SwarmMapPage() {
   }, []);
 
   // ── CRISPR White-Gold Surge (recursiveFixVerified event) ─────────────────
+  // Listens for event from Multi-Sig Gate or right-click context menu.
+  // Computes 800 px/s speed-accurate timing using bezierLength() measurements.
   useEffect(() => {
     const h = (e: Event) => {
       const { agentId } = (e as CustomEvent<{ agentId?: string }>).detail ?? {};
       const rootId = agentId ?? nodes.find(n => n.isRoot)?.id;
       if (!rootId) return;
+
+      // BFS all descendants in order (root first, then each generation)
       const descendants = bfsChildren(rootId, links);
-      const ordered = [rootId, ...descendants];
+      const ordered     = [rootId, ...descendants];
+
+      // Canvas center (where LUCA is fixed)
+      const svg = svgRef.current;
+      const W   = svg?.clientWidth  ?? 600;
+      const H   = svg?.clientHeight ?? 500;
+      const cx  = W / 2;
+      const cy  = H / 2;
+
+      // Build live nodeMap from simulation positions
+      const liveMap = new Map<string, SwarmNodeData>(
+        (simRef.current?.nodes() as SwarmNodeData[] | undefined ?? nodes).map(n => [n.id, n])
+      );
+
+      // Compute physics-accurate timings at 800 px/s
+      const { arrivalMs, segmentCps, totalMs } = buildSurgeTimings(ordered, liveMap, links, cx, cy);
+
       setSurges(prev => [...prev, {
         rootId,
-        startedAt: Date.now(),
-        targets: ordered,
-        duration: Math.min(3500, 600 + ordered.length * 400),
+        startedAt:  Date.now(),
+        targets:    ordered,
+        arrivalMs,
+        segmentCps,
+        totalMs,
       }]);
     };
     window.addEventListener("recursiveFixVerified", h);
     return () => window.removeEventListener("recursiveFixVerified", h);
   }, [nodes, links]);
 
-  // Prune expired surges & sparks
+  // Prune expired surges & sparks; purge 60s-expired afterglow entries
   useEffect(() => {
     const id = setInterval(() => {
       const now = Date.now();
-      setSurges(prev => prev.filter(s => now - s.startedAt < s.duration + 500));
+      setSurges(prev => prev.filter(s => now - s.startedAt < s.totalMs + 2000));
       setSpawnSparks(prev => prev.filter(s => now - s.startedAt < 1800));
+      // Clean up afterglow map so memory doesn't grow forever
+      for (const [id, ts] of afterglowRef.current) {
+        if (now - ts > 62_000) afterglowRef.current.delete(id);
+      }
     }, 500);
     return () => clearInterval(id);
   }, []);
@@ -647,23 +738,54 @@ export default function SwarmMapPage() {
   }, [renderTick]);
 
   // ── Surge active check ────────────────────────────────────────────────────
-  /** Returns 0-1 intensity for a given node if it's currently being surged. */
+  /**
+   * Returns 0–1 surge intensity for a node, using speed-accurate arrivalMs timing.
+   * Also stamps afterglowRef on first contact (enabling the 60-second afterglow).
+   */
   const surgeIntensity = useCallback((nodeId: string): number => {
     const now = Date.now();
     for (const surge of surges) {
       const idx = surge.targets.indexOf(nodeId);
       if (idx === -1) continue;
-      const elapsed = now - surge.startedAt;
-      const perNode  = surge.duration / Math.max(surge.targets.length, 1);
-      const arrivalMs = idx * perNode;
-      const endMs     = arrivalMs + perNode * 1.8; // overlap so glow lingers
-      if (elapsed >= arrivalMs && elapsed <= endMs) {
-        const t = (elapsed - arrivalMs) / (endMs - arrivalMs);
-        return 1 - t;  // fade out after arrival
+      const elapsed    = now - surge.startedAt;
+      const arrivalMs  = surge.arrivalMs[idx] ?? (idx * 600);
+      const glowMs     = 1800; // each node glows for 1.8s after contact
+      const endMs      = arrivalMs + glowMs;
+      if (elapsed >= arrivalMs) {
+        // First contact → stamp afterglow
+        if (!afterglowRef.current.has(nodeId)) {
+          afterglowRef.current.set(nodeId, now - (elapsed - arrivalMs));
+        }
+        if (elapsed <= endMs) {
+          const t = (elapsed - arrivalMs) / glowMs;
+          return 1 - t * 0.7; // 1.0 → 0.3 fade
+        }
       }
     }
     return 0;
   }, [surges, renderTick]);
+
+  /**
+   * Returns 0–1 afterglow intensity for a node over 60 seconds after surge contact.
+   * 0–2s: flash phase (fades 1→0.4), 2–60s: slow decay (0.4→0).
+   */
+  const afterglowIntensity = useCallback((nodeId: string): number => {
+    const contact = afterglowRef.current.get(nodeId);
+    if (contact == null) return 0;
+    const elapsed = Date.now() - contact;
+    if (elapsed > 60_000) return 0;
+    if (elapsed < 2_000) return 0.4 + 0.6 * (1 - elapsed / 2_000); // 1.0→0.4
+    return 0.4 * (1 - (elapsed - 2_000) / 58_000);                  // 0.4→0
+  }, [renderTick]);
+
+  /**
+   * Returns true if a node has been reached by surge (in metamorphosis / post-metamorphosis).
+   * In this state: feTurbulence is killed, color is sage, mutation path → circle.
+   */
+  const isMetamorphosed = useCallback((nodeId: string): boolean => {
+    return afterglowRef.current.has(nodeId) &&
+           Date.now() - (afterglowRef.current.get(nodeId) ?? 0) < 60_000;
+  }, [renderTick]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleNodeClick      = useCallback((e: React.MouseEvent, node: SwarmNodeData) => { e.preventDefault(); setSelectedNode(node); setCtxMenu(null); }, []);
@@ -937,9 +1059,19 @@ export default function SwarmMapPage() {
                 const hovered   = hoveredLinkIdx === i;
                 const f         = ((src.fitnessScore ?? 0.5) + (tgt.fitnessScore ?? 0.5)) / 2;
 
-                // Stroke color: revoked → withered grey; drifting → amber/violet; healthy → fitness-tinted sage
+                // Afterglow vine: if both endpoints are in afterglow, tint the vine gold
+                const srcAfterglow = afterglowIntensity(src.id);
+                const tgtAfterglow = afterglowIntensity(tgt.id);
+                const vineAfterglow = Math.min(srcAfterglow, tgtAfterglow); // both ends must be healed
+
+                // Stroke color: revoked → withered grey; drifting → amber/violet; healed → gold-sage; healthy → fitness-tinted sage
                 let strokeColor: string;
                 if (isRevoked) strokeColor = "#4B5563";           // withered grey
+                else if (vineAfterglow > 0.01 && !hovered) {
+                  // Gold-sage blend fading over 60s
+                  const goldMix = (vineAfterglow * 0.55).toFixed(2);
+                  strokeColor = `rgba(255,215,0,${goldMix})`;     // gold at decaying opacity
+                }
                 else if (drift > 30) strokeColor = P.mutation + "99";
                 else if (drift > 15) strokeColor = P.amber + "88";
                 else strokeColor = `rgba(64,${Math.round(150 + f * 35)},${Math.round(130 + f * 25)},${(0.28 + f * 0.45).toFixed(2)})`;
@@ -983,42 +1115,53 @@ export default function SwarmMapPage() {
               })}
             </g>
 
-            {/* ── CRISPR White-Gold Surge — travelling particles along vines ── */}
+            {/* ── CRISPR White-Gold Surge — 800 px/s particle on radial vine ── */}
             {surges.map(surge => {
-              const now = Date.now();
+              const now     = Date.now();
               const elapsed = now - surge.startedAt;
-              const perNode = surge.duration / Math.max(surge.targets.length, 1);
-              const currentIdx = Math.floor(elapsed / perNode);
-              if (currentIdx >= surge.targets.length) return null;
 
-              const activeId = surge.targets[currentIdx];
-              const nextId   = surge.targets[currentIdx + 1];
-              const node     = nodeMap.get(activeId ?? "");
-              const nextNode = nodeMap.get(nextId ?? "");
+              // Find which vine segment the particle is currently traversing
+              let segIdx = -1;
+              for (let i = 0; i < surge.arrivalMs.length - 1; i++) {
+                if (elapsed >= (surge.arrivalMs[i] ?? 0) && elapsed < (surge.arrivalMs[i + 1] ?? Infinity)) {
+                  segIdx = i;
+                  break;
+                }
+              }
+              if (segIdx === -1) return null;
 
-              if (!node?.x || !node?.y) return null;
-              const tInSegment = (elapsed % perNode) / perNode;
-              let px = node.x; let py = node.y;
-              if (nextNode?.x && nextNode?.y) {
-                // Interpolate along vine arc
-                const saAngle = Math.atan2(node.y - cy, node.x - cx);
-                const taAngle = Math.atan2(nextNode.y - cy, nextNode.x - cx);
-                let midA = (saAngle + taAngle) / 2;
-                if (Math.abs(taAngle - saAngle) > Math.PI) midA += Math.PI;
-                const midR = (Math.sqrt((node.x - cx) ** 2 + (node.y - cy) ** 2) + Math.sqrt((nextNode.x - cx) ** 2 + (nextNode.y - cy) ** 2)) / 2 * 0.7;
-                const cpx = cx + midR * Math.cos(midA);
-                const cpy = cy + midR * Math.sin(midA);
-                const pt = bezierPt(node.x, node.y, cpx, cpy, nextNode.x, nextNode.y, tInSegment);
-                px = pt.x; py = pt.y;
+              const srcId = surge.targets[segIdx];
+              const tgtId = surge.targets[segIdx + 1];
+              const src   = nodeMap.get(srcId ?? "");
+              const tgt   = nodeMap.get(tgtId ?? "");
+              if (!src?.x || !src?.y) return null;
+
+              // Fractional progress within this segment
+              const segStart = surge.arrivalMs[segIdx]  ?? 0;
+              const segEnd   = surge.arrivalMs[segIdx + 1] ?? segStart + 400;
+              const tSeg     = Math.max(0, Math.min(1, (elapsed - segStart) / (segEnd - segStart)));
+
+              let px = src.x;
+              let py = src.y;
+
+              if (tgt?.x && tgt?.y) {
+                // Use pre-computed control point for accurate vine arc matching
+                const [cpx, cpy] = surge.segmentCps[segIdx] ?? radialVineCp(src.x, src.y, tgt.x, tgt.y, cx, cy);
+                const pt = bezierPt(src.x, src.y, cpx, cpy, tgt.x, tgt.y, tSeg);
+                px = pt.x;
+                py = pt.y;
               }
 
               return (
                 <g key={`surge-${surge.rootId}-${surge.startedAt}`}>
-                  {/* Trail glow */}
-                  <circle cx={px} cy={py} r={12} fill={P.whiteGold} fillOpacity="0.18" filter="url(#fg-white)" />
-                  {/* Core particle */}
-                  <circle cx={px} cy={py} r={5} fill={P.gold} fillOpacity="0.95" filter="url(#fg-gold)" />
-                  <circle cx={px} cy={py} r={2} fill="#ffffff" fillOpacity="0.9" />
+                  {/* Outer aura */}
+                  <circle cx={px} cy={py} r={16} fill={P.whiteGold} fillOpacity="0.12" filter="url(#fg-white)" />
+                  {/* White-gold halo ring */}
+                  <circle cx={px} cy={py} r={9}  fill="none" stroke={P.gold} strokeWidth="1.5" opacity="0.55" />
+                  {/* Core surge particle */}
+                  <circle cx={px} cy={py} r={5}  fill={P.gold} fillOpacity="0.98" filter="url(#fg-gold)" />
+                  {/* Hot white center */}
+                  <circle cx={px} cy={py} r={2}  fill="#ffffff" fillOpacity="0.95" />
                 </g>
               );
             })}
@@ -1074,49 +1217,61 @@ export default function SwarmMapPage() {
             <g className="organisms">
               {nodes.map(node => {
                 if (!node.x || !node.y) return null;
-                const calc    = isCalcified(node.id);
-                const color   = nodeColor(node, calc);
+                const calc        = isCalcified(node.id);
+                const metamorphed = isMetamorphosed(node.id);
+                const afterglow   = afterglowIntensity(node.id);
+                const hasAftergl  = afterglow > 0;
+
+                // ── Metamorphosis overrides ──────────────────────────────────
+                // If CRISPR surge has reached this node, kill turbulence and
+                // transition color from mutation-violet → sage-teal.
+                const baseDrift  = node.drift ?? 0;
+                const effectiveDrift = metamorphed ? Math.min(baseDrift, 10) : baseDrift; // snap below mutation threshold
+                const color      = metamorphed ? P.sage : nodeColor(node, calc);
+
                 const r       = node.radius ?? 14;
                 const f       = node.fitnessScore ?? 0.5;
-                const drift   = node.drift ?? 0;
-                const isMut   = drift > 15 && node.status !== "revoked";
-                const isSev   = drift > 30;
+                const drift   = effectiveDrift;
+                const isMut   = drift > 15 && node.status !== "revoked" && !metamorphed;
+                const isSev   = drift > 30 && !metamorphed;
                 const surgeI  = surgeIntensity(node.id);
                 const isSurging = surgeI > 0;
 
                 const isSelected = selectedNode?.id === node.id;
 
-                // Bio-luminescence breathing (prosperity health < 5% drift glow)
+                // Bio-luminescence breathing
                 const bioGlow = !isMut && !calc && drift < 5 && node.status === "active";
-                const breathAmp = bioGlow ? (1 + f * 1.5) : 0.6;
+                const breathAmp  = bioGlow ? (1 + f * 1.5) : 0.6;
                 const breathFreq = bioGlow ? 0.03 + f * 0.015 : 0.08;
-                const glowPulse = r + breathAmp * (1.5 + Math.sin(tickRef.current * breathFreq + node.id.charCodeAt(0) * 0.4) * breathAmp);
+                const glowPulse  = r + breathAmp * (1.5 + Math.sin(tickRef.current * breathFreq + node.id.charCodeAt(0) * 0.4) * breathAmp);
 
-                // CRISPR surge: override to white-gold glow
+                // Filter cascade — metamorphosis kills turbulence warp
                 const filterId = isSurging ? "fg-white"
+                  : hasAftergl ? "fg-sage"
                   : calc ? "fg-calcite"
                   : node.status === "revoked" ? "fg-terra"
                   : isSev ? "fg-mutation"
                   : isMut ? "fg-amber"
                   : node.isRoot ? "fg-gold"
-                  : bioGlow ? "fg-sage"
                   : "fg-sage";
 
-                const mutFilter = isSurging ? undefined
+                // mutFilter: killed after metamorphosis
+                const mutFilter = (isSurging || metamorphed) ? undefined
                   : isSev ? "url(#mutation-warp-severe)"
                   : isMut ? "url(#mutation-warp)"
                   : undefined;
 
-                const calcFilter = (calc && !isSurging) ? "url(#calcify)" : undefined;
+                const calcFilter = (calc && !isSurging && !metamorphed) ? "url(#calcify)" : undefined;
                 const nodeFilter = calcFilter ?? mutFilter;
 
                 const displayColor = isSurging
                   ? P.whiteGold
+                  : metamorphed ? P.sage
                   : calc ? P.calcite
                   : color;
 
-                const fillOpacity = calc ? 0.2 : 0.28 + f * 0.2;
-                const strokeOpacity = calc ? 0.35 : 1;
+                const fillOpacity   = calc && !metamorphed ? 0.2 : 0.28 + f * 0.2;
+                const strokeOpacity = calc && !metamorphed ? 0.35 : 1;
 
                 return (
                   <g key={node.id} style={{ cursor: "pointer" }}
@@ -1127,6 +1282,25 @@ export default function SwarmMapPage() {
                     {isSelected && (
                       <circle cx={node.x} cy={node.y} r={r + 12}
                         fill="none" stroke={P.blue} strokeWidth="2.5" opacity="0.9" />
+                    )}
+
+                    {/* ── 60s Afterglow — faint gold ring on healed lineage ── */}
+                    {hasAftergl && (
+                      <>
+                        {/* Outer gold halo ring — Active Monitoring state */}
+                        <circle cx={node.x} cy={node.y} r={r + 8 + Math.sin(tickRef.current * 0.025) * 2}
+                          fill="none" stroke={P.gold}
+                          strokeWidth={1.2}
+                          opacity={afterglow * 0.35}
+                          filter="url(#fg-gold)"
+                        />
+                        {/* Inner warm-sage pulse ring */}
+                        <circle cx={node.x} cy={node.y} r={r + 3}
+                          fill="none" stroke={P.sage}
+                          strokeWidth={0.8}
+                          opacity={afterglow * 0.25}
+                        />
+                      </>
                     )}
 
                     {/* Bio-luminescent halo (outer glow pulse) */}
@@ -1151,7 +1325,7 @@ export default function SwarmMapPage() {
                       </>
                     )}
 
-                    {/* Node body — with turbulence filter for mutation, desaturate for calcification */}
+                    {/* Node body — metamorphosis: standard circle (no turbulence warp) */}
                     <circle cx={node.x} cy={node.y} r={r}
                       fill={displayColor} fillOpacity={fillOpacity}
                       stroke={displayColor} strokeWidth={node.isRoot ? 2.5 : 2}
@@ -1159,10 +1333,10 @@ export default function SwarmMapPage() {
                       filter={nodeFilter ?? `url(#${filterId})`}
                     />
 
-                    {/* Inner nucleus — fitness × brightness */}
+                    {/* Inner nucleus — fitness × brightness; afterglow adds warm gold tint */}
                     <circle cx={node.x} cy={node.y} r={r * (0.42 + f * 0.22)}
-                      fill={displayColor}
-                      fillOpacity={calc ? 0.15 : isSurging ? 0.95 : (0.55 + f * 0.35)}
+                      fill={hasAftergl ? P.gold : displayColor}
+                      fillOpacity={calc && !metamorphed ? 0.15 : isSurging ? 0.95 : hasAftergl ? (afterglow * 0.18 + 0.4) : (0.55 + f * 0.35)}
                       filter={isSurging ? "url(#crispr-surge)" : undefined}
                     />
 
@@ -1173,19 +1347,20 @@ export default function SwarmMapPage() {
                         filter="url(#fg-white)" />
                     )}
 
-                    {/* Icon */}
+                    {/* Icon — metamorphosed nodes show ◉ (restored cell) */}
                     <text x={node.x} y={node.y}
                       textAnchor="middle" dominantBaseline="central"
                       fontSize={node.isRoot ? 12 : 9}
                       fill={node.isRoot ? P.bg : calc ? P.dim : "#fff"}
                       fontWeight={node.isRoot ? "bold" : "normal"}
                       style={{ userSelect: "none", pointerEvents: "none" }}>
-                      {node.status === "revoked"       ? "✕"
-                        : calc                         ? "❄"
-                        : node.status === "drift-locked" ? "⚠"
-                        : node.isRoot                  ? "◆"
-                        : isSev                        ? "⚡"
-                        : bioGlow                      ? "●"
+                      {node.status === "revoked"         ? "✕"
+                        : calc && !metamorphed            ? "❄"
+                        : node.status === "drift-locked"  ? "⚠"
+                        : node.isRoot                     ? "◆"
+                        : metamorphed                     ? "◉"
+                        : isSev                           ? "⚡"
+                        : bioGlow                         ? "●"
                         : "●"}
                     </text>
 
@@ -1196,22 +1371,24 @@ export default function SwarmMapPage() {
                       {node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label}
                     </text>
 
-                    {/* Fitness / drift badge */}
+                    {/* Status badge — surging/recoded/afterglow/drift/fitness */}
                     {node.status !== "revoked" && !calc && (
                       <text x={node.x} y={node.y - r - 7}
                         textAnchor="middle" fontSize="7"
-                        fill={isSurging ? P.whiteGold : isSev ? P.mutation : isMut ? P.amber : bioGlow ? P.sage : P.dim}
+                        fill={isSurging ? P.whiteGold : metamorphed ? P.gold : hasAftergl ? P.gold : isSev ? P.mutation : isMut ? P.amber : bioGlow ? P.sage : P.dim}
                         fontWeight="bold"
                         style={{ userSelect: "none", pointerEvents: "none" }}>
-                        {isSurging ? "RECODING"
-                          : isSev  ? `⚠ ${drift.toFixed(0)}%`
-                          : isMut  ? `Δ${drift.toFixed(0)}%`
+                        {isSurging    ? "RECODING"
+                          : metamorphed && surgeI === 0 ? "◈ HEALED"
+                          : hasAftergl ? "☀ MONITORING"
+                          : isSev    ? `⚠ ${baseDrift.toFixed(0)}%`
+                          : isMut    ? `Δ${baseDrift.toFixed(0)}%`
                           : node.isRoot ? "LUCA"
-                          : bioGlow ? `✦ fit:${(f * 100).toFixed(0)}%`
+                          : bioGlow  ? `✦ fit:${(f * 100).toFixed(0)}%`
                           : `fit:${(f * 100).toFixed(0)}%`}
                       </text>
                     )}
-                    {calc && (
+                    {calc && !metamorphed && (
                       <text x={node.x} y={node.y - r - 7}
                         textAnchor="middle" fontSize="7"
                         fill={P.calcite}

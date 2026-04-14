@@ -71,7 +71,14 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - **Calcification Shader**: Agents idle >300s → `#calcify` SVG filter (feColorMatrix saturate=0.08, 20% opacity), grey ❄ icon, "CALCIFIED" badge. 6th KPI card tracks count.
 - **Cellular Dissolution**: Revoke triggers 10-particle radial burst + expanding extinction ring over 1s, vine withers to grey dashed `2,5` line.
 - **Prosperity Pulse**: 4 concentric breath rings, amplitude = swarmFertility, 5s oscillation cycle. Darwin background radial gradient aura.
-- **CRISPR White-Gold Surge**: Right-click → "Apply CRISPR White-Gold Surge" dispatches `recursiveFixVerified` event. BFS enumerates all descendants. Gold/white-gold particle animates along each vine arc using `bezierPt()` interpolation. Surging nodes display "RECODING" badge + #fg-white filter.
+- **Sovereign CRISPR — Genetic Recoding Surge (v4)**:
+  - Listens for `recursiveFixVerified` CustomEvent from Multi-Sig Gate OR right-click menu
+  - `bezierLength(sx,sy,cpx,cpy,tx,ty, samples=24)` — integrates 24-point quadratic bezier arc length in pixels
+  - `buildSurgeTimings(targets, nodeMap, _links, cx, cy)` — computes `arrivalMs[]` per node at exactly 800 px/s (0.8 px/ms), plus pre-computed `segmentCps[]` bezier control points for each vine
+  - Surge particle uses `arrivalMs` binary-search to find active segment, `segmentCps` for exact vine arc matching — particle position is frame-accurate to 800 px/s
+  - **Metamorphosis** on node contact: `isMetamorphosed(id)` kills `feTurbulence` warp filters, snaps `effectiveDrift` below 15% threshold → node color transitions from Violet (#C084FC) → Sage Teal (#40B595). Node icon changes from ⚡ → ◉ (restored cell symbol)
+  - **Afterglow — 60-second Active Monitoring**: `afterglowRef<Map<nodeId, contactTimestamp>>` stamped at first contact. `afterglowIntensity()` returns 1.0→0.4 (0–2s flash) then 0.4→0 (2–60s decay). Afterglow nodes show: faint pulsing gold outer ring, warm gold nucleus tint, "☀ MONITORING" badge. Healed vines show gold `rgba(255,215,0,intensity)` tint fading over 60s.
+  - Expired afterglow (>62s) auto-purged from Map to prevent memory growth
 - **Spawn Sparks**: New offspring nodes trigger gold spark travelling from parent → child along vine arc over 1.6s.
 - **Lineage Hover**: Hovering vine → BFS avg fitness tooltip. Vine turns gold on hover.
 - **6-KPI Board**: Swarm Fertility · Apex Fitness · Genetic Drift · Natural Selection · Active Population · Calcification.
