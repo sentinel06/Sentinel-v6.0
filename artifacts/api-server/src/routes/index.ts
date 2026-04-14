@@ -9,6 +9,7 @@ import pulseRouter from "./pulse";
 import statusRouter from "./status";
 import forensicRouter from "./forensic";
 import topologyRouter from "./topology";
+import whitepaperRouter from "./whitepaper";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(pulseRouter);
 router.use(statusRouter);
 router.use(forensicRouter);
 router.use(topologyRouter);
+router.use(whitepaperRouter);
 
 export default router;

@@ -13,8 +13,8 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2, XCircle,
-  Zap, Activity, RefreshCw, Lock, Cpu, Radio,
+  ShieldCheck, ShieldAlert, CheckCircle2, XCircle,
+  Zap, Activity, RefreshCw, Lock, Cpu, Radio, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -292,6 +292,287 @@ function HistoryRow({ p, idx, onVerify, isVerifying }: {
   );
 }
 
+// ── White Paper Print HTML ────────────────────────────────────────────────
+
+interface WhitepaperResponse {
+  documentId:           string;
+  generatedAt:          string;
+  signatureFingerprint: string;
+  hmacSeal:             string;
+  pulseSeal: {
+    globalIntegrityIndex: number;
+    totalEvents:          number;
+    verifiedEvents:       number;
+    status:               string;
+    quantumThroughputBits: string;
+    activeSwarms:         number;
+    revokedSwarms:        number;
+  };
+  markdown: string;
+}
+
+function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
+  const now     = new Date(wp.generatedAt);
+  const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  // Escape HTML entities in the raw markdown for safe embedding inside <pre>
+  const safeEscape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Convert markdown to HTML — simple inline transformation
+  function mdToHtml(md: string): string {
+    const lines = md.split("\n");
+    const out: string[] = [];
+    let inTable   = false;
+    let tableHead = true;
+    let inCode    = false;
+    let codeLines: string[] = [];
+
+    for (const raw of lines) {
+      // Fenced code blocks
+      if (raw.startsWith("```")) {
+        if (!inCode) {
+          inCode    = true;
+          codeLines = [];
+        } else {
+          out.push(`<pre class="code">${safeEscape(codeLines.join("\n"))}</pre>`);
+          inCode    = false;
+          codeLines = [];
+        }
+        continue;
+      }
+      if (inCode) { codeLines.push(raw); continue; }
+
+      // Table rows
+      if (raw.startsWith("|")) {
+        if (!inTable) {
+          out.push('<table>');
+          inTable   = true;
+          tableHead = true;
+        }
+        if (/^\|[-| :]+\|$/.test(raw.trim())) { tableHead = false; continue; }
+        const cells = raw.split("|").slice(1, -1).map((c) => c.trim());
+        const tag   = tableHead ? "th" : "td";
+        out.push(`<tr>${cells.map((c) => `<${tag}>${inlineFormat(c)}</${tag}>`).join("")}</tr>`);
+        tableHead = false;
+        continue;
+      }
+      if (inTable) { out.push("</table>"); inTable = false; tableHead = true; }
+
+      // Headings
+      const h1 = raw.match(/^# (.+)$/);
+      if (h1) { out.push(`<h1>${inlineFormat(h1[1]!)}</h1>`); continue; }
+      const h2 = raw.match(/^## (.+)$/);
+      if (h2) { out.push(`<h2>${inlineFormat(h2[1]!)}</h2>`); continue; }
+      const h3 = raw.match(/^### (.+)$/);
+      if (h3) { out.push(`<h3>${inlineFormat(h3[1]!)}</h3>`); continue; }
+
+      // Horizontal rule
+      if (/^---+$/.test(raw.trim())) { out.push('<hr>'); continue; }
+
+      // Blockquote
+      const bq = raw.match(/^> (.+)$/);
+      if (bq) { out.push(`<blockquote>${inlineFormat(bq[1]!)}</blockquote>`); continue; }
+
+      // Bullet list
+      const li = raw.match(/^[-*] (.+)$/);
+      if (li) { out.push(`<li>${inlineFormat(li[1]!)}</li>`); continue; }
+
+      // Blank line → paragraph break
+      if (raw.trim() === "") { out.push("<br>"); continue; }
+
+      out.push(`<p>${inlineFormat(raw)}</p>`);
+    }
+    if (inTable) out.push("</table>");
+    return out.join("\n");
+  }
+
+  function inlineFormat(s: string): string {
+    return safeEscape(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+  }
+
+  const bodyHtml = mdToHtml(wp.markdown);
+
+  return `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<title>Agent-Sentinel v4.0 — Technical White Paper — ${dateStr}</title>
+<style>
+  @page {
+    size: A4 landscape;
+    margin: 16mm 18mm 20mm;
+    @bottom-center {
+      content: "Document ID: AS-WP-${wp.documentId}  ·  Page " counter(page) " of " counter(pages)  "  ·  CONFIDENTIAL";
+      font-family: 'Courier New', monospace;
+      font-size: 7px;
+      color: #9AA4B1;
+    }
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #ffffff;
+    color: #0a0f13;
+    font-size: 9.5px;
+    line-height: 1.6;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  .screen-toolbar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #0d1117; border-bottom: 2px solid #40B595;
+    padding: 10px 20px; margin-bottom: 24px;
+  }
+  .screen-toolbar span { font-size: 11px; color: #9AA4B1; letter-spacing: 1px; }
+  .print-btn {
+    background: #40B595; color: #0d1117; border: none;
+    padding: 7px 20px; font-family: 'Courier New', monospace;
+    font-size: 10px; font-weight: bold; letter-spacing: 1.5px;
+    cursor: pointer; border-radius: 2px;
+  }
+  .print-btn:hover { background: #34a07f; }
+  @media print { .screen-toolbar { display: none; } }
+  .document { max-width: 1040px; margin: 0 auto; padding: 0 10px; }
+  .cover-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #40B595; padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .logo { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+  .logo em { color: #40B595; font-style: normal; }
+  .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .badge-conf {
+    font-size: 7.5px; letter-spacing: 2px; color: #D96161; font-weight: bold;
+    border: 1.5px solid #D96161; padding: 3px 10px; background: #D9616108;
+  }
+  .badge-ver {
+    font-size: 7.5px; letter-spacing: 1.5px; color: #40B595; font-weight: bold;
+    border: 1.5px solid #40B595; padding: 3px 10px; background: #40B59510;
+  }
+  .cover-title { font-size: 22px; font-weight: bold; margin-bottom: 4px; color: #0a0f13; }
+  .cover-subtitle { font-size: 11px; color: #40B595; font-weight: bold; margin-bottom: 10px; letter-spacing: 0.5px; }
+  .cover-meta {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    font-size: 8px; color: #4A5568; margin-bottom: 20px;
+  }
+  .cover-meta span strong { color: #0a0f13; }
+  .seal-strip {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    background: #f8f9fa; border: 1px solid #e2e8f0; border-left: 4px solid #40B595;
+    padding: 8px 12px; margin-bottom: 22px; font-size: 7.5px; color: #4A5568;
+  }
+  .seal-strip code { color: #0a0f13; font-size: 7px; background: #edf2f7; padding: 1px 4px; }
+  .pulse-bar {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+    margin-bottom: 22px;
+  }
+  .pulse-kpi {
+    background: #f0faf6; border: 1px solid #40B59540; padding: 8px 10px; border-radius: 3px;
+  }
+  .pulse-kpi .kpi-label { font-size: 7px; color: #9AA4B1; text-transform: uppercase; letter-spacing: 1px; }
+  .pulse-kpi .kpi-value { font-size: 14px; font-weight: bold; color: #40B595; margin-top: 2px; }
+  .pulse-kpi .kpi-sub   { font-size: 7px; color: #4A5568; }
+  h1 { font-size: 18px; font-weight: bold; margin: 20px 0 6px; color: #0a0f13; border-bottom: 2px solid #40B595; padding-bottom: 4px; page-break-after: avoid; }
+  h2 { font-size: 13px; font-weight: bold; margin: 16px 0 5px; color: #0a0f13; border-left: 3px solid #40B595; padding-left: 8px; page-break-after: avoid; }
+  h3 { font-size: 11px; font-weight: bold; margin: 12px 0 4px; color: #2d3748; page-break-after: avoid; }
+  p { margin: 5px 0; font-size: 9px; color: #2d3748; }
+  code { font-family: 'Courier New', monospace; font-size: 8px; background: #edf2f7; padding: 1px 4px; border-radius: 2px; }
+  strong { font-weight: bold; color: #0a0f13; }
+  em { font-style: italic; color: #4A5568; }
+  pre.code {
+    background: #0d1117; color: #40B595; font-size: 8px;
+    padding: 10px 14px; margin: 8px 0; border-left: 3px solid #40B595;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+    page-break-inside: avoid;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8.5px; page-break-inside: avoid; }
+  th { background: #40B595; color: #fff; font-weight: bold; padding: 5px 8px; text-align: left; }
+  td { padding: 4px 8px; border-bottom: 1px solid #e2e8f0; color: #2d3748; vertical-align: top; }
+  tr:nth-child(even) td { background: #f7fafc; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
+  blockquote {
+    border-left: 3px solid #EBC06D; padding: 6px 12px; margin: 8px 0;
+    background: #FFFBEB; font-style: italic; font-size: 8.5px; color: #4A5568;
+  }
+  li { margin: 3px 0 3px 16px; font-size: 9px; color: #2d3748; list-style-type: disc; }
+  br { display: block; margin: 4px 0; content: ""; }
+  .footer {
+    margin-top: 24px; padding-top: 10px; border-top: 1px solid #e2e8f0;
+    font-size: 7.5px; color: #9AA4B1; text-align: center;
+  }
+</style></head>
+<body>
+<div class="screen-toolbar">
+  <span>AGENT-SENTINEL v4.0 — TECHNICAL WHITE PAPER · ${dateStr} ${timeStr}</span>
+  <button class="print-btn" onclick="window.print()">⎙ SAVE AS PDF</button>
+</div>
+<div class="document">
+  <div class="cover-header">
+    <div>
+      <div class="logo">AGENT-<em>SENTINEL</em> <span style="font-size:11px;color:#9AA4B1;font-weight:normal;">v4.0</span></div>
+      <div style="font-size:8px;color:#9AA4B1;margin-top:3px;">Sovereign Pulse Engine · QL-2.0 · FIPS-204 · EU AI Act Art. 12/14</div>
+    </div>
+    <div class="badges">
+      <div class="badge-conf">CONFIDENTIAL — APEX-FINTECH ALPHA</div>
+      <div class="badge-ver">QUANTUM-SEALED · ML-DSA-87 · SL5</div>
+    </div>
+  </div>
+  <div class="cover-title">Technical White Paper</div>
+  <div class="cover-subtitle">Post-Quantum Sovereign Governance for High-Risk AI Systems</div>
+  <div class="cover-meta">
+    <span><strong>Document ID:</strong> AS-WP-${wp.documentId}</span>
+    <span><strong>Generated:</strong> ${dateStr} ${timeStr}</span>
+    <span><strong>Framework:</strong> EU AI Act 2026 · NIST AI RMF 2026 · FIPS-204</span>
+    <span><strong>Algorithm:</strong> ML-DSA-87 (k=8, l=7, q=8,380,417)</span>
+  </div>
+  <div class="seal-strip">
+    <span>DOCUMENT SEAL:</span>
+    <span><strong>HMAC-SHA256:</strong> <code>${wp.hmacSeal}</code></span>
+    <span><strong>LEDGER KEY:</strong> <code>${wp.signatureFingerprint}</code></span>
+    <span><strong>INTEGRITY:</strong> <code>${wp.pulseSeal.globalIntegrityIndex.toFixed(4)}%</code></span>
+    <span><strong>STATUS:</strong> <code>${wp.pulseSeal.status}</code></span>
+  </div>
+  <div class="pulse-bar">
+    <div class="pulse-kpi">
+      <div class="kpi-label">Global Integrity</div>
+      <div class="kpi-value">${wp.pulseSeal.globalIntegrityIndex.toFixed(2)}%</div>
+      <div class="kpi-sub">Lifetime ledger coverage</div>
+    </div>
+    <div class="pulse-kpi">
+      <div class="kpi-label">Total Audit Events</div>
+      <div class="kpi-value">${wp.pulseSeal.totalEvents.toLocaleString()}</div>
+      <div class="kpi-sub">All-time immutable log</div>
+    </div>
+    <div class="pulse-kpi">
+      <div class="kpi-label">QSig Verified</div>
+      <div class="kpi-value">${wp.pulseSeal.verifiedEvents.toLocaleString()}</div>
+      <div class="kpi-sub">ML-DSA-87 proven</div>
+    </div>
+    <div class="pulse-kpi">
+      <div class="kpi-label">Active Swarms</div>
+      <div class="kpi-value">${wp.pulseSeal.activeSwarms}</div>
+      <div class="kpi-sub">${wp.pulseSeal.revokedSwarms} revoked</div>
+    </div>
+    <div class="pulse-kpi">
+      <div class="kpi-label">Pulse Status</div>
+      <div class="kpi-value" style="font-size:10px;color:${wp.pulseSeal.status === "NOMINAL" ? "#40B595" : "#D96161"};">${wp.pulseSeal.status}</div>
+      <div class="kpi-sub">Sovereign Pulse Engine</div>
+    </div>
+  </div>
+  ${bodyHtml}
+  <div class="footer">
+    Agent-Sentinel v4.0 · Document AS-WP-${wp.documentId} · Generated ${dateStr} ${timeStr} ·
+    ML-DSA-87 (FIPS-204 SL5) · EU AI Act Art. 12/14 · NIST AI RMF 2026 · CONFIDENTIAL
+  </div>
+</div>
+</body></html>`;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function StatusPage() {
@@ -304,6 +585,8 @@ export default function StatusPage() {
   const [pulseFiring, setPulseFiring] = useState(false);
   const [pulseMsg, setPulseMsg] = useState<string | null>(null);
   const [fault, setFault] = useState<{ message: string } | null>(null);
+  const [wpLoading,  setWpLoading]  = useState(false);
+  const [wpError,    setWpError]    = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -349,6 +632,32 @@ export default function StatusPage() {
     };
     return () => ws.close();
   }, [fetchStatus]);
+
+  const handleDownloadWhitepaper = async () => {
+    setWpLoading(true);
+    setWpError(null);
+    try {
+      const r = await fetch(`${BASE}/api/v1/whitepaper`);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setWpError((err as { error?: string }).error ?? "Whitepaper generation failed");
+        return;
+      }
+      const data: WhitepaperResponse = await r.json();
+      const html = buildWhitepaperPrintHTML(data);
+      const win  = window.open("", "_blank", "width=1200,height=820,scrollbars=yes");
+      if (!win) { setWpError("Allow popups to download the white paper."); return; }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 700);
+    } catch {
+      setWpError("Network error — whitepaper download failed");
+    } finally {
+      setWpLoading(false);
+    }
+  };
 
   const handleVerify = async (id: string) => {
     setVerifying(true);
@@ -421,7 +730,7 @@ export default function StatusPage() {
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button
               size="sm" variant="outline" onClick={fetchStatus}
               className="font-mono text-xs gap-1.5 h-8"
@@ -436,10 +745,23 @@ export default function StatusPage() {
               <Zap className="w-3.5 h-3.5" />
               {pulseFiring ? "Firing…" : "Fire Sovereign Pulse"}
             </Button>
+            <Button
+              size="sm" onClick={handleDownloadWhitepaper} disabled={wpLoading}
+              className="font-mono text-xs gap-1.5 h-8"
+              style={{ background: wpLoading ? `${C.blue}80` : C.blue, color: "#fff", border: "none" }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {wpLoading ? "Generating…" : "Download White Paper"}
+            </Button>
           </div>
           {pulseMsg && (
             <div className="text-[10px] font-mono" style={{ color: pulseMsg.startsWith("✓") ? C.sage : C.terra }}>
               {pulseMsg}
+            </div>
+          )}
+          {wpError && (
+            <div className="text-[10px] font-mono" style={{ color: C.terra }}>
+              {wpError}
             </div>
           )}
         </div>

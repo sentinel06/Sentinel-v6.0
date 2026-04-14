@@ -61,6 +61,14 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - If `SENTINEL_KEY` is not set, all POST requests are allowed (dev mode)
 - Sensitive headers redacted from logs
 
+## Technical White Paper Engine
+
+- **`GET /v1/whitepaper`** — Dynamically generates a full Technical White Paper from live system state. Returns JSON with `markdown`, `pulseSeal`, `quantumManifest`, and `hmacSeal` fields.
+- **`artifacts/api-server/src/services/whitepaper_gen.ts`** — Service that pulls ML-DSA-87 lattice params (k=8, l=7, q=8,380,417), FIPS-204 SL5 status from Sovereign Pulse, anonymized drift/surge topology snippets, and assembles 9-section Markdown white paper.
+- **Download White Paper button** on `/status` page — fetches whitepaper JSON, renders Sentinel Zen A4 Landscape print HTML, opens in new window with `window.print()`.
+- **`docs/partner_onboarding_guide.md`** — Full Apex-Fintech alpha partner documentation (9 sections, EU AI Act compliance guide, sovereign key provisioning, breach scenario walkthrough).
+- **`pnpm --filter @workspace/scripts run breach`** — Runs 3-stage Apex-Fintech breach simulation script (cognitive drift, honey-token vault breach, causal chain break).
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
@@ -69,3 +77,4 @@ Agent-Sentinel is an immutable audit ledger system for AI agents, designed to me
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 - `pnpm --filter @workspace/sentinel-dashboard run dev` — run dashboard locally
+- `pnpm --filter @workspace/scripts run breach` — run Apex-Fintech 3-stage breach simulation
