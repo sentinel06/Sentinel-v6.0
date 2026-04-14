@@ -17,6 +17,7 @@ import TopologyPage from "@/pages/topology";
 import BadgePage from "@/pages/badge";
 import SwarmMapPage from "@/pages/swarmmap";
 import PartnerPortalPage from "@/pages/partnerportal";
+import PartnerOnboardingPage from "@/pages/partneronboarding";
 import EQAPage from "@/pages/eqa";
 import PulsePage from "@/pages/pulse";
 import StatusPage from "@/pages/status";
@@ -45,6 +46,7 @@ function Router() {
         <Route path="/badge" component={BadgePage} />
         <Route path="/swarmmap" component={SwarmMapPage} />
         <Route path="/partner" component={PartnerPortalPage} />
+        <Route path="/partner-onboarding" component={PartnerOnboardingPage} />
         <Route path="/eqa" component={EQAPage} />
         <Route path="/pulse" component={PulsePage} />
         <Route path="/status" component={StatusPage} />

@@ -16,6 +16,7 @@ import {
   Building2,
   Zap,
   Radio,
+  Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetIntegrityStatus } from "@workspace/api-client-react";
@@ -95,8 +96,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { path: "/compliance", label: "Compliance", icon: FileCheck },
         { path: "/integrity", label: "Hash Chain", icon: ShieldCheck },
         { path: "/badge", label: "Sentinel Badge", icon: Award },
-        { path: "/partner", label: "Partner Portal", icon: Building2 },
-        { path: "/eqa",     label: "Quantum Audit",  icon: Zap },
+        { path: "/partner",             label: "Partner Portal",   icon: Building2 },
+        { path: "/partner-onboarding", label: "Alpha Onboarding",  icon: Rocket },
+        { path: "/eqa",                label: "Quantum Audit",     icon: Zap },
       ],
     },
   ];
