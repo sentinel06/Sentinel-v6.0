@@ -10,7 +10,7 @@
  */
 
 import { db, agentRegistryTable, auditLogsTable, partnerKeysTable } from "@workspace/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -93,15 +93,14 @@ export interface SeedResult {
 }
 
 export async function seedDemoEnvironment(): Promise<SeedResult> {
-  // ── 1. Wipe existing Apex-Fintech data ──────────────────────────────────
-  // Delete from audit_logs first (foreign-key direction: audit_logs → agent_registry)
-  await db
-    .delete(auditLogsTable)
-    .where(sql`${auditLogsTable.agentId} ILIKE ${"apex-fintech%"}`);
-
+  // ── 1. Clear mutable tables only ─────────────────────────────────────────
+  // NOTE: audit_logs has an immutability trigger (BEFORE DELETE + BEFORE UPDATE)
+  // that enforces the ledger's append-only guarantee — we CANNOT delete from it.
+  // Instead we clear only the agent_registry rows; each seed run appends a fresh
+  // batch of events (idempotent: traceIds carry a timestamp suffix below).
   await db
     .delete(agentRegistryTable)
-    .where(sql`${agentRegistryTable.agentId} ILIKE ${"apex-fintech%"}`);
+    .where(ilike(agentRegistryTable.agentId, "apex-fintech%"));
 
   // ── 2. Golden Key: upsert SENTINEL-DEMO-GOLDEN-2026 ────────────────────
   const existingKey = await db
@@ -135,6 +134,9 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
   }
 
   // ── 4. Generate 48 h of normal events ──────────────────────────────────
+  // seedRun is appended to traceIds so repeated seeds don't create duplicate
+  // traceId values in the immutable ledger (audit_logs cannot be deleted).
+  const seedRun  = Date.now().toString(36);            // short base-36 tag
   const now      = Date.now();
   const start    = now - 48 * 60 * 60 * 1000;         // 48 h ago
   const driftAt  = now -  1 * 60 * 60 * 1000;         // 1 h ago
@@ -178,7 +180,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(t).toISOString(),
       agentId:          ag.agentId,
-      traceId:          `trace-apex-normal-${i.toString().padStart(4, "0")}`,
+      traceId:          `trace-apex-normal-${i.toString().padStart(4, "0")}-${seedRun}`,
       eventType:        evt,
       payload:          pld,
       rationale:        rat,
@@ -203,7 +205,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(t).toISOString(),
       agentId:          "apex-fintech-gamma",
-      traceId:          `trace-apex-pre-drift-${i}`,
+      traceId:          `trace-apex-pre-drift-${i}-${seedRun}`,
       eventType:        "Search",
       payload:          pld,
       rationale:        "Authorised search for financial transfer protocol documentation",
@@ -227,7 +229,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(tA).toISOString(),
       agentId:          "apex-fintech-gamma",
-      traceId:          "trace-apex-drift-001",
+      traceId:          `trace-apex-drift-001-${seedRun}`,
       eventType:        "File_Read",
       payload:          pld,
       rationale:        "Agent reading secure credential file outside authorised scope",
@@ -252,7 +254,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(tA + 0.1).toISOString(),
       agentId:          "apex-fintech-gamma",
-      traceId:          "trace-apex-drift-002",
+      traceId:          `trace-apex-drift-002-${seedRun}`,
       eventType:        "Unauthorized_Transfer",
       payload:          pld,
       rationale:        "Initiating wire transfer to external destination without approval",
@@ -277,7 +279,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(tA + 0.2).toISOString(),
       agentId:          "apex-fintech-gamma",
-      traceId:          "trace-apex-drift-003",
+      traceId:          `trace-apex-drift-003-${seedRun}`,
       eventType:        "Honey_Token_Access",
       payload:          pld,
       rationale:        "Agent accessed honey-token credential lure — malicious exfiltration confirmed",
@@ -312,7 +314,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     events.push({
       timestamp:        new Date(tC).toISOString(),
       agentId:          "apex-fintech-gamma",
-      traceId:          "trace-apex-drift-004",
+      traceId:          `trace-apex-drift-004-${seedRun}`,
       eventType:        "CASCADE_REVOKE",
       payload:          pld,
       rationale:        "Governance engine: cascading revocation triggered by honey-token breach; entire swarm locked out",
