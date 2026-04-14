@@ -19,6 +19,7 @@ import SwarmMapPage from "@/pages/swarmmap";
 import PartnerPortalPage from "@/pages/partnerportal";
 import EQAPage from "@/pages/eqa";
 import PulsePage from "@/pages/pulse";
+import StatusPage from "@/pages/status";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ function Router() {
         <Route path="/partner" component={PartnerPortalPage} />
         <Route path="/eqa" component={EQAPage} />
         <Route path="/pulse" component={PulsePage} />
+        <Route path="/status" component={StatusPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -83,7 +83,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         { path: "/traces", label: "Traces", icon: ListTree },
         { path: "/topology", label: "Topology", icon: GitBranch },
         { path: "/swarmmap", label: "Swarm Map", icon: Network },
-        { path: "/pulse", label: "Live Pulse", icon: Radio },
+        { path: "/pulse",  label: "Live Pulse",     icon: Radio },
+        { path: "/status", label: "System Status",  icon: ShieldCheck },
       ],
     },
     {

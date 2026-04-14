@@ -261,3 +261,42 @@ export const pulseLogsTable = pgTable(
 );
 
 export type PulseLog = typeof pulseLogsTable.$inferSelect;
+
+// ── Sovereign Pulse Store ──────────────────────────────────────────────────
+// Internal heartbeat snapshots produced by the Pulse Engine every 6 hours.
+// Each entry is self-signed with the QL-2.0 Master Key (ML-DSA-87, SYSTEM scope)
+// to ensure history cannot be tampered with after the fact.
+
+export const systemPulsesTable = pgTable(
+  "system_pulses",
+  {
+    id:                   uuid("id").primaryKey().defaultRandom(),
+    createdAt:            timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** 0–100 — percentage of ALL ledger events with ML-DSA-87 pq_signature */
+    globalIntegrityIndex: real("global_integrity_index").notNull(),
+    totalEvents:          integer("total_events").notNull(),
+    verifiedEvents:       integer("verified_events").notNull(),
+    /** Active swarm sessions at snapshot time */
+    activeSwarms:         integer("active_swarms").notNull(),
+    /** Revoked swarm sessions at snapshot time */
+    revokedSwarms:        integer("revoked_swarms").notNull(),
+    /** Theoretical ML-DSA-87 entropy bits processed (verifiedEvents × sigBytes × 8) */
+    quantumThroughputBits: text("quantum_throughput_bits").notNull(),
+    /** NOMINAL | ALERT | UNDER_INVESTIGATION */
+    status:               text("status").notNull().default("NOMINAL"),
+    /** Human-readable reason if status != NOMINAL */
+    faultReason:          text("fault_reason").default(null),
+    /** Canonical payload string that was signed (deterministic from the metrics) */
+    pulsePayload:         text("pulse_payload").notNull(),
+    /** QL-2.0 HybridSignatureEnvelope as JSONB — self-signs this pulse record */
+    pulseSignature:       jsonb("pulse_signature").notNull(),
+    /** Hours of data aggregated (default 6) */
+    windowHours:          integer("window_hours").notNull().default(6),
+  },
+  (table) => [
+    index("system_pulses_created_at_idx").on(table.createdAt),
+    index("system_pulses_status_idx").on(table.status),
+  ],
+);
+
+export type SystemPulse = typeof systemPulsesTable.$inferSelect;

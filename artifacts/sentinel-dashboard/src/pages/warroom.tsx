@@ -197,9 +197,29 @@ function DownloadPDFButton({ agentId }: { agentId?: string }) {
   );
 }
 
+// ── Pulse Fault hook — listens for Sovereign Pulse Engine alerts ──────────
+
+function usePulseFault() {
+  const [fault, setFault] = useState<{ pulseId: string; globalIntegrityIndex: string; faultReason: string | null; createdAt: string } | null>(null);
+
+  useEffect(() => {
+    const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${BASE}/api/v1/ws`);
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "pulse_fault") setFault(msg.data);
+      } catch {}
+    };
+    return () => ws.close();
+  }, []);
+
+  return { fault, dismiss: () => setFault(null) };
+}
+
 export default function WarRoomPage() {
   const { requests, loading, refresh, criticalBreaches } = useAuthRequests();
   const { active: killActive, toggle: toggleKill } = useKillSwitch();
+  const { fault: pulseFault, dismiss: dismissFault } = usePulseFault();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const pending = requests.filter((r) => r.status === "PENDING");
@@ -241,6 +261,48 @@ export default function WarRoomPage() {
           </button>
         </div>
       </div>
+
+      {/* PULSE FAULT ALERT ─ Sovereign Pulse Engine integrity failure */}
+      {pulseFault && (
+        <div className="rounded-lg p-4 flex items-start gap-3 relative" style={{ background: "rgba(217,97,97,0.10)", border: "1px solid #D96161" }}>
+          <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 text-destructive" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-mono font-bold text-destructive uppercase tracking-widest">
+                ⚠ PULSE FAULT — SOVEREIGN INTEGRITY ENGINE
+              </span>
+              <span className="text-[9px] font-mono ml-auto" style={{ color: "#9AA4B1" }}>
+                {new Date(pulseFault.createdAt).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="text-xs font-mono" style={{ color: "#cdd5e0" }}>
+              Global Integrity Index dropped to{" "}
+              <span className="font-bold text-destructive">{pulseFault.globalIntegrityIndex}%</span>
+              {" "}— below the 99.9% sovereign threshold.
+            </div>
+            {pulseFault.faultReason && (
+              <div className="text-[10px] font-mono mt-1" style={{ color: "#9AA4B1" }}>
+                {pulseFault.faultReason}
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              <a
+                href={`${BASE}/status`}
+                className="text-[10px] font-mono px-2 py-0.5 rounded border text-destructive border-destructive/40 hover:bg-destructive/10 transition-colors"
+              >
+                View System Status →
+              </a>
+            </div>
+          </div>
+          <button
+            onClick={dismissFault}
+            className="absolute top-3 right-3 text-[10px] font-mono opacity-50 hover:opacity-100"
+            style={{ color: "#9AA4B1" }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* CRITICAL BREACH ALERTS ─ honeypot trap activations */}
       {criticalBreaches.length > 0 && (
