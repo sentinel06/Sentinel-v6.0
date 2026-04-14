@@ -19,8 +19,9 @@ import {
   ListTree, AlertTriangle, X, Clock, Terminal, BrainCircuit,
   ChevronRight, Loader2, ShieldCheck, ShieldAlert,
   Link2, Link2Off, Zap, Activity, Hash, Fingerprint,
-  TriangleAlert, Eye, Pen, Network, GitBranch,
+  TriangleAlert, Eye, Pen, Network, GitBranch, Share2,
 } from "lucide-react";
+import CausalTopologyMap from "@/components/CausalTopologyMap";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -729,20 +730,18 @@ function TraceDetailView({ traceId, onClose, onFocusAgent }: {
   const chainMap = useMemo(() => checkChain(events), [events]);
   const brokenLinks = useMemo(() => events.filter(e => chainMap.get(e.id) === false).length, [events, chainMap]);
 
-  // Scroll list to event when topology node is selected
-  const handleTopoSelect = useCallback((ev: AnyEvent) => {
-    setTopoSelectedId(ev.id);
-    // Scroll the list view to this event
+  // Scroll list to event when causal topology node is selected
+  const handleTopoSelect = useCallback((eventId: string, agentId: string) => {
+    setTopoSelectedId(eventId);
+    // Scroll the event list to the selected item
     setTimeout(() => {
-      const el = document.getElementById(`trace-ev-${ev.id}`);
+      const el = document.getElementById(`trace-ev-${eventId}`);
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
     // Dispatch HUD sync for swarm map
-    if ((ev as any).agentId || trace?.agentId) {
-      window.dispatchEvent(new CustomEvent("sentinelFocusAgent", {
-        detail: { agentId: (ev as any).agentId ?? trace?.agentId, eventId: ev.id },
-      }));
-    }
+    window.dispatchEvent(new CustomEvent("sentinelFocusAgent", {
+      detail: { agentId: agentId ?? trace?.agentId, eventId },
+    }));
   }, [trace?.agentId]);
 
   if (isLoading) {
@@ -829,24 +828,22 @@ function TraceDetailView({ traceId, onClose, onFocusAgent }: {
       {/* ── Topology View ── */}
       {showTopology && (
         <div data-testid="trace-topology-panel" className="border-b border-border/40 shrink-0" style={{ background: "#070b12" }}>
-          <div className="px-4 py-3">
-            <div className="flex items-center gap-2 mb-3">
-              <Network className="w-3.5 h-3.5" style={{ color: P.blue }} />
+          <div className="px-4 pt-3 pb-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Share2 className="w-3.5 h-3.5" style={{ color: P.blue }} />
               <span data-testid="trace-topology-header" className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: P.blue }}>
-                TRACE TOPOLOGY — {events.length} STEPS
+                CAUSAL DEPENDENCY GRAPH
               </span>
               <span className="text-[9px] font-mono ml-2" style={{ color: P.dim }}>
-                Drift bleed propagation · QL-2.0 edge verification · Click node = sync HUD
+                Swimlane DAG · Drift heatmap edges · QL-2.0 integrity · Click edge = payload diff
               </span>
             </div>
-            <TraceTopology
-              events={events}
-              chainMap={chainMap}
-              onNodeSelect={handleTopoSelect}
-              selectedId={topoSelectedId}
-              agentId={trace.agentId}
-            />
           </div>
+          <CausalTopologyMap
+            traceId={traceId}
+            onNodeSelect={handleTopoSelect}
+            selectedEventId={topoSelectedId}
+          />
         </div>
       )}
 
