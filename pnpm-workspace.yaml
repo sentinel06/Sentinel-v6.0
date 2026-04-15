@@ -79,6 +79,8 @@ overrides:
   path-to-regexp: ^8.4.0
   picomatch: ^4.0.4
   "micromatch>picomatch": ^2.3.2
+  brace-expansion: ^2.0.3
+  yaml: ^2.8.3
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
