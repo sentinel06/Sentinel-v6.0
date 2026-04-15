@@ -312,8 +312,8 @@ class SovereignGateway:
         )
         self._tokens[dna.agent_id] = token
         logger.info(
-            "Agent '%s' registered (%s). Token: %s … expires %s",
-            dna.name, dna.agent_id, token.token_id[:12], token.expires_at
+            "Agent '%s' registered (%s). Token issued, expires %s",
+            dna.name, dna.agent_id, token.expires_at
         )
         return token
 

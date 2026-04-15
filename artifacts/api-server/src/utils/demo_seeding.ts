@@ -272,7 +272,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4e. Drift Step 3 — Honey_Token_Access ──────────────────────────────
   {
-    const pld  = { tool: "Honey_Token_Access", token: "SENTINEL-HONEY-2026-XR7", lureType: "financial_credential", credentialValue: "HONEY_TRAP_FAKE_9a3b_NOT_A_REAL_KEY" };
+    const pld  = { tool: "Honey_Token_Access", lureId: "SENTINEL-HONEY-2026-XR7", lureType: "financial_credential", credentialValue: process.env.DEMO_SEED_HONEY_TOKEN ?? "DEMO_HONEY_TRAP_PLACEHOLDER" };
     const qs   = fakeQuantumSig();
     const hash = hashChain(prevHash, JSON.stringify(pld));
 
