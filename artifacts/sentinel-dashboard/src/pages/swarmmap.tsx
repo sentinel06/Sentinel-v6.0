@@ -745,17 +745,20 @@ export default function SwarmMapPage() {
 
     // ── Initial positions ────────────────────────────────────────────────────
     const maxDepth = Math.max(...nodes.map(n => n.generationDepth ?? 0), 1);
-    const VERT_SPACING = Math.min((H - 80) / Math.max(maxDepth, 1), 120);
-    const TOP_Y = isMobile ? 60 : cy;
+    // Mobile ART: LUCA pinned at exactly 10% from top; descendants cascade below
+    const TOP_Y       = isMobile ? Math.round(H * 0.10) : cy;
+    const VERT_SPACING = isMobile
+      ? Math.min(Math.round((H * 0.85) / Math.max(maxDepth, 1)), 110)
+      : Math.min((H - 80) / Math.max(maxDepth, 1), 120);
 
     nodes.filter(n => n.isRoot).forEach(n => {
-      if (n.x == null) { n.x = cx; n.y = isMobile ? TOP_Y : cy; }
+      if (n.x == null) { n.x = cx; n.y = TOP_Y; }
       if (isMobile) { n.fx = cx; n.fy = TOP_Y; }
     });
     nodes.filter(n => !n.isRoot).forEach(n => {
       if (n.x == null) {
         if (isMobile) {
-          n.x = cx + (Math.random() - 0.5) * 120;
+          n.x = cx + (Math.random() - 0.5) * 80;
           n.y = TOP_Y + (n.generationDepth ?? 1) * VERT_SPACING;
         } else {
           const angle = Math.random() * Math.PI * 2;
@@ -765,7 +768,7 @@ export default function SwarmMapPage() {
       }
     });
 
-    // ── Mobile force multipliers: +40% link strength, +50% charge ───────────
+    // ── Force multipliers ─────────────────────────────────────────────────────
     const linkStrMult  = isMobile ? 1.4 : 1.0;
     const chargeMult   = isMobile ? 1.5 : 1.0;
 
@@ -789,13 +792,18 @@ export default function SwarmMapPage() {
       .force("charge", d3.forceManyBody<SwarmNodeData>()
         .strength(d => (d.status === "revoked" ? -600 : d.isRoot ? -800 : -200 - (d.fitnessScore ?? 0.5) * 60) * chargeMult)
       )
+      // forceCenter disabled on mobile — phylo_x/phylo_y handle centering
       .force("center", d3.forceCenter(cx, cy).strength(isMobile ? 0.0 : 0.015))
-      .force("collide", d3.forceCollide<SwarmNodeData>().radius(d => (d.radius ?? 14) + (isMobile ? 16 : 10)))
+      // Mobile ART: 3× collide radius to prevent node overlap in vertical cascade
+      .force("collide", d3.forceCollide<SwarmNodeData>().radius(d => {
+        const base = d.radius ?? 14;
+        return isMobile ? base * 3 + 8 : base + 10;
+      }))
       .alphaDecay(0.010)
-      .velocityDecay(0.44)
+      .velocityDecay(isMobile ? 0.55 : 0.44)
       .on("tick", () => {
         tickRef.current++;
-        const margin = 24;
+        const margin = isMobile ? 12 : 24;
         for (const n of nodes) {
           const r = n.radius ?? 14;
           n.x = Math.max(r + margin, Math.min(W - r - margin, n.x ?? cx));
@@ -804,13 +812,14 @@ export default function SwarmMapPage() {
         setRenderTick(t => t + 1);
       });
 
-    // ── Layout strategy: Vertical Orchard (mobile) vs Radial Phylogeny (desktop) ──
+    // ── Layout strategy: Cascading Tree (mobile) vs Radial Phylogeny (desktop) ──
     if (isMobile) {
-      sim.force("phylo_x", d3.forceX<SwarmNodeData>(cx).strength(0.18));
+      // Stronger forces keep the vertical cascade from collapsing on small screens
+      sim.force("phylo_x", d3.forceX<SwarmNodeData>(cx).strength(0.45));
       sim.force("phylo_y", d3.forceY<SwarmNodeData>(d => {
         if (d.isRoot) return TOP_Y;
         return TOP_Y + (d.generationDepth ?? 1) * VERT_SPACING;
-      }).strength(0.55));
+      }).strength(0.75));
     } else {
       sim.force("phylo_radial", d3.forceRadial<SwarmNodeData>(
         d => {
@@ -1004,36 +1013,72 @@ export default function SwarmMapPage() {
     }
   }, []);
 
-  // ── Pinch-to-Zoom handlers ────────────────────────────────────────────────
+  // ── Pinch-to-Zoom + single-touch pan (with elastic-bounce prevention) ──────
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+
   const getPinchDist = (touches: React.TouchList) => {
     const t0 = touches[0]; const t1 = touches[1];
     if (!t0 || !t1) return 0;
     return Math.sqrt((t0.clientX - t1.clientX) ** 2 + (t0.clientY - t1.clientY) ** 2);
   };
 
-  const handleSvgTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
-    if (e.touches.length !== 2) return;
-    e.preventDefault();
-    const t0 = e.touches[0]!; const t1 = e.touches[1]!;
-    pinchRef.current = {
-      dist:  getPinchDist(e.touches),
-      scale: zoom,
-      midX:  (t0.clientX + t1.clientX) / 2,
-      midY:  (t0.clientY + t1.clientY) / 2,
+  // Clamp pan so the canvas cannot be dragged completely off-screen.
+  // Minimum visible fraction: at least 60px of canvas edge must stay on screen.
+  const clampPan = useCallback((x: number, y: number, scale: number) => {
+    const { W, H } = svgDims;
+    const safeW = W * (scale - 1) + 60;
+    const safeH = H * (scale - 1) + 60;
+    return {
+      x: Math.max(-safeW, Math.min(safeW, x)),
+      y: Math.max(-safeH, Math.min(safeH, y)),
     };
-  }, [zoom]);
+  }, [svgDims]);
+
+  const handleSvgTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 2) {
+      // Pinch: record start for zoom gesture
+      e.preventDefault();
+      const t0 = e.touches[0]!; const t1 = e.touches[1]!;
+      pinchRef.current = {
+        dist:  getPinchDist(e.touches),
+        scale: zoom,
+        midX:  (t0.clientX + t1.clientX) / 2,
+        midY:  (t0.clientY + t1.clientY) / 2,
+      };
+      panStartRef.current = null; // cancel any active pan
+    } else if (e.touches.length === 1 && isMobile) {
+      // Single touch: begin pan tracking
+      const t = e.touches[0]!;
+      panStartRef.current = { x: t.clientX, y: t.clientY, panX: panXY.x, panY: panXY.y };
+    }
+  }, [zoom, panXY, isMobile]);
 
   const handleSvgTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
-    if (e.touches.length !== 2 || !pinchRef.current) return;
-    e.preventDefault();
-    const newDist  = getPinchDist(e.touches);
-    const ratio    = newDist / Math.max(pinchRef.current.dist, 1);
-    const newScale = Math.max(0.5, Math.min(4, pinchRef.current.scale * ratio));
-    setZoom(newScale);
-  }, []);
+    if (e.touches.length === 2 && pinchRef.current) {
+      // Pinch-to-zoom: mobile min 0.8x, desktop min 0.5x
+      e.preventDefault();
+      const newDist  = getPinchDist(e.touches);
+      const ratio    = newDist / Math.max(pinchRef.current.dist, 1);
+      const minZoom  = isMobile ? 0.8 : 0.5;
+      const newScale = Math.max(minZoom, Math.min(4, pinchRef.current.scale * ratio));
+      setZoom(newScale);
+    } else if (e.touches.length === 1 && panStartRef.current && isMobile) {
+      // Single-touch pan with elastic-bounce prevention
+      const t  = e.touches[0]!;
+      const dx = t.clientX - panStartRef.current.x;
+      const dy = t.clientY - panStartRef.current.y;
+      const raw = {
+        x: panStartRef.current.panX + dx,
+        y: panStartRef.current.panY + dy,
+      };
+      const clamped = clampPan(raw.x, raw.y, zoom);
+      setPanXY(clamped);
+    }
+  }, [isMobile, clampPan, zoom]);
 
   const handleSvgTouchEnd = useCallback(() => {
     pinchRef.current = null;
+    panStartRef.current = null;
   }, []);
 
   // ── Turbulence seed (slow drift so animation feels organic) ───────────────
@@ -1204,29 +1249,49 @@ export default function SwarmMapPage() {
                 </filter>
               ))}
 
-              {/* ── Maladaptive Mutation distortion (feTurbulence warp) ── */}
-              {/* Mobile ART: numOctaves reduced 3→1 to maintain 60 FPS on GPU-constrained devices */}
-              <filter id="mutation-warp" x="-30%" y="-30%" width="160%" height="160%">
-                <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves={isMobile ? 1 : 3}
-                  seed={turbSeed} result="noise" />
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale={isMobile ? 5 : 8}
-                  xChannelSelector="R" yChannelSelector="G" result="warped" />
-                <feFlood floodColor={P.mutation} result="flood" />
-                <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                <feGaussianBlur in="tintMask" stdDeviation={isMobile ? 2 : 3} result="tintBlur" />
-                <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
-              </filter>
-              {/* Severe mutation — more extreme turbulence (Mobile ART: 4→2 octaves) */}
-              <filter id="mutation-warp-severe" x="-40%" y="-40%" width="180%" height="180%">
-                <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves={isMobile ? 2 : 4}
-                  seed={turbSeed} result="noise" />
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale={isMobile ? 8 : 14}
-                  xChannelSelector="R" yChannelSelector="G" result="warped" />
-                <feFlood floodColor={P.mutation} result="flood" />
-                <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                <feGaussianBlur in="tintMask" stdDeviation={isMobile ? 3 : 5} result="tintBlur" />
-                <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
-              </filter>
+              {/* ── Maladaptive Mutation distortion (desktop: feTurbulence warp) ── */}
+              {!isMobile && (
+                <>
+                  <filter id="mutation-warp" x="-30%" y="-30%" width="160%" height="160%">
+                    <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves={3}
+                      seed={turbSeed} result="noise" />
+                    <feDisplacementMap in="SourceGraphic" in2="noise" scale={8}
+                      xChannelSelector="R" yChannelSelector="G" result="warped" />
+                    <feFlood floodColor={P.mutation} result="flood" />
+                    <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
+                    <feGaussianBlur in="tintMask" stdDeviation={3} result="tintBlur" />
+                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
+                  </filter>
+                  <filter id="mutation-warp-severe" x="-40%" y="-40%" width="180%" height="180%">
+                    <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves={4}
+                      seed={turbSeed} result="noise" />
+                    <feDisplacementMap in="SourceGraphic" in2="noise" scale={14}
+                      xChannelSelector="R" yChannelSelector="G" result="warped" />
+                    <feFlood floodColor={P.mutation} result="flood" />
+                    <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
+                    <feGaussianBlur in="tintMask" stdDeviation={5} result="tintBlur" />
+                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
+                  </filter>
+                </>
+              )}
+              {/* Mobile ART: static violet-tint pulse — zero feTurbulence cost, 60 FPS safe */}
+              {isMobile && (
+                <>
+                  <filter id="mutation-warp" x="-20%" y="-20%" width="140%" height="140%">
+                    <feFlood floodColor={P.mutation} result="flood" />
+                    <feComposite in="flood" in2="SourceGraphic" operator="in" result="tintMask" />
+                    <feGaussianBlur in="tintMask" stdDeviation="4" result="tintBlur" />
+                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                  <filter id="mutation-warp-severe" x="-25%" y="-25%" width="150%" height="150%">
+                    <feFlood floodColor={P.mutation} result="flood" />
+                    <feComposite in="flood" in2="SourceGraphic" operator="in" result="tintMask" />
+                    <feGaussianBlur in="tintMask" stdDeviation="6" result="tintBlur" />
+                    <feBlend in="SourceGraphic" in2="tintBlur" mode="screen" result="blended" />
+                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="blended" /></feMerge>
+                  </filter>
+                </>
+              )}
 
               {/* Calcification desaturate filter */}
               <filter id="calcify" x="-10%" y="-10%" width="120%" height="120%">
@@ -1635,12 +1700,14 @@ export default function SwarmMapPage() {
                         : "●"}
                     </text>
 
-                    {/* Label */}
-                    <text x={node.x} y={node.y + r + 13}
-                      textAnchor="middle" fontSize="8" fill={P.dim}
-                      style={{ userSelect: "none", pointerEvents: "none" }}>
-                      {node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label}
-                    </text>
+                    {/* Label — Mobile ART: only shown for Mutant/Revoked/DriftLocked, 40% smaller */}
+                    {(!isMobile || isMut || node.status === "revoked" || node.status === "drift-locked") && (
+                      <text x={node.x} y={node.y + r + 13}
+                        textAnchor="middle" fontSize={isMobile ? "5" : "8"} fill={isMobile && (isMut || node.status === "revoked") ? P.mutation : P.dim}
+                        style={{ userSelect: "none", pointerEvents: "none" }}>
+                        {node.label.length > (isMobile ? 10 : 14) ? node.label.slice(0, isMobile ? 8 : 12) + "…" : node.label}
+                      </text>
+                    )}
 
                     {/* Status badge — surging/recoded/afterglow/drift/fitness */}
                     {node.status !== "revoked" && !calc && (
@@ -1843,6 +1910,16 @@ export default function SwarmMapPage() {
           from { transform: translateY(100%); opacity: 0; }
           to   { transform: translateY(0);    opacity: 1; }
         }
+        @keyframes violetPulse {
+          0%   { box-shadow: 0 0 0 0   rgba(192,132,252,0); opacity: 0.75; }
+          40%  { box-shadow: 0 0 0 6px rgba(192,132,252,0.45); opacity: 1; }
+          100% { box-shadow: 0 0 0 0   rgba(192,132,252,0); opacity: 0.75; }
+        }
+        @keyframes violetPulseSvg {
+          0%   { opacity: 0.65; }
+          50%  { opacity: 1.0; }
+          100% { opacity: 0.65; }
+        }
         @keyframes whiteGoldRecode {
           0%   { box-shadow: 0 0 0 0 rgba(255,215,0,0); }
           40%  { box-shadow: 0 0 0 8px rgba(255,215,0,0.35); }
@@ -1850,79 +1927,124 @@ export default function SwarmMapPage() {
         }
       `}</style>
 
-      {/* ── Vitality Sheet — mobile bottom drawer ── */}
-      {isMobile && (
-        <div
-          style={{
-            position: "fixed",
-            left: 0, right: 0, bottom: 0,
-            zIndex: 200,
-            background: P.panel,
-            borderTop: `1px solid ${P.border}`,
-            borderRadius: "16px 16px 0 0",
-            boxShadow: "0 -4px 32px rgba(0,0,0,0.55)",
-            animation: vitalityOpen ? "vitality-slide-up 0.28s cubic-bezier(0.22,1,0.36,1) both" : undefined,
-            transform: vitalityOpen ? "translateY(0)" : "translateY(100%)",
-            transition: vitalityOpen ? undefined : "transform 0.22s cubic-bezier(0.4,0,1,1)",
-            maxHeight: "58vh",
-            overflowY: "auto",
-          }}>
-          {/* Drag handle */}
-          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: P.border }} />
-          </div>
-          {/* Title row */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "0 16px 10px", borderBottom: `1px solid ${P.border}44` }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: P.sage, letterSpacing: "0.06em" }}>
-              ◈ VITALITY MATRIX
-            </span>
-            <button onClick={() => setVitalityOpen(false)}
-              style={{ fontSize: 16, color: P.dim, background: "none", border: "none", cursor: "pointer" }}>✕</button>
-          </div>
-          {/* KPI cards grid — 2 columns */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "12px 14px 20px" }}>
-            {kpiCards.map((k, i) => (
-              <div key={i} style={{
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.035)",
-                border: `1px solid ${k.color}33`,
-                padding: "10px 12px",
-                animation: "whiteGoldRecode 2s ease-in-out infinite",
-                animationDelay: `${i * 0.3}s`,
-              }}>
-                <div style={{ fontSize: 9, color: P.dim, marginBottom: 4, letterSpacing: "0.07em" }}>
-                  {k.label}
+      {/* ── Vitality Sheet — mobile bottom drawer (15% peek + swipe-up) ── */}
+      {isMobile && (() => {
+        // Sheet swipe handler: swipe up on handle → open, swipe down → close
+        let sheetSwipeY = 0;
+        const onHandleTouchStart = (e: React.TouchEvent) => {
+          sheetSwipeY = e.touches[0]?.clientY ?? 0;
+        };
+        const onHandleTouchEnd = (e: React.TouchEvent) => {
+          const dy = (e.changedTouches[0]?.clientY ?? 0) - sheetSwipeY;
+          if (dy < -30) setVitalityOpen(true);   // swipe up
+          if (dy >  30) setVitalityOpen(false);  // swipe down
+        };
+
+        return (
+          <div
+            style={{
+              position:     "fixed",
+              left: 0, right: 0, bottom: 0,
+              zIndex:       200,
+              background:   P.panel,
+              borderTop:    `1px solid ${P.border}`,
+              borderRadius: "16px 16px 0 0",
+              boxShadow:    "0 -4px 32px rgba(0,0,0,0.55)",
+              // When closed: only 15vh peek visible. When open: full 58vh.
+              maxHeight:    vitalityOpen ? "58vh" : "15vh",
+              overflowY:    vitalityOpen ? "auto" : "hidden",
+              transition:   "max-height 0.32s cubic-bezier(0.22,1,0.36,1)",
+            }}>
+
+            {/* Drag handle — touch-sensitive, always visible in peek state */}
+            <div
+              onClick={() => setVitalityOpen(v => !v)}
+              onTouchStart={onHandleTouchStart}
+              onTouchEnd={onHandleTouchEnd}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center",
+                padding: "10px 0 6px", cursor: "pointer", userSelect: "none" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: P.border, marginBottom: 8 }} />
+              {/* Compact peek-mode KPI ticker — visible when sheet is collapsed */}
+              {!vitalityOpen && (
+                <div style={{ display: "flex", gap: 10, alignItems: "center",
+                  fontSize: 10, fontFamily: "monospace", color: P.dim, paddingBottom: 4 }}>
+                  {kpiCards.slice(0, 4).map((k, i) => (
+                    <span key={i} style={{ color: k.color, fontWeight: 700 }}>
+                      {k.label.split(" ").pop()}: {k.value}
+                    </span>
+                  ))}
+                  <span style={{ color: P.sage, opacity: 0.55, fontSize: 9 }}>▴ swipe up</span>
                 </div>
-                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: k.color }}>
-                  {k.value}
-                </div>
-                {k.sub && (
-                  <div style={{ fontSize: 9, color: P.dim, marginTop: 3 }}>{k.sub}</div>
-                )}
-              </div>
-            ))}
-          </div>
-          {/* Selected node mini-info */}
-          {selectedNode && (
-            <div style={{ margin: "0 14px 16px", padding: "10px 12px", borderRadius: 10,
-              background: `${P.sage}12`, border: `1px solid ${P.sage}33` }}>
-              <div style={{ fontSize: 9, color: P.dim, marginBottom: 4 }}>SELECTED ORGANISM</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: P.sage, marginBottom: 2 }}>
-                {selectedNode.id.length > 22 ? selectedNode.id.substring(0, 20) + "…" : selectedNode.id}
-              </div>
-              <div style={{ fontSize: 9, color: P.dim }}>
-                Status: <span style={{ color: selectedNode.status === "healthy" ? P.sage : selectedNode.status === "mutant" ? P.violet : P.terra }}>
-                  {selectedNode.status?.toUpperCase()}
+              )}
+              {vitalityOpen && (
+                <span style={{ fontSize: 9, color: P.sage, letterSpacing: "0.1em", paddingBottom: 2 }}>
+                  ◈ VITALITY MATRIX ▾
                 </span>
-                {" · "} Drift: <span style={{ color: (selectedNode.driftScore ?? 0) > 15 ? P.amber : P.dim }}>
-                  {(selectedNode.driftScore ?? 0).toFixed(1)}%
-                </span>
-              </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Full KPI content — only rendered when sheet is open */}
+            {vitalityOpen && (
+              <>
+                {/* KPI cards grid — 2 columns */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "4px 14px 16px" }}>
+                  {kpiCards.map((k, i) => (
+                    <div key={i} style={{
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.035)",
+                      border: `1px solid ${k.color}33`,
+                      padding: "10px 12px",
+                      animation: "whiteGoldRecode 2s ease-in-out infinite",
+                      animationDelay: `${i * 0.3}s`,
+                    }}>
+                      <div style={{ fontSize: 9, color: P.dim, marginBottom: 4, letterSpacing: "0.07em" }}>
+                        {k.label}
+                      </div>
+                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: k.color }}>
+                        {k.value}
+                      </div>
+                      {k.sub && (
+                        <div style={{ fontSize: 9, color: P.dim, marginTop: 3 }}>{k.sub}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Selected node mini-info */}
+                {selectedNode && (
+                  <div style={{ margin: "0 14px 16px", padding: "10px 12px", borderRadius: 10,
+                    background: `${P.sage}12`, border: `1px solid ${P.sage}33` }}>
+                    <div style={{ fontSize: 9, color: P.dim, marginBottom: 4 }}>SELECTED ORGANISM</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: P.sage, marginBottom: 2 }}>
+                      {selectedNode.id.length > 22 ? selectedNode.id.substring(0, 20) + "…" : selectedNode.id}
+                    </div>
+                    <div style={{ fontSize: 9, color: P.dim }}>
+                      Status: <span style={{ color: selectedNode.status === "active" ? P.sage : selectedNode.status === "mutant" ? P.mutation : P.terra }}>
+                        {selectedNode.status?.toUpperCase()}
+                      </span>
+                      {" · "} Drift: <span style={{ color: (selectedNode.driftScore ?? 0) > 15 ? P.amber : P.dim }}>
+                        {(selectedNode.driftScore ?? 0).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                      <button onClick={() => { handleCrispr(selectedNode); setVitalityOpen(false); }}
+                        style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, fontFamily: "monospace",
+                          background: P.gold + "22", border: `1px solid ${P.gold}44`, color: P.gold, cursor: "pointer" }}>
+                        ⚡ CRISPR
+                      </button>
+                      <button onClick={() => { handleTrace(selectedNode); }}
+                        style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, fontFamily: "monospace",
+                          background: "rgba(255,255,255,0.05)", border: `1px solid ${P.border}`, color: P.dim, cursor: "pointer" }}>
+                        ◈ Trace
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Context menu ── */}
       {ctxMenu && (

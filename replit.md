@@ -122,6 +122,35 @@ Three new WS message handlers in the swarm map:
 - **`GATEWAY_DISSOLUTION`** → `CELLULAR_DISSOLUTION`: triggers the 10-particle radial burst + extinction ring animation, marks node as revoked.
 - **`GATEWAY_MUTATION`** → Violet/Mutant jitter: updates node status to `mutant`, raises drift score to trigger `feTurbulence` filter and violet node color.
 
+### Mobile Sovereign ART Optimizations (swarmmap.tsx)
+
+Full mobile-first physics and UX for the Swarm Map:
+
+**D3 Simulation (Cascading Tree layout)**
+- LUCA root pinned at `H × 10%` from top (not screen center).
+- `VERT_SPACING` derived from `H × 85%` so descendants cascade evenly.
+- `forceCollide` radius = `base × 3 + 8` on mobile (3× desktop) preventing overlap.
+- `phylo_x` strength `0.45`, `phylo_y` strength `0.75` (vs desktop's 0.18/0.55).
+- `velocityDecay` `0.55` on mobile (vs `0.44` desktop) for quicker settling.
+
+**Mutation Filters — 60 FPS safe**
+- Desktop: full `feTurbulence` fractal warp (3–4 octaves).
+- Mobile: static violet-tint pulse using `feFlood` + `feComposite` + `feBlend` only (zero turbulence cost).
+
+**Touch / Zoom Constraints**
+- Pinch-zoom: min `0.8×` on mobile (vs `0.5×` desktop), max `4×`.
+- Single-touch pan via `panStartRef` with `clampPan()` preventing elastic bounce.
+- Swipe-up / swipe-down on vitality sheet handle: swipe `>30px` up → open, down → close.
+
+**Label Filtering**
+- Mobile shows labels only for Mutant, Revoked, and Drift-Locked nodes.
+- Mobile label font: `5px` (40% of desktop `8px`); colored in `P.mutation` for alarm states.
+
+**Vitality Sheet — 15vh peek state**
+- Collapsed: `maxHeight: 15vh` — always visible at bottom with handle + compact KPI ticker (4 metrics).
+- Expanded: `maxHeight: 58vh` — full KPI grid, selected node info, CRISPR + Trace quick-action buttons.
+- CSS `max-height` transition `0.32s cubic-bezier(0.22,1,0.36,1)` for smooth open/close.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
