@@ -437,6 +437,16 @@ h1, h2, h3, h4, h5, h6 {
   50%       { box-shadow: 0 0 24px 4px rgba(217, 97, 97, 0.22); border-color: rgba(217, 97, 97, 0.65); }
 }
 
+/* Green pulse on Hash Function card when chain is valid */
+@keyframes chain-valid-glow {
+  0%,  100% { box-shadow: 0 0 4px #40B595; opacity: 0.85; }
+  50%        { box-shadow: 0 0 10px #40B595, 0 0 20px #40B59544; opacity: 1; }
+}
+
+.chain-valid-pulse {
+  animation: chain-valid-glow 2.5s ease-in-out infinite;
+}
+
 /* Crimson ripple ring behind the ShieldAlert icon */
 .crimson-pulse-ring {
   position: absolute;
