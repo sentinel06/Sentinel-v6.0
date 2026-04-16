@@ -1,24 +1,28 @@
 /**
  * Live Pulse Feed — /pulse
  *
- * Displays the automated 6-hour "System Trust Velocity" pulses in a
- * timeline-style feed, mirroring what is posted to X (Twitter).
+ * Displays automated 6-hour "System Trust Velocity" pulses in a
+ * timeline-style feed. Internal system trust only — no social posting.
  *
  * Features:
  * - Auto-refreshes every 30 seconds
- * - Shows trust velocity gauge, status badge, tweet link
- * - Manual "Fire Pulse Now" button for immediate posting
+ * - Trust velocity gauge, FIPS-204 / ML-DSA-87 quantum-signature badge
+ * - Manual "Fire Pulse Now" button for immediate snapshot
  * - Countdown to next scheduled pulse
- * - Twitter/X credentials status banner
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Radio, RefreshCw, Zap, ExternalLink, Clock, CheckCircle2, AlertTriangle, XCircle, Twitter, Shield, Activity } from "lucide-react";
+import {
+  Radio, RefreshCw, Zap, Clock,
+  CheckCircle2, AlertTriangle, XCircle,
+  Shield, Activity, Fingerprint, ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useForensic } from "@/contexts/ForensicContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// ── Design tokens (Sentinel Zen palette) ──────────────────────────────────
+// ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
   sage:    "#40B595",
   honey:   "#EBC06D",
@@ -26,7 +30,7 @@ const C = {
   panel:   "#161B22",
   border:  "#2C3136",
   dimText: "#9AA4B1",
-  blue:    "#5B8DEF",
+  gold:    "#FFD700",
   bg:      "#0D1117",
 } as const;
 
@@ -76,8 +80,8 @@ function VelocityRing({ value, status }: { value: number; status: string }) {
   const col = statusColor(status);
 
   return (
-    <div className="relative flex items-center justify-center w-20 h-20">
-      <svg width="80" height="80" className="-rotate-90">
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 80, height: 80 }}>
+      <svg width="80" height="80" style={{ transform: "rotate(-90deg)" }}>
         <circle cx="40" cy="40" r={r} fill="none" stroke={C.border} strokeWidth="6" />
         <circle
           cx="40" cy="40" r={r}
@@ -89,11 +93,41 @@ function VelocityRing({ value, status }: { value: number; status: string }) {
           style={{ transition: "stroke-dasharray 0.6s ease" }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[11px] font-bold font-mono" style={{ color: col }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: col }}>
           {value.toFixed(1)}%
         </span>
-        <span className="text-[8px] font-mono" style={{ color: C.dimText }}>trust</span>
+        <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>trust</span>
+      </div>
+    </div>
+  );
+}
+
+// ── FIPS-204 Badge ────────────────────────────────────────────────────────
+
+function Fips204Badge() {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 16px",
+      borderRadius: 10, background: `${C.sage}0f`, border: `1px solid ${C.sage}33`,
+    }}>
+      <span style={{ fontSize: 14 }}>⚡</span>
+      <div>
+        <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.sage, marginBottom: 2 }}>
+          FIPS-204 / ML-DSA-87 · Security Level 5
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          {[
+            { label: "Scheme",     value: "Dilithium-87" },
+            { label: "PQ Status",  value: "POST-QUANTUM ✓", color: C.sage },
+            { label: "Verify",     value: "ML-DSA-87 ✓",    color: C.sage },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ display: "flex", gap: 5, fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}>
+              <span style={{ color: C.dimText }}>{label}:</span>
+              <span style={{ color: color ?? "#cdd5e0", fontWeight: 700 }}>{value}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -105,17 +139,11 @@ function useCountdown(lastFiredAt: string | null): string {
   const [display, setDisplay] = useState("--:--:--");
 
   useEffect(() => {
-    if (!lastFiredAt) {
-      setDisplay("--:--:--");
-      return;
-    }
+    if (!lastFiredAt) { setDisplay("--:--:--"); return; }
     const next = new Date(lastFiredAt).getTime() + 6 * 60 * 60 * 1000;
     const tick = () => {
       const diff = next - Date.now();
-      if (diff <= 0) {
-        setDisplay("00:00:00");
-        return;
-      }
+      if (diff <= 0) { setDisplay("00:00:00"); return; }
       const h = String(Math.floor(diff / 3600000)).padStart(2, "0");
       const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
       const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
@@ -132,79 +160,57 @@ function useCountdown(lastFiredAt: string | null): string {
 // ── Single Pulse Card ─────────────────────────────────────────────────────
 
 function PulseCard({ entry, isLatest }: { entry: PulseEntry; isLatest: boolean }) {
-  const dt    = new Date(entry.firedAt);
+  const dt = new Date(entry.firedAt);
   const dateStr = dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const col = statusColor(entry.status);
 
   return (
-    <div
-      className="rounded-lg p-4 relative"
-      style={{
-        background:  C.panel,
-        border:      `1px solid ${isLatest ? statusColor(entry.status) : C.border}`,
-        boxShadow:   isLatest ? `0 0 12px ${statusColor(entry.status)}22` : undefined,
-      }}
-    >
+    <div style={{
+      borderRadius: 10, padding: 16, position: "relative",
+      background: C.panel,
+      border: `1px solid ${isLatest ? col : C.border}`,
+      boxShadow: isLatest ? `0 0 12px ${col}22` : undefined,
+    }}>
       {isLatest && (
-        <div
-          className="absolute top-3 right-3 text-[9px] font-mono font-bold px-2 py-0.5 rounded-full animate-pulse"
-          style={{ background: `${statusColor(entry.status)}22`, color: statusColor(entry.status), border: `1px solid ${statusColor(entry.status)}` }}
-        >
+        <div className="animate-pulse" style={{
+          position: "absolute", top: 12, right: 12,
+          fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+          padding: "2px 8px", borderRadius: 999,
+          background: `${col}22`, color: col, border: `1px solid ${col}`,
+        }}>
           LATEST
         </div>
       )}
 
-      {/* Header row */}
-      <div className="flex items-start gap-4">
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
         <VelocityRing value={entry.trustVelocity} status={entry.status} />
 
-        <div className="flex-1 min-w-0">
-          {/* Status + time */}
-          <div className="flex items-center gap-2 mb-1">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             {statusIcon(entry.status)}
-            <span className="text-[11px] font-mono font-bold" style={{ color: statusColor(entry.status) }}>
+            <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: col }}>
               {entry.status} {statusEmoji(entry.status)}
             </span>
-            <span className="text-[10px] font-mono ml-auto" style={{ color: C.dimText }}>
+            <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: C.dimText, marginLeft: "auto" }}>
               {dateStr} · {timeStr}
             </span>
           </div>
 
-          {/* Tweet text */}
-          <div
-            className="font-mono text-[11px] leading-relaxed rounded p-2.5 mb-3 break-all"
-            style={{ background: `${C.bg}80`, border: `1px solid ${C.border}`, color: "#cdd5e0" }}
-          >
+          <div style={{
+            fontFamily: "JetBrains Mono, monospace", fontSize: 11, lineHeight: 1.6,
+            borderRadius: 6, padding: "10px 12px", marginBottom: 12, wordBreak: "break-all",
+            background: `${C.bg}80`, border: `1px solid ${C.border}`, color: "#cdd5e0",
+          }}>
             {entry.message}
           </div>
 
-          {/* KPI chips */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            <Chip label="Events" value={entry.totalEvents.toLocaleString()} color={C.dimText} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Chip label="Events"         value={entry.totalEvents.toLocaleString()}   color={C.dimText} />
             <Chip label="QL-2.0 Verified" value={entry.verifiedEvents.toLocaleString()} color={C.sage} />
-            <Chip label="Anomalies" value={String(entry.anomalyCount)} color={entry.anomalyCount > 0 ? C.terra : C.sage} />
-            <Chip label="Window" value={`${entry.windowHours}h`} color={C.dimText} />
+            <Chip label="Anomalies"      value={String(entry.anomalyCount)}            color={entry.anomalyCount > 0 ? C.terra : C.sage} />
+            <Chip label="Window"         value={`${entry.windowHours}h`}              color={C.dimText} />
           </div>
-
-          {/* Twitter / X link or error */}
-          {entry.tweetUrl ? (
-            <a
-              href={entry.tweetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[10px] font-mono rounded px-2.5 py-1 transition-opacity hover:opacity-80"
-              style={{ background: "#1a1f2e", border: `1px solid #2563eb44`, color: "#5B8DEF" }}
-            >
-              <Twitter className="w-3 h-3" />
-              View on X / Twitter
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-          ) : entry.tweetError ? (
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono" style={{ color: C.dimText }}>
-              <Twitter className="w-3 h-3" style={{ color: C.dimText }} />
-              <span>{entry.tweetError.startsWith("Twitter keys") ? "Logged locally — Twitter keys not configured" : `Post failed: ${entry.tweetError.slice(0, 60)}`}</span>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>
@@ -213,38 +219,47 @@ function PulseCard({ entry, isLatest }: { entry: PulseEntry; isLatest: boolean }
 
 function Chip({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div
-      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono"
-      style={{ background: `${color}15`, border: `1px solid ${color}33` }}
-    >
+    <div style={{
+      display: "flex", alignItems: "center", gap: 5,
+      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+      background: `${color}15`, border: `1px solid ${color}33`,
+    }}>
       <span style={{ color: C.dimText }}>{label}</span>
-      <span style={{ color }} className="font-bold">{value}</span>
+      <span style={{ color, fontWeight: 700 }}>{value}</span>
     </div>
   );
 }
 
-// ── Header stats bar ──────────────────────────────────────────────────────
+// ── Stats cards ───────────────────────────────────────────────────────────
 
 function StatsBar({ pulses }: { pulses: PulseEntry[] }) {
   if (pulses.length === 0) return null;
-  const avgVel = pulses.reduce((a, p) => a + p.trustVelocity, 0) / pulses.length;
+  const avgVel        = pulses.reduce((a, p) => a + p.trustVelocity, 0) / pulses.length;
   const totalAnomalies = pulses.reduce((a, p) => a + p.anomalyCount, 0);
-  const tweeted = pulses.filter((p) => p.tweetId).length;
-  const criticals = pulses.filter((p) => p.status === "CRITICAL").length;
+  const criticals      = pulses.filter((p) => p.status === "CRITICAL").length;
+
+  const cards = [
+    { label: "Avg Trust Velocity", value: `${avgVel.toFixed(2)}%`,      color: C.sage,  icon: <Shield style={{ width: 16, height: 16 }} /> },
+    { label: "Total Anomalies",    value: totalAnomalies.toString(),     color: totalAnomalies > 0 ? C.terra : C.sage, icon: <AlertTriangle style={{ width: 16, height: 16 }} /> },
+    { label: "Critical Pulses",    value: criticals.toString(),          color: criticals > 0 ? C.terra : C.sage,     icon: <Activity style={{ width: 16, height: 16 }} /> },
+  ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {[
-        { label: "Avg Trust Velocity", value: `${avgVel.toFixed(2)}%`, color: C.sage, icon: <Shield className="w-4 h-4" /> },
-        { label: "Total Anomalies", value: totalAnomalies.toString(), color: totalAnomalies > 0 ? C.terra : C.sage, icon: <AlertTriangle className="w-4 h-4" /> },
-        { label: "Posted to X", value: `${tweeted} / ${pulses.length}`, color: C.blue, icon: <Twitter className="w-4 h-4" /> },
-        { label: "CRITICAL Pulses", value: criticals.toString(), color: criticals > 0 ? C.terra : C.sage, icon: <Activity className="w-4 h-4" /> },
-      ].map((s) => (
-        <div key={s.label} className="rounded-lg p-3 flex items-center gap-3" style={{ background: C.panel, border: `1px solid ${C.border}` }}>
-          <div className="opacity-70" style={{ color: s.color }}>{s.icon}</div>
+    <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+      {cards.map((s) => (
+        <div key={s.label} style={{
+          flex: "1 1 0", maxWidth: 280, display: "flex", alignItems: "center", gap: 14,
+          padding: "14px 20px", borderRadius: 10,
+          background: C.panel, border: `1px solid ${C.border}`,
+        }}>
+          <div style={{ color: s.color, opacity: 0.7, flexShrink: 0 }}>{s.icon}</div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: C.dimText }}>{s.label}</div>
-            <div className="text-lg font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: "0.08em", color: C.dimText, marginBottom: 2 }}>
+              {s.label}
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: s.color }}>
+              {s.value}
+            </div>
           </div>
         </div>
       ))}
@@ -261,6 +276,7 @@ export default function PulsePage() {
   const [fireMsg, setFireMsg]     = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { activeMutations }       = useForensic();
 
   const lastFiredAt = pulses[0]?.firedAt ?? null;
   const countdown   = useCountdown(lastFiredAt);
@@ -273,7 +289,7 @@ export default function PulsePage() {
       setPulses(data.pulses ?? []);
       setLastRefresh(new Date());
     } catch {
-      // ignore — keep stale data
+      // keep stale data
     } finally {
       setLoading(false);
     }
@@ -282,9 +298,7 @@ export default function PulsePage() {
   useEffect(() => {
     fetchPulses();
     intervalRef.current = setInterval(fetchPulses, 30_000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [fetchPulses]);
 
   const handleFireNow = async () => {
@@ -303,45 +317,44 @@ export default function PulsePage() {
         setFireMsg(`✓ Pulse fired — integrity ${data.trustVelocity.toFixed(2)}% · status ${data.status}`);
         await fetchPulses();
       }
-    } catch (e) {
+    } catch {
       setFireMsg("Network error");
     } finally {
       setFiring(false);
     }
   };
 
-  const twitterConfigured = pulses.length > 0 && pulses.some((p) => p.tweetId);
-  const twitterStatus = pulses.length === 0 ? "unknown" :
-    pulses[0]!.tweetId ? "active" :
-    (pulses[0]!.tweetError?.startsWith("Twitter keys") ? "unconfigured" : "error");
+  const riskState =
+    activeMutations > 5 ? "BREACH" :
+    activeMutations >= 3 ? "WARNING" : "NOMINAL";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Radio className="w-5 h-5" style={{ color: C.sage }} />
-            <h1 className="text-2xl font-bold font-mono tracking-tight text-foreground">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <Radio style={{ width: 20, height: 20, color: C.sage }} />
+            <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", letterSpacing: "-0.01em", color: "#fff", margin: 0 }}>
               Live Pulse Feed
             </h1>
-            <div className="text-[10px] font-mono px-2 py-0.5 rounded border font-bold" style={{ color: C.sage, borderColor: C.sage, background: `${C.sage}15` }}>
+            <div style={{
+              fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+              padding: "3px 8px", borderRadius: 5, color: C.sage,
+              border: `1px solid ${C.sage}`, background: `${C.sage}15`,
+            }}>
               SYSTEM PULSE
             </div>
           </div>
-          <p className="text-sm font-mono" style={{ color: C.dimText }}>
-            Global System Trust Velocity · ML-DSA-87 (FIPS-204 SL5) · auto-posted to X every 6 hours
+          <p style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: C.dimText, margin: 0 }}>
+            Global System Trust Velocity · ML-DSA-87 (FIPS-204 SL5) · 6-hour rolling window
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={fetchPulses}
-              className="font-mono text-xs gap-1.5 h-8"
-            >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button size="sm" variant="outline" onClick={fetchPulses} className="font-mono text-xs gap-1.5 h-8">
               <RefreshCw className="w-3.5 h-3.5" />
               Refresh
             </Button>
@@ -357,86 +370,71 @@ export default function PulsePage() {
             </Button>
           </div>
           {fireMsg && (
-            <div
-              className="text-[10px] font-mono text-right max-w-[260px]"
-              style={{ color: fireMsg.startsWith("✓") ? C.sage : C.terra }}
-            >
+            <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", textAlign: "right", maxWidth: 260, color: fireMsg.startsWith("✓") ? C.sage : C.terra }}>
               {fireMsg}
             </div>
           )}
           {lastRefresh && (
-            <div className="text-[9px] font-mono" style={{ color: C.dimText }}>
+            <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>
               refreshed {lastRefresh.toLocaleTimeString()} · auto in 30s
             </div>
           )}
         </div>
       </div>
 
-      {/* Twitter config banner */}
-      <div
-        className="rounded-lg p-3 flex items-center gap-3"
-        style={{
-          background: twitterStatus === "active" ? `${C.sage}10` : twitterStatus === "error" ? `${C.terra}10` : `${C.dimText}10`,
-          border: `1px solid ${twitterStatus === "active" ? C.sage : twitterStatus === "error" ? C.terra : C.border}`,
-        }}
-      >
-        <Twitter className="w-4 h-4 flex-shrink-0" style={{ color: twitterStatus === "active" ? C.sage : C.dimText }} />
-        <div className="flex-1 min-w-0">
-          {twitterStatus === "active" && (
-            <span className="text-xs font-mono" style={{ color: C.sage }}>
-              X / Twitter integration <strong>active</strong> — pulses are posted automatically every 6 hours
-            </span>
-          )}
-          {twitterStatus === "unconfigured" && (
-            <span className="text-xs font-mono" style={{ color: C.dimText }}>
-              X / Twitter posting not configured — add <code className="text-[10px] px-1 rounded" style={{ background: C.panel }}>TWITTER_API_KEY</code>,{" "}
-              <code className="text-[10px] px-1 rounded" style={{ background: C.panel }}>TWITTER_API_SECRET</code>,{" "}
-              <code className="text-[10px] px-1 rounded" style={{ background: C.panel }}>TWITTER_ACCESS_TOKEN</code>, and{" "}
-              <code className="text-[10px] px-1 rounded" style={{ background: C.panel }}>TWITTER_ACCESS_TOKEN_SECRET</code> to Replit Secrets to enable it
-            </span>
-          )}
-          {twitterStatus === "error" && (
-            <span className="text-xs font-mono" style={{ color: C.terra }}>
-              X / Twitter posting failed — check your API keys in Replit Secrets
-            </span>
-          )}
-          {twitterStatus === "unknown" && (
-            <span className="text-xs font-mono" style={{ color: C.dimText }}>
-              No pulses yet — fire the first pulse to test Twitter/X connectivity
-            </span>
-          )}
-        </div>
+      {/* ── FIPS-204 primary badge + countdown ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <Fips204Badge />
 
-        {/* Next pulse countdown */}
-        {lastFiredAt && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <Clock className="w-3.5 h-3.5" style={{ color: C.dimText }} />
-            <span className="text-[10px] font-mono" style={{ color: C.dimText }}>
-              Next pulse in
+        {/* Countdown + Risk Horizon sync */}
+        <div style={{ display: "flex", gap: 12 }}>
+          {lastFiredAt && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 10,
+              background: C.panel, border: `1px solid ${C.border}`,
+            }}>
+              <Clock style={{ width: 14, height: 14, color: C.dimText }} />
+              <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>Next pulse</span>
+              <span style={{ fontSize: 13, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: C.honey }}>{countdown}</span>
+            </div>
+          )}
+
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 10,
+            background: C.panel,
+            border: `1px solid ${riskState === "BREACH" ? C.terra : riskState === "WARNING" ? C.honey : C.border}`,
+          }}>
+            <ShieldCheck style={{
+              width: 14, height: 14,
+              color: riskState === "BREACH" ? C.terra : riskState === "WARNING" ? C.honey : C.sage,
+            }} />
+            <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>Risk Horizon</span>
+            <span style={{
+              fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+              color: riskState === "BREACH" ? C.terra : riskState === "WARNING" ? C.honey : C.sage,
+            }}>
+              {riskState}
             </span>
-            <span className="text-[11px] font-mono font-bold" style={{ color: C.honey }}>
-              {countdown}
+            <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>
+              ({activeMutations} mutations)
             </span>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Stats bar */}
+      {/* ── Stats bar ── */}
       <StatsBar pulses={pulses} />
 
-      {/* Pulse feed */}
+      {/* ── Pulse feed ── */}
       {loading ? (
-        <div className="text-center py-16 font-mono text-sm" style={{ color: C.dimText }}>
+        <div style={{ textAlign: "center", padding: "64px 0", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: C.dimText }}>
           Loading pulse feed…
         </div>
       ) : pulses.length === 0 ? (
-        <div
-          className="rounded-lg p-10 text-center"
-          style={{ background: C.panel, border: `1px solid ${C.border}` }}
-        >
-          <Radio className="w-8 h-8 mx-auto mb-3" style={{ color: C.dimText }} />
-          <div className="font-mono font-bold mb-1" style={{ color: C.dimText }}>No pulses recorded yet</div>
-          <div className="text-xs font-mono mb-4" style={{ color: C.dimText }}>
+        <div style={{ borderRadius: 10, padding: 40, textAlign: "center", background: C.panel, border: `1px solid ${C.border}` }}>
+          <Radio style={{ width: 32, height: 32, margin: "0 auto 12px", color: C.dimText, opacity: 0.4 }} />
+          <div style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: C.dimText, marginBottom: 6 }}>No pulses recorded yet</div>
+          <div style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: C.dimText, marginBottom: 16 }}>
             The first pulse fires 30 seconds after API server startup, or click "Fire Pulse Now".
           </div>
           <Button
@@ -451,27 +449,25 @@ export default function PulsePage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {pulses.map((entry, i) => (
             <PulseCard key={entry.id} entry={entry} isLatest={i === 0} />
           ))}
         </div>
       )}
 
-      {/* How it works footer */}
-      <div
-        className="rounded-lg p-4 text-[10px] font-mono leading-relaxed"
-        style={{ background: C.panel, border: `1px solid ${C.border}`, color: C.dimText }}
-      >
-        <div className="font-bold mb-1" style={{ color: "#cdd5e0" }}>HOW SYSTEM PULSE WORKS</div>
-        <div className="space-y-0.5">
-          <div>① Every 6 hours the Pulse Engine queries all audit_logs in the rolling window.</div>
-          <div>② System Trust Velocity = (events with ML-DSA-87 pq_signature) ÷ (total events) × 100</div>
-          <div>③ Status is rated NOMINAL / ELEVATED / CRITICAL based on velocity and anomaly count.</div>
-          <div>④ A formatted status message is posted to X via the Twitter v2 API (OAuth 1.0a).</div>
-          <div>⑤ Each pulse is persisted to the pulse_logs table and shown in this feed.</div>
-          <div>⑥ The feed auto-refreshes every 30 seconds. Use "Fire Pulse Now" for an instant snapshot.</div>
-        </div>
+      {/* ── How it works ── */}
+      <div style={{
+        borderRadius: 10, padding: 16, fontSize: 10, fontFamily: "JetBrains Mono, monospace", lineHeight: 1.8,
+        background: C.panel, border: `1px solid ${C.border}`, color: C.dimText,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, color: "#cdd5e0" }}>HOW SYSTEM PULSE WORKS</div>
+        <div>① Every 6 hours the Pulse Engine queries all audit_logs in the rolling window.</div>
+        <div>② System Trust Velocity = (events with ML-DSA-87 pq_signature) ÷ (total events) × 100</div>
+        <div>③ Status is rated NOMINAL / ELEVATED / CRITICAL based on velocity and anomaly count.</div>
+        <div>④ Each pulse is persisted to the pulse_logs table and shown in this feed.</div>
+        <div>⑤ The feed auto-refreshes every 30 seconds. Use "Fire Pulse Now" for an instant snapshot.</div>
+        <div>⑥ Risk Horizon syncs live from the Swarm Map via the Forensic Inspector context.</div>
       </div>
     </div>
   );

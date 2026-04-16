@@ -3,41 +3,15 @@
  *
  * Aggregates the global "System Trust Velocity" — the percentage of all events
  * across every partner that carry a valid ML-DSA-87 quantum signature in the
- * last N hours — then formats a human-readable status tweet and optionally
- * posts it to X (Twitter) via the v2 API.
+ * last N hours — formats a human-readable status message, and persists every
+ * run to pulse_logs so the Live Pulse Feed UI can display them.
  *
- * Persists every run to pulse_logs so the Live Pulse Feed UI can display them.
+ * Social posting (Twitter/X) has been decommissioned. Pulses are internal only.
  */
 
 import { db, auditLogsTable, pulseLogsTable } from "@workspace/db";
 import { gte, count, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
-
-// ── Twitter v2 client (optional — graceful no-op if keys missing) ──────────
-
-let twitterClient: import("twitter-api-v2").TwitterApi | null = null;
-
-async function getTwitterClient(): Promise<import("twitter-api-v2").TwitterApi | null> {
-  const apiKey             = process.env["TWITTER_API_KEY"];
-  const apiSecret          = process.env["TWITTER_API_SECRET"];
-  const accessToken        = process.env["TWITTER_ACCESS_TOKEN"];
-  const accessTokenSecret  = process.env["TWITTER_ACCESS_TOKEN_SECRET"];
-
-  if (!apiKey || !apiSecret || !accessToken || !accessTokenSecret) {
-    return null;
-  }
-
-  if (!twitterClient) {
-    const { TwitterApi } = await import("twitter-api-v2");
-    twitterClient = new TwitterApi({
-      appKey:            apiKey,
-      appSecret:         apiSecret,
-      accessToken:       accessToken,
-      accessSecret:      accessTokenSecret,
-    });
-  }
-  return twitterClient;
-}
 
 // ── Status classifier ──────────────────────────────────────────────────────
 
@@ -56,18 +30,18 @@ const STATUS_EMOJI: Record<string, string> = {
 // ── Pulse message formatter ────────────────────────────────────────────────
 
 function formatPulseMessage(opts: {
-  firedAt:       Date;
-  trustVelocity: number;
+  firedAt:        Date;
+  trustVelocity:  number;
   verifiedEvents: number;
-  totalEvents:   number;
-  anomalyCount:  number;
-  status:        string;
-  windowHours:   number;
+  totalEvents:    number;
+  anomalyCount:   number;
+  status:         string;
+  windowHours:    number;
 }): string {
-  const ts       = opts.firedAt.toISOString().replace(/\.\d{3}Z$/, "Z");
-  const pct      = opts.trustVelocity.toFixed(2);
-  const emoji    = STATUS_EMOJI[opts.status] ?? "🛡️";
-  const ratio    = `${opts.verifiedEvents.toLocaleString()}/${opts.totalEvents.toLocaleString()} events`;
+  const ts    = opts.firedAt.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const pct   = opts.trustVelocity.toFixed(2);
+  const emoji = STATUS_EMOJI[opts.status] ?? "🛡️";
+  const ratio = `${opts.verifiedEvents.toLocaleString()}/${opts.totalEvents.toLocaleString()} events`;
 
   return (
     `SYSTEM PULSE: ${ts} | ` +
@@ -96,7 +70,7 @@ export interface PulseResult {
 }
 
 export async function firePulse(windowHours = 6): Promise<PulseResult> {
-  const since = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+  const since   = new Date(Date.now() - windowHours * 60 * 60 * 1000);
   const firedAt = new Date();
 
   // Count total events in window
@@ -139,28 +113,7 @@ export async function firePulse(windowHours = 6): Promise<PulseResult> {
     firedAt, trustVelocity, verifiedEvents, totalEvents, anomalyCount, status, windowHours,
   });
 
-  // ── Twitter post (best-effort) ───────────────────────────────────────────
-  let tweetUrl:   string | null = null;
-  let tweetId:    string | null = null;
-  let tweetError: string | null = null;
-
-  try {
-    const client = await getTwitterClient();
-    if (client) {
-      const response = await client.v2.tweet(message);
-      tweetId  = response.data.id;
-      tweetUrl = `https://x.com/i/web/status/${tweetId}`;
-      logger.info({ tweetId }, "System pulse posted to X");
-    } else {
-      tweetError = "Twitter keys not configured — pulse logged locally only";
-      logger.info("Twitter keys absent — pulse will not be posted");
-    }
-  } catch (err: unknown) {
-    tweetError = err instanceof Error ? err.message : String(err);
-    logger.warn({ err: tweetError }, "Failed to post pulse to Twitter");
-  }
-
-  // ── Persist to DB ────────────────────────────────────────────────────────
+  // ── Persist to DB (social posting decommissioned) ─────────────────────────
   const [inserted] = await db
     .insert(pulseLogsTable)
     .values({
@@ -171,9 +124,9 @@ export async function firePulse(windowHours = 6): Promise<PulseResult> {
       anomalyCount,
       status,
       message,
-      tweetUrl,
-      tweetId,
-      tweetError,
+      tweetUrl:  null,
+      tweetId:   null,
+      tweetError: null,
       windowHours,
     })
     .returning();
@@ -187,14 +140,14 @@ export async function firePulse(windowHours = 6): Promise<PulseResult> {
     anomalyCount,
     status,
     message,
-    tweetUrl,
-    tweetId,
-    tweetError,
+    tweetUrl:  null,
+    tweetId:   null,
+    tweetError: null,
     windowHours,
   };
 
   logger.info(
-    { trustVelocity: trustVelocity.toFixed(2), anomalyCount, status, tweetPosted: !!tweetId },
+    { trustVelocity: trustVelocity.toFixed(2), anomalyCount, status },
     "System pulse fired",
   );
 
@@ -210,19 +163,13 @@ export function startPulseScheduler(): void {
 
   // Fire once 30 seconds after boot (avoids blocking startup)
   setTimeout(async () => {
-    try {
-      await firePulse(6);
-    } catch (err) {
-      logger.warn({ err }, "Initial pulse failed");
-    }
+    try { await firePulse(6); }
+    catch (err) { logger.warn({ err }, "Initial pulse failed"); }
   }, 30_000);
 
   // Then every 6 hours
   setInterval(async () => {
-    try {
-      await firePulse(6);
-    } catch (err) {
-      logger.warn({ err }, "Scheduled pulse failed");
-    }
+    try { await firePulse(6); }
+    catch (err) { logger.warn({ err }, "Scheduled pulse failed"); }
   }, PULSE_INTERVAL_MS);
 }
