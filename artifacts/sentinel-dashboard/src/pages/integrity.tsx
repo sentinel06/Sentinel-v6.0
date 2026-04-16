@@ -4,12 +4,19 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, ShieldAlert, RefreshCw, Database,
-  Link as LinkIcon, GitBranch, Layers, CheckCircle2, XCircle
+  Link as LinkIcon, GitBranch, Layers, CheckCircle2, XCircle,
 } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/audit-utils";
 
+const SAGE  = "#40B595";
+const TERRA = "#D96161";
+const AMBER = "#EBC06D";
+const SKY   = "#38BDF8";
+
 export default function IntegrityPage() {
-  const { data: rawStatus, isLoading, refetch } = useGetIntegrityStatus({ query: { queryKey: ["integrity"] } });
+  const { data: rawStatus, isLoading, refetch } = useGetIntegrityStatus({
+    query: { queryKey: ["integrity"] },
+  });
   const status = rawStatus as any;
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -25,18 +32,32 @@ export default function IntegrityPage() {
     }
   };
 
-  const isOk = status?.ok === true;
+  // ── Computed state (SHA-256 walk logic unchanged) ──
+  const isOk          = status?.ok === true;
   const isCompromised = status?.tamperDetected === true;
   const merkleChecked: number = status?.merkleBlocksChecked ?? 0;
-  const merkleFailed: number = status?.merkleBlocksFailed ?? 0;
-  const merkleOk = merkleChecked > 0 && merkleFailed === 0;
+  const merkleFailed:  number = status?.merkleBlocksFailed  ?? 0;
+  const merkleOk      = merkleChecked > 0 && merkleFailed === 0;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div
+      className="animate-in fade-in duration-500 max-w-5xl mx-auto"
+      style={{ display: "flex", flexDirection: "column", gap: 24 }}
+    >
+
+      {/* ── Page header ────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Hash Chain Integrity</h1>
-          <p className="text-sm text-muted-foreground font-mono mt-1">
+          <h1 style={{
+            fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em",
+            color: "var(--sv-text-primary)", marginBottom: 4,
+          }}>
+            Hash Chain Integrity
+          </h1>
+          <p style={{
+            fontSize: 12, fontFamily: "JetBrains Mono, monospace",
+            color: "var(--sv-text-dim)", lineHeight: 1.5,
+          }}>
             Two-phase cryptographic verification: SHA-256 sequential chain + Merkle tree
           </p>
         </div>
@@ -44,195 +65,491 @@ export default function IntegrityPage() {
         <Button
           onClick={handleVerify}
           disabled={isVerifying || isLoading}
-          className="font-mono shadow-[0_0_15px_rgba(14,165,233,0.3)]"
+          className="font-mono shadow-[0_0_15px_rgba(64,181,149,0.25)]"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${isVerifying ? "animate-spin" : ""}`} />
-          {isVerifying ? "Verifying Chain..." : "Trigger Manual Verification"}
+          {isVerifying ? "Verifying Chain…" : "Trigger Manual Verification"}
         </Button>
       </div>
 
-      {isCompromised && (
-        <div className="bg-destructive/20 border border-destructive/50 rounded-lg p-4 flex items-start gap-4 animate-in slide-in-from-top-2">
-          <ShieldAlert className="w-6 h-6 text-destructive shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-mono font-bold text-destructive uppercase tracking-wide">
-              Tamper Alert: Ledger Compromised
-            </h3>
-            <p className="text-sm text-foreground/90 mt-1 font-mono">
-              {status?.message || "Cryptographic verification failed. The audit trail has been modified."}
+      {/* ════════════════════════════════════════════════════════════
+          ROW 1 — Mathematical Sovereignty (Hash Fn + Design + Stats)
+          ════════════════════════════════════════════════════════════ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 260px", gap: 16 }}>
+
+        {/* Hash Function */}
+        <SovereignCard>
+          <CardLabel icon={<LinkIcon style={{ width: 13, height: 13 }} />}>
+            Hash Function
+          </CardLabel>
+
+          <div style={{ marginBottom: 14 }}>
+            <span style={{
+              display: "inline-block", fontSize: 8, fontFamily: "JetBrains Mono, monospace",
+              fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+              padding: "2px 8px", borderRadius: 4,
+              background: `${SAGE}18`, border: `1px solid ${SAGE}30`, color: SAGE,
+              marginBottom: 10,
+            }}>
+              SHA-256 · NIST FIPS 180-4
+            </span>
+
+            <p style={{
+              fontSize: 11, fontFamily: "JetBrains Mono, monospace",
+              color: "var(--sv-text-dim)", lineHeight: 1.8,
+            }}>
+              H<sub style={{ fontSize: 9 }}>n</sub> = SHA-256(
+              <span style={{ color: SKY }}>timestamp</span> |{" "}
+              <span style={{ color: AMBER }}>agentId</span> |{" "}
+              <span style={{ color: SAGE }}>payload</span> |{" "}
+              <span style={{ color: "var(--sv-text-primary)" }}>H<sub style={{ fontSize: 9 }}>n-1</sub></span>
+              )
             </p>
-            {status?.tamperedEntries?.length > 0 && (
-              <div className="mt-3 text-xs font-mono bg-destructive/10 p-3 rounded border border-destructive/20">
-                <span className="text-destructive/80 mb-2 block font-bold">AFFECTED ENTRY IDs:</span>
-                <ul className="list-disc pl-4 space-y-1 text-destructive/90">
-                  {status.tamperedEntries.map((id: string) => (
-                    <li key={id}>{id}</li>
-                  ))}
-                </ul>
+          </div>
+
+          <div style={{
+            fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+            color: "var(--sv-text-dim)", lineHeight: 1.6,
+            padding: "8px 10px", borderRadius: 6,
+            background: "var(--sv-btn-bg)",
+            border: "1px solid var(--sv-panel-border)",
+          }}>
+            Genesis anchor: H<sub style={{ fontSize: 8 }}>0</sub> ={" "}
+            <span style={{ color: "var(--sv-text-primary)", fontWeight: 700 }}>GENESIS</span>
+            <br />
+            Every subsequent entry binds to its predecessor.<br />
+            Any mutation breaks all downstream links.
+          </div>
+        </SovereignCard>
+
+        {/* Verification Design */}
+        <SovereignCard>
+          <CardLabel icon={<Layers style={{ width: 13, height: 13 }} />}>
+            Verification Design
+          </CardLabel>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              {
+                phase: "Phase 1",
+                color: SKY,
+                text: "Merkle sweep — recomputes each block's root from its 512 leaf hashes and compares against the stored checkpoint. O(b · log n). Flags tampered blocks instantly.",
+              },
+              {
+                phase: "Phase 2",
+                color: AMBER,
+                text: "Sequential chain walk — only runs inside blocks that failed Phase 1. Walks entry-by-entry to pinpoint the exact tampered row(s). Partial tail always scanned.",
+              },
+              {
+                phase: "Sealing",
+                color: SAGE,
+                text: "A Merkle checkpoint seals every 512 inserts. Block root = SHA-256 pairwise tree over all leaf hashes. Odd leaves doubled (Bitcoin-style padding).",
+              },
+            ].map(({ phase, color, text }) => (
+              <div key={phase} style={{ display: "flex", gap: 8 }}>
+                <span style={{
+                  fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                  color, flexShrink: 0, paddingTop: 1, minWidth: 44,
+                }}>
+                  {phase}
+                </span>
+                <span style={{
+                  fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+                  color: "var(--sv-text-dim)", lineHeight: 1.6,
+                }}>
+                  {text}
+                </span>
               </div>
-            )}
+            ))}
+          </div>
+        </SovereignCard>
+
+        {/* Ledger Stats — persistent top-right reference */}
+        <SovereignCard accent={isCompromised ? TERRA : SAGE}>
+          <CardLabel icon={<Database style={{ width: 13, height: 13 }} />}>
+            Ledger Stats
+          </CardLabel>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <StatBlock
+              label="Total Entries Checked"
+              value={status?.totalChecked?.toLocaleString() ?? "0"}
+              color="var(--sv-text-primary)"
+              large
+            />
+            <StatBlock
+              label="Merkle Blocks"
+              value={isLoading ? "—" : `${merkleChecked - merkleFailed} / ${merkleChecked}`}
+              color={merkleFailed > 0 ? TERRA : SAGE}
+              large
+            />
+            <div>
+              <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--sv-section-label)", marginBottom: 3 }}>
+                Last Verification
+              </div>
+              <div style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-primary)" }}>
+                {status?.lastVerifiedAt ? (
+                  <>
+                    {formatDate(status.lastVerifiedAt)}{" "}
+                    <span style={{ color: "var(--sv-text-dim)", fontSize: 10 }}>
+                      {formatTime(status.lastVerifiedAt)}
+                    </span>
+                  </>
+                ) : "Never"}
+              </div>
+            </div>
+          </div>
+        </SovereignCard>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════
+          ROW 2 — Merkle Tree Layer (the work being done)
+          ════════════════════════════════════════════════════════════ */}
+      <SovereignCard>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <CardLabel icon={<GitBranch style={{ width: 13, height: 13 }} />}>
+            Merkle Tree Layer
+          </CardLabel>
+          <span style={{
+            fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            padding: "2px 8px", borderRadius: 4,
+            color: merkleOk ? SAGE : merkleFailed > 0 ? TERRA : "var(--sv-text-dim)",
+            background: merkleOk ? `${SAGE}15` : merkleFailed > 0 ? `${TERRA}15` : "var(--sv-btn-bg)",
+            border: `1px solid ${merkleOk ? SAGE + "30" : merkleFailed > 0 ? TERRA + "30" : "var(--sv-panel-border)"}`,
+          }}>
+            {isLoading ? "SCANNING…" : merkleOk ? "ALL BLOCKS CLEAN" : merkleFailed > 0 ? `${merkleFailed} BLOCK(S) FAILED` : "AWAITING SEAL"}
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Block grid visualization */}
+          <div>
+            <div style={{
+              fontSize: 9, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.1em",
+              textTransform: "uppercase", color: "var(--sv-section-label)", marginBottom: 8,
+            }}>
+              Block Map (512 entries / block)
+            </div>
+            <MerkleBlockGrid
+              total={merkleChecked}
+              failed={merkleFailed}
+              isLoading={isLoading}
+            />
+          </div>
+
+          {/* Phase status summary */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <PhaseStatus
+              phase="Phase 1"
+              label="Merkle Sweep"
+              color={SKY}
+              status={isLoading ? "running" : merkleChecked === 0 ? "idle" : merkleFailed === 0 ? "ok" : "fail"}
+              detail={
+                isLoading ? "Running Merkle sweep…"
+                : merkleChecked === 0 ? "No sealed blocks yet — chain < 512 entries"
+                : merkleFailed === 0 ? `All ${merkleChecked} sealed block(s) passed`
+                : `${merkleFailed} of ${merkleChecked} block(s) failed root check`
+              }
+            />
+            <PhaseStatus
+              phase="Phase 2"
+              label="Sequential Chain Walk"
+              color={AMBER}
+              status={isLoading ? "running" : isCompromised ? "fail" : merkleFailed === 0 ? "ok" : "ok"}
+              detail={
+                isLoading ? "Walking chain entries…"
+                : isCompromised && status?.tamperedEntries?.length > 0
+                  ? `${status.tamperedEntries.length} tampered entry(s) pinpointed`
+                  : isCompromised ? "Chain link broken"
+                  : "No entry-level breaks found"
+              }
+            />
           </div>
         </div>
-      )}
+      </SovereignCard>
 
-      {/* Main status + ledger stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card
-          className={`md:col-span-2 p-8 border-border/60 backdrop-blur-sm flex flex-col items-center justify-center text-center ${
-            isLoading
-              ? "bg-card/50"
-              : isCompromised
-              ? "bg-destructive/5 border-destructive/30"
-              : "bg-emerald-500/5 border-emerald-500/30"
-          }`}
-        >
-          {isLoading ? (
-            <RefreshCw className="w-20 h-20 text-muted-foreground/30 animate-spin mb-6" />
-          ) : isCompromised ? (
-            <ShieldAlert className="w-20 h-20 text-destructive mb-6 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
-          ) : (
-            <ShieldCheck className="w-20 h-20 text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-          )}
+      {/* ════════════════════════════════════════════════════════════
+          ROW 3 — Forensic Verdict (main status card)
+          ════════════════════════════════════════════════════════════ */}
+      <div style={{
+        borderRadius: 14, padding: "28px 32px",
+        display: "flex", alignItems: "center", gap: 24,
+        background: isLoading
+          ? "var(--sv-btn-bg)"
+          : isCompromised
+          ? `${TERRA}08`
+          : `${SAGE}08`,
+        border: `1px solid ${isLoading ? "var(--sv-panel-border)" : isCompromised ? TERRA + "30" : SAGE + "30"}`,
+        backdropFilter: "blur(12px)",
+        transition: "background 0.4s ease, border-color 0.4s ease",
+      }}>
+        {isLoading ? (
+          <RefreshCw style={{ width: 52, height: 52, color: "var(--sv-text-dim)", opacity: 0.25, flexShrink: 0 }} className="animate-spin" />
+        ) : isCompromised ? (
+          <ShieldAlert style={{ width: 52, height: 52, color: TERRA, flexShrink: 0, filter: `drop-shadow(0 0 14px ${TERRA}66)` }} />
+        ) : (
+          <ShieldCheck style={{ width: 52, height: 52, color: SAGE, flexShrink: 0, filter: `drop-shadow(0 0 14px ${SAGE}66)` }} />
+        )}
 
-          <h2 className="font-mono text-2xl font-bold mb-2">
-            {isLoading ? "Checking Ledger..." : isCompromised ? "INTEGRITY BROKEN" : "CHAIN VERIFIED"}
-          </h2>
-          <p className="text-muted-foreground font-mono max-w-md mx-auto text-sm">
+        <div style={{ flex: 1 }}>
+          <div style={{
+            fontSize: 18, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+            letterSpacing: "0.04em",
+            color: isLoading ? "var(--sv-text-dim)" : isCompromised ? TERRA : SAGE,
+            marginBottom: 6,
+          }}>
+            {isLoading ? "VERIFYING LEDGER…" : isCompromised ? "INTEGRITY BROKEN" : "CHAIN VERIFIED"}
+          </div>
+          <p style={{
+            fontSize: 12, fontFamily: "JetBrains Mono, monospace",
+            color: "var(--sv-text-dim)", lineHeight: 1.6, maxWidth: 520,
+          }}>
             {isLoading
               ? "Running two-phase verification: Merkle sweep then sequential chain walk…"
               : isCompromised
-              ? "The mathematical link between sequential log entries is invalid."
-              : "All audit entries mathematically link to their predecessors. No tampering detected."}
+              ? "The mathematical link between sequential log entries is invalid. Forensic sweep pinpointed the break point."
+              : "All audit entries mathematically link to their predecessors. No tampering detected across the full ledger."}
           </p>
-
           {!isLoading && status?.message && (
-            <p className="mt-4 text-xs font-mono text-muted-foreground bg-muted/40 px-4 py-2 rounded-full border border-border/40">
+            <div style={{
+              marginTop: 10, display: "inline-block",
+              fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+              color: "var(--sv-text-dim)",
+              padding: "4px 12px", borderRadius: 20,
+              background: "var(--sv-btn-bg)", border: "1px solid var(--sv-panel-border)",
+            }}>
               {status.message}
-            </p>
-          )}
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="p-6 border-border/60 bg-card/50 backdrop-blur-sm">
-            <h3 className="font-mono text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-              <Database className="w-4 h-4" /> Ledger Stats
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase mb-1">Total Entries Checked</div>
-                <div className="font-mono text-2xl font-semibold">
-                  {status?.totalChecked?.toLocaleString() ?? "0"}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] font-mono text-muted-foreground uppercase mb-1">Last Verification</div>
-                <div className="font-mono text-sm">
-                  {status?.lastVerifiedAt ? (
-                    <>
-                      {formatDate(status.lastVerifiedAt)}{" "}
-                      <span className="text-muted-foreground">{formatTime(status.lastVerifiedAt)}</span>
-                    </>
-                  ) : (
-                    "Never"
-                  )}
-                </div>
-              </div>
             </div>
-          </Card>
+          )}
+        </div>
 
-          <Card className="p-6 border-border/60 bg-card/50 backdrop-blur-sm">
-            <h3 className="font-mono text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-              <LinkIcon className="w-4 h-4" /> Hash Function
-            </h3>
-            <p className="text-xs text-muted-foreground font-mono leading-relaxed">
-              H<sub>n</sub> = SHA-256(timestamp | agentId | payload | H<sub>n-1</sub>)
-            </p>
-            <p className="text-xs text-muted-foreground font-mono leading-relaxed mt-2">
-              First entry uses <span className="text-foreground/70">GENESIS</span> as H<sub>0</sub>.
-            </p>
-          </Card>
+        <div style={{
+          flexShrink: 0, textAlign: "center", padding: "10px 16px", borderRadius: 10,
+          background: isCompromised ? `${TERRA}14` : `${SAGE}14`,
+          border: `1px solid ${isCompromised ? TERRA + "25" : SAGE + "25"}`,
+        }}>
+          <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--sv-section-label)", marginBottom: 4 }}>
+            Verdict
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: isCompromised ? TERRA : SAGE, fontFamily: "JetBrains Mono, monospace" }}>
+            {isLoading ? "—" : isCompromised ? "FAIL" : "PASS"}
+          </div>
         </div>
       </div>
 
-      {/* Merkle tree layer */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="p-6 border-border/60 bg-card/50 backdrop-blur-sm">
-          <h3 className="font-mono text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-            <GitBranch className="w-4 h-4" /> Merkle Tree Layer
-          </h3>
+      {/* ════════════════════════════════════════════════════════════
+          ROW 4 — Tamper Alert (crimson pulse — only when compromised)
+          ════════════════════════════════════════════════════════════ */}
+      {isCompromised && (
+        <div className="integrity-tamper-alert animate-in slide-in-from-bottom-2">
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <ShieldAlert style={{ width: 22, height: 22, color: TERRA, position: "relative", zIndex: 1 }} />
+              <div className="crimson-pulse-ring" />
+            </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <div className="text-[10px] font-mono text-muted-foreground uppercase mb-1">Blocks Verified</div>
-              <div className="font-mono text-2xl font-semibold text-emerald-400">
-                {isLoading ? "—" : merkleChecked}
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: 12, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                letterSpacing: "0.08em", textTransform: "uppercase", color: TERRA, marginBottom: 4,
+              }}>
+                ⚠ Tamper Alert: Ledger Compromised
               </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-mono text-muted-foreground uppercase mb-1">Blocks Failed</div>
-              <div className={`font-mono text-2xl font-semibold ${merkleFailed > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                {isLoading ? "—" : merkleFailed}
-              </div>
-            </div>
-          </div>
+              <p style={{
+                fontSize: 11, fontFamily: "JetBrains Mono, monospace",
+                color: "var(--sv-text-primary)", lineHeight: 1.6, marginBottom: status?.tamperedEntries?.length > 0 ? 10 : 0,
+              }}>
+                {status?.message || "Cryptographic verification failed. The audit trail has been modified outside of the sanctioned write path."}
+              </p>
 
-          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-mono border ${
-            isLoading
-              ? "bg-muted/30 border-border/30 text-muted-foreground"
-              : merkleOk
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : merkleChecked === 0
-              ? "bg-sky-500/10 border-sky-500/20 text-sky-400"
-              : "bg-destructive/10 border-destructive/20 text-destructive"
-          }`}>
-            {isLoading ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : merkleOk ? (
-              <CheckCircle2 className="w-3 h-3" />
-            ) : merkleChecked === 0 ? (
-              <Layers className="w-3 h-3" />
-            ) : (
-              <XCircle className="w-3 h-3" />
-            )}
-            {isLoading
-              ? "Running Merkle sweep…"
-              : merkleOk
-              ? `All ${merkleChecked} sealed block(s) match their checkpoints`
-              : merkleChecked === 0
-              ? "No sealed blocks yet — chain is partial (< 512 entries)"
-              : `${merkleFailed} of ${merkleChecked} block(s) failed Merkle root check`}
+              {status?.tamperedEntries?.length > 0 && (
+                <div style={{
+                  padding: "10px 14px", borderRadius: 8,
+                  background: `${TERRA}12`, border: `1px solid ${TERRA}25`,
+                }}>
+                  <div style={{
+                    fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                    letterSpacing: "0.1em", textTransform: "uppercase", color: TERRA,
+                    opacity: 0.85, marginBottom: 6,
+                  }}>
+                    Affected Entry IDs
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                    {status.tamperedEntries.map((id: string) => (
+                      <li key={id} style={{
+                        fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+                        color: TERRA, display: "flex", alignItems: "center", gap: 6,
+                      }}>
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: TERRA, flexShrink: 0, display: "inline-block" }} />
+                        {id}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
+      )}
+    </div>
+  );
+}
 
-        <Card className="p-6 border-border/60 bg-card/50 backdrop-blur-sm">
-          <h3 className="font-mono text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-            <Layers className="w-4 h-4" /> Verification Design
-          </h3>
-          <div className="space-y-3 text-xs font-mono text-muted-foreground leading-relaxed">
-            <div className="flex items-start gap-2">
-              <span className="text-sky-400 font-bold shrink-0">Phase 1</span>
-              <span>
-                Merkle sweep — recomputes each block&apos;s root from its 512 leaf hashes and compares against the
-                stored checkpoint. O(b · log n) where b = blocks. Flags tampered blocks instantly.
-              </span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-amber-400 font-bold shrink-0">Phase 2</span>
-              <span>
-                Sequential chain walk — only runs inside blocks that failed Phase 1. Walks entry-by-entry to
-                pinpoint the exact tampered row(s). Partial block (tail) always scanned.
-              </span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-emerald-400 font-bold shrink-0">Sealing</span>
-              <span>
-                A Merkle checkpoint is sealed automatically every 512 inserts. Block root = SHA-256 pairwise tree
-                over all leaf hashes. Odd leaves are doubled (standard Bitcoin-style padding).
-              </span>
-            </div>
-          </div>
-        </Card>
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SovereignCard({ children, accent }: { children: React.ReactNode; accent?: string }) {
+  return (
+    <div style={{
+      borderRadius: 14, padding: 20,
+      background: "var(--sv-inspector-bg)",
+      border: `1px solid ${accent ? accent + "28" : "var(--sv-panel-border)"}`,
+      backdropFilter: "blur(12px)",
+      transition: "background 0.3s ease, border-color 0.3s ease",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function CardLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6, marginBottom: 14,
+      fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+      letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sv-section-label)",
+    }}>
+      <span style={{ color: SAGE }}>{icon}</span>
+      {children}
+    </div>
+  );
+}
+
+function StatBlock({ label, value, color, large }: { label: string; value: string; color: string; large?: boolean }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 9, fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase",
+        letterSpacing: "0.1em", color: "var(--sv-section-label)", marginBottom: 2,
+      }}>
+        {label}
       </div>
+      <div style={{
+        fontSize: large ? 22 : 14, fontFamily: "JetBrains Mono, monospace",
+        fontWeight: 700, color,
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MerkleBlockGrid({ total, failed, isLoading }: { total: number; failed: number; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="animate-pulse" style={{
+            width: 28, height: 28, borderRadius: 5,
+            background: "var(--sv-btn-bg)", border: "1px solid var(--sv-panel-border)",
+          }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (total === 0) {
+    return (
+      <div style={{
+        padding: "10px 14px", borderRadius: 8, fontSize: 10,
+        fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)",
+        background: "var(--sv-btn-bg)", border: "1px solid var(--sv-panel-border)",
+      }}>
+        No sealed blocks yet<br />
+        <span style={{ fontSize: 9, opacity: 0.6 }}>Chain has &lt; 512 entries — first block seals automatically</span>
+      </div>
+    );
+  }
+
+  const failedSet = new Set<number>();
+  for (let i = total - failed; i < total; i++) failedSet.add(i);
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+        {Array.from({ length: total }).map((_, i) => {
+          const isFail = failedSet.has(i);
+          return (
+            <div
+              key={i}
+              title={`Block ${i + 1}: ${isFail ? "FAILED" : "CLEAN"}`}
+              style={{
+                width: 28, height: 28, borderRadius: 5, display: "flex",
+                alignItems: "center", justifyContent: "center",
+                fontSize: 8, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                background: isFail ? `${TERRA}18` : `${SAGE}14`,
+                border: `1px solid ${isFail ? TERRA + "40" : SAGE + "35"}`,
+                color: isFail ? TERRA : SAGE,
+                transition: "background 0.3s ease, border-color 0.3s ease",
+              }}
+            >
+              {i + 1}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 12, fontSize: 9, fontFamily: "JetBrains Mono, monospace" }}>
+        <span style={{ color: SAGE }}>■ {total - failed} clean</span>
+        {failed > 0 && <span style={{ color: TERRA }}>■ {failed} failed</span>}
+      </div>
+    </div>
+  );
+}
+
+function PhaseStatus({
+  phase, label, color, status: phaseStatus, detail,
+}: {
+  phase: string;
+  label: string;
+  color: string;
+  status: "ok" | "fail" | "idle" | "running";
+  detail: string;
+}) {
+  const icon =
+    phaseStatus === "running" ? <RefreshCw style={{ width: 11, height: 11 }} className="animate-spin" /> :
+    phaseStatus === "ok"      ? <CheckCircle2 style={{ width: 11, height: 11 }} /> :
+    phaseStatus === "fail"    ? <XCircle style={{ width: 11, height: 11 }} /> :
+                                <Layers style={{ width: 11, height: 11 }} />;
+
+  const bg =
+    phaseStatus === "ok"   ? `${SAGE}12` :
+    phaseStatus === "fail" ? `${TERRA}12` :
+    "var(--sv-btn-bg)";
+
+  const bc =
+    phaseStatus === "ok"   ? `${SAGE}28` :
+    phaseStatus === "fail" ? `${TERRA}28` :
+    "var(--sv-panel-border)";
+
+  const tc =
+    phaseStatus === "ok"   ? SAGE :
+    phaseStatus === "fail" ? TERRA :
+    "var(--sv-text-dim)";
+
+  return (
+    <div style={{
+      borderRadius: 8, padding: "10px 12px",
+      background: bg, border: `1px solid ${bc}`,
+      transition: "background 0.3s ease, border-color 0.3s ease",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <span style={{ color: tc }}>{icon}</span>
+        <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.1em" }}>{phase}</span>
+        <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-section-label)" }}>— {label}</span>
+      </div>
+      <p style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", lineHeight: 1.5, margin: 0 }}>
+        {detail}
+      </p>
     </div>
   );
 }
