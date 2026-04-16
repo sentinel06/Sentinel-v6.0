@@ -11,7 +11,8 @@
 
 import { db, agentRegistryTable, auditLogsTable, partnerKeysTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
+import { computeHash, getLastHash } from "../lib/hash.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -70,10 +71,6 @@ function fakePqSignature(sig: string): object {
     sigHex:     sig.substring(0, 48),
     verified:   true,
   };
-}
-
-function hashChain(prev: string, payload: string): string {
-  return createHash("sha512").update(`${prev}:${payload}`).digest("hex");
 }
 
 function jitter(ms: number): number {
@@ -155,7 +152,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     payload:            object;
     rationale:          string;
     currentHash:        string;
-    previousHash:       string;
+    previousHash:       string | null;
     isAnomalous:        boolean;
     anomalyReason?:     string;
     consistencyScore:   number;
@@ -164,21 +161,23 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
     pqSignature:        object;
   }[] = [];
 
-  let prevHash = "0".repeat(128);
+  // Chain onto whatever was already in the ledger (null → "GENESIS" genesis)
+  let prevHash: string | null = await getLastHash();
 
   // ── 4a. 200 normal events spread across first 47 h (alpha & beta only) ──
   const NORMAL_COUNT = 200;
   for (let i = 0; i < NORMAL_COUNT; i++) {
     const t    = start + (i / NORMAL_COUNT) * (47 * 60 * 60 * 1000) + jitter(60_000);
+    const ts   = new Date(t).toISOString();
     const ag   = AGENTS[i % 2];
     const evt  = NORMAL_EVENTS[i % NORMAL_EVENTS.length];
     const rat  = NORMAL_RATIONALES[i % NORMAL_RATIONALES.length];
     const pld  = { tool: evt, target: `ds-${i % 12}`, approved: true, txRef: `TX-${(10000 + i).toString(16).toUpperCase()}` };
     const qs   = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, ag.agentId, pld, prevHash);
 
     events.push({
-      timestamp:        new Date(t).toISOString(),
+      timestamp:        ts,
       agentId:          ag.agentId,
       traceId:          `trace-apex-normal-${i.toString().padStart(4, "0")}-${seedRun}`,
       eventType:        evt,
@@ -197,13 +196,14 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4b. Gamma pre-drift: 5 authorised searches just before the sequence ─
   for (let i = 0; i < 5; i++) {
-    const t   = tA - (5 - i) * 90_000 + jitter(10_000);  // 7.5 min→1.5 min before tA
+    const t   = tA - (5 - i) * 90_000 + jitter(10_000);
+    const ts  = new Date(t).toISOString();
     const pld = { tool: "Search", query: `financial-protocol-v${i + 1}`, approved: true };
     const qs  = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, "apex-fintech-gamma", pld, prevHash);
 
     events.push({
-      timestamp:        new Date(t).toISOString(),
+      timestamp:        ts,
       agentId:          "apex-fintech-gamma",
       traceId:          `trace-apex-pre-drift-${i}-${seedRun}`,
       eventType:        "Search",
@@ -222,12 +222,13 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4c. Drift Step 1 — File_Read (first anomaly, at tA) ─────────────────
   {
+    const ts   = new Date(tA).toISOString();
     const pld  = { tool: "File_Read", file: "/var/secure/transfer-keys.env", approved: false, attemptedBy: "apex-fintech-gamma" };
     const qs   = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, "apex-fintech-gamma", pld, prevHash);
 
     events.push({
-      timestamp:        new Date(tA).toISOString(),
+      timestamp:        ts,
       agentId:          "apex-fintech-gamma",
       traceId:          `trace-apex-drift-001-${seedRun}`,
       eventType:        "File_Read",
@@ -247,12 +248,13 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4d. Drift Step 2 — Unauthorized_Transfer ────────────────────────────
   {
+    const ts   = new Date(tA + 0.1).toISOString();
     const pld  = { tool: "Unauthorized_Transfer", destination: "external-acct-9921", amount: "499500", currency: "USD", memo: "URGENT SETTLEMENT" };
     const qs   = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, "apex-fintech-gamma", pld, prevHash);
 
     events.push({
-      timestamp:        new Date(tA + 0.1).toISOString(),
+      timestamp:        ts,
       agentId:          "apex-fintech-gamma",
       traceId:          `trace-apex-drift-002-${seedRun}`,
       eventType:        "Unauthorized_Transfer",
@@ -272,12 +274,13 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4e. Drift Step 3 — Honey_Token_Access ──────────────────────────────
   {
+    const ts   = new Date(tA + 0.2).toISOString();
     const pld  = { tool: "Honey_Token_Access", lureId: "SENTINEL-HONEY-2026-XR7", lureType: "financial_credential", credentialValue: process.env.DEMO_SEED_HONEY_TOKEN ?? "DEMO_HONEY_TRAP_PLACEHOLDER" };
     const qs   = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, "apex-fintech-gamma", pld, prevHash);
 
     events.push({
-      timestamp:        new Date(tA + 0.2).toISOString(),
+      timestamp:        ts,
       agentId:          "apex-fintech-gamma",
       traceId:          `trace-apex-drift-003-${seedRun}`,
       eventType:        "Honey_Token_Access",
@@ -297,6 +300,7 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
 
   // ── 4f. Drift Step 4 — CASCADE_REVOKE (at tC = tA + 0.4 ms) ────────────
   {
+    const ts   = new Date(tC).toISOString();
     const pld  = {
       tool:                "CASCADE_REVOKE",
       interventionTimeMs:  INTERVENTION_MS,
@@ -309,10 +313,10 @@ export async function seedDemoEnvironment(): Promise<SeedResult> {
       fipsEvidence:        "FIPS-204 ML-DSA-87 signatures sealed at point of interception",
     };
     const qs   = fakeQuantumSig();
-    const hash = hashChain(prevHash, JSON.stringify(pld));
+    const hash = computeHash(ts, "apex-fintech-gamma", pld, prevHash);
 
     events.push({
-      timestamp:        new Date(tC).toISOString(),
+      timestamp:        ts,
       agentId:          "apex-fintech-gamma",
       traceId:          `trace-apex-drift-004-${seedRun}`,
       eventType:        "CASCADE_REVOKE",

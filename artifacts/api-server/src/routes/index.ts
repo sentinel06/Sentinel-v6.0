@@ -11,6 +11,7 @@ import forensicRouter from "./forensic";
 import topologyRouter from "./topology";
 import whitepaperRouter from "./whitepaper";
 import gatewayRouter from "./gateway";
+import chainReconstructRouter from "./chain_reconstruct";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(forensicRouter);
 router.use(topologyRouter);
 router.use(whitepaperRouter);
 router.use(gatewayRouter);
+router.use(chainReconstructRouter);
 
 export default router;
