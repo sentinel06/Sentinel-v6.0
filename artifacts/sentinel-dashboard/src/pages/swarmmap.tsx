@@ -478,6 +478,7 @@ export default function SwarmMapPage() {
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const r = await fetch(`${BASE}/api/v1/swarm/map`);
       if (!r.ok) return;
       const data = await r.json();
@@ -525,6 +526,8 @@ export default function SwarmMapPage() {
         return enriched.map(n => { const pos = posMap.get(n.id); return pos ? { ...n, ...pos } : n; });
       });
       setLinks(rawLinks);
+    } catch (err) {
+      console.warn("[swarmmap] fetchData failed", err);
     } finally { setLoading(false); }
   }, []);
 
@@ -1106,8 +1109,8 @@ export default function SwarmMapPage() {
               💀 {revokeResult}
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}
-            className="font-mono gap-1.5 text-xs">
+          <Button variant="outline" size="sm" onClick={() => fetchData()} type="button"
+            className="font-mono gap-1.5 text-xs cursor-pointer">
             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
