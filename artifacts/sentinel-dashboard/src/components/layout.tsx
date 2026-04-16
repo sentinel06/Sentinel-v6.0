@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useTheme } from "next-themes";
 import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
-  Rocket, Sun, Moon, Skull, Fingerprint, Dna, Shield, ChevronRight,
+  Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -24,44 +23,6 @@ interface PendingNotification {
   id: string;
   agentId: string;
   actionType: string;
-}
-
-// ── Sovereign Switch ──────────────────────────────────────────────────────────
-function SovereignSwitch() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const isDark = mounted ? (resolvedTheme ?? theme) !== "light" : true;
-
-  return (
-    <button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      style={{
-        width: 34, height: 34,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        borderRadius: 8,
-        border: "1px solid var(--sv-btn-border)",
-        background: "var(--sv-btn-bg)",
-        cursor: "pointer", transition: "background 0.2s",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "transform 0.3s ease, opacity 0.2s ease",
-          transform: isDark ? "rotate(0deg)" : "rotate(180deg)",
-        }}
-      >
-        {isDark
-          ? <Sun  style={{ width: 15, height: 15, color: "#facc15" }} />
-          : <Moon style={{ width: 15, height: 15, color: "#93c5fd" }} />
-        }
-      </div>
-    </button>
-  );
 }
 
 // ── Risk Horizon ──────────────────────────────────────────────────────────────
@@ -599,8 +560,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
-            {/* Sovereign Switch */}
-            <SovereignSwitch />
           </div>
         </header>
 
