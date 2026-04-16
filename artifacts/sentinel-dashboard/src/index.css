@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -214,7 +215,163 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    min-width: 1280px;
+    overflow-x: hidden;
   }
+
+  /* Desktop-only: disable touch action globally */
+  * {
+    touch-action: pan-x pan-y;
+  }
+}
+
+/* JetBrains Mono for all telemetry/data elements */
+.font-telemetry,
+.font-mono {
+  font-family: 'JetBrains Mono', 'Geist Mono', monospace;
+}
+
+/* Inter for headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', var(--app-font-sans), sans-serif;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(10, 12, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Risk Horizon pulse animation */
+@keyframes risk-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1.0; }
+}
+
+@keyframes breach-glow {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1.0; }
+}
+
+/* Sentinel v5 — remove all mobile breakpoints from global components */
+@media (max-width: 767px) {
+  body {
+    overflow-x: auto;
+  }
+}
+
+/* Forensic Inspector — agent card entrance */
+@keyframes forensic-enter {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.forensic-agent-enter {
+  animation: forensic-enter 0.22s ease-out both;
+}
+
+/* Forensic Inspector — action buttons */
+.forensic-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  margin-bottom: 4px;
+}
+
+.forensic-btn-recode:hover {
+  background: rgba(255, 191, 0, 0.1);
+  border-color: rgba(255, 191, 0, 0.2);
+}
+
+.forensic-btn-terminate:hover {
+  background: rgba(217, 97, 97, 0.12);
+  border-color: rgba(217, 97, 97, 0.25);
+}
+
+/* Sidebar nav items */
+.nav-featured-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+
+.nav-featured-active {
+  background: rgba(64, 181, 149, 0.12);
+  color: #40B595;
+  border-color: rgba(64, 181, 149, 0.18);
+}
+
+.nav-featured-inactive {
+  color: #9AA4B1;
+}
+
+.nav-featured-inactive:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.nav-secondary-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  text-decoration: none;
+  transition: background 0.12s;
+  margin-bottom: 1px;
+}
+
+.nav-secondary-active {
+  background: rgba(64, 181, 149, 0.08);
+  color: #40B595;
+}
+
+.nav-secondary-inactive {
+  color: #9AA4B1;
+}
+
+.nav-secondary-inactive:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e6ed;
+}
+
+/* Risk Horizon warning pulse */
+@keyframes risk-horizon-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1.0; }
+}
+
+.risk-horizon-pulse {
+  animation: risk-horizon-pulse 3s ease-in-out infinite;
 }
 
 /**

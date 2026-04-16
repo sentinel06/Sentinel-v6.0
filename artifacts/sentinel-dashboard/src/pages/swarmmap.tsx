@@ -21,6 +21,7 @@ import {
   Network, RefreshCw, Skull, Activity, X,
   ChevronRight, Fingerprint, Dna, TreePine, Flame, Zap,
 } from "lucide-react";
+import { useForensic } from "@/contexts/ForensicContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -440,16 +441,14 @@ export default function SwarmMapPage() {
   const feedRef            = useRef<HTMLDivElement>(null);
 
   const [, navigate] = useLocation();
+  const { setAgent, setActiveMutations } = useForensic();
 
-  // ── Mobile detection + SVG canvas dimensions ──────────────────────────────
-  const [isMobile, setIsMobile]   = useState(false);
+  // ── Desktop-only: isMobile is always false ─────────────────────────────────
+  const isMobile = false;
   const [svgDims, setSvgDims]     = useState({ W: 900, H: 540 });
-  const [vitalityOpen, setVitalityOpen] = useState(false);   // bottom-sheet toggle
 
   useEffect(() => {
     const update = () => {
-      const w = window.innerWidth;
-      setIsMobile(w < 768);
       const svg = svgRef.current;
       if (!svg) return;
       const r = svg.getBoundingClientRect();
@@ -862,6 +861,12 @@ export default function SwarmMapPage() {
     return { total: nodes.length, active: active.length, revoked: revoked.length, drifting: drifters.length, avgFitness: avgF, fertility, avgDrift, calcifiedCount };
   }, [nodes, renderTick]);
 
+  // Sync activeMutations to Risk Horizon
+  useEffect(() => {
+    const mutations = nodes.filter(n => (n.drift ?? 0) > 15 && n.status === "active").length;
+    setActiveMutations(mutations);
+  }, [nodes, renderTick, setActiveMutations]);
+
   const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes, renderTick]);
 
   // ── Calcification check ───────────────────────────────────────────────────
@@ -922,7 +927,25 @@ export default function SwarmMapPage() {
   }, [renderTick]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleNodeClick      = useCallback((e: React.MouseEvent, node: SwarmNodeData) => { e.preventDefault(); setSelectedNode(node); setCtxMenu(null); }, []);
+  const handleNodeClick      = useCallback((e: React.MouseEvent, node: SwarmNodeData) => {
+    e.preventDefault();
+    setSelectedNode(node);
+    setCtxMenu(null);
+    setAgent({
+      id: node.id,
+      label: node.label,
+      status: node.status,
+      drift: node.drift ?? 0,
+      fitnessScore: node.fitnessScore ?? 0,
+      generationDepth: node.generationDepth ?? 0,
+      isRoot: node.isRoot,
+      swarmId: node.swarmId,
+      parentUid: node.parentUid,
+      createdAt: node.createdAt,
+      revokedAt: node.revokedAt,
+      revokedReason: node.revokedReason,
+    });
+  }, [setAgent]);
   const handleNodeRightClick = useCallback((e: React.MouseEvent, node: SwarmNodeData) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ node, x: e.clientX, y: e.clientY }); setSelectedNode(null); }, []);
 
   const handleRevoke = useCallback(async (node: SwarmNodeData) => {
@@ -1174,29 +1197,7 @@ export default function SwarmMapPage() {
                 <span style={{ color: P.dim }}>hover vine = lineage · right-click = CRISPR</span>
               </>
             )}
-            {isMobile && (
-              <span style={{ color: P.dim + "99" }}>long-press = CRISPR</span>
-            )}
           </div>
-
-          {/* Mobile: Vitality Sheet toggle pill ── */}
-          {isMobile && (
-            <button
-              onClick={() => setVitalityOpen(v => !v)}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full font-mono text-[10px] font-bold"
-              style={{
-                background: P.panel,
-                border: `1px solid ${P.sage}55`,
-                color: P.sage,
-                boxShadow: `0 0 16px ${P.sage}22`,
-              }}>
-              <Activity className="w-3 h-3" />
-              {vitalityOpen ? "▾ Close Vitality" : "▴ Vitality Sheet"}
-              <span className="ml-1 font-mono text-[9px]" style={{ color: P.amber }}>
-                {(stats.fertility * 100).toFixed(0)}%
-              </span>
-            </button>
-          )}
 
           {nodes.length === 0 && !loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ color: P.dim }}>
@@ -1927,124 +1928,6 @@ export default function SwarmMapPage() {
         }
       `}</style>
 
-      {/* ── Vitality Sheet — mobile bottom drawer (15% peek + swipe-up) ── */}
-      {isMobile && (() => {
-        // Sheet swipe handler: swipe up on handle → open, swipe down → close
-        let sheetSwipeY = 0;
-        const onHandleTouchStart = (e: React.TouchEvent) => {
-          sheetSwipeY = e.touches[0]?.clientY ?? 0;
-        };
-        const onHandleTouchEnd = (e: React.TouchEvent) => {
-          const dy = (e.changedTouches[0]?.clientY ?? 0) - sheetSwipeY;
-          if (dy < -30) setVitalityOpen(true);   // swipe up
-          if (dy >  30) setVitalityOpen(false);  // swipe down
-        };
-
-        return (
-          <div
-            style={{
-              position:     "fixed",
-              left: 0, right: 0, bottom: 0,
-              zIndex:       200,
-              background:   P.panel,
-              borderTop:    `1px solid ${P.border}`,
-              borderRadius: "16px 16px 0 0",
-              boxShadow:    "0 -4px 32px rgba(0,0,0,0.55)",
-              // When closed: only 15vh peek visible. When open: full 58vh.
-              maxHeight:    vitalityOpen ? "58vh" : "15vh",
-              overflowY:    vitalityOpen ? "auto" : "hidden",
-              transition:   "max-height 0.32s cubic-bezier(0.22,1,0.36,1)",
-            }}>
-
-            {/* Drag handle — touch-sensitive, always visible in peek state */}
-            <div
-              onClick={() => setVitalityOpen(v => !v)}
-              onTouchStart={onHandleTouchStart}
-              onTouchEnd={onHandleTouchEnd}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center",
-                padding: "10px 0 6px", cursor: "pointer", userSelect: "none" }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: P.border, marginBottom: 8 }} />
-              {/* Compact peek-mode KPI ticker — visible when sheet is collapsed */}
-              {!vitalityOpen && (
-                <div style={{ display: "flex", gap: 10, alignItems: "center",
-                  fontSize: 10, fontFamily: "monospace", color: P.dim, paddingBottom: 4 }}>
-                  {kpiCards.slice(0, 4).map((k, i) => (
-                    <span key={i} style={{ color: k.color, fontWeight: 700 }}>
-                      {k.label.split(" ").pop()}: {k.value}
-                    </span>
-                  ))}
-                  <span style={{ color: P.sage, opacity: 0.55, fontSize: 9 }}>▴ swipe up</span>
-                </div>
-              )}
-              {vitalityOpen && (
-                <span style={{ fontSize: 9, color: P.sage, letterSpacing: "0.1em", paddingBottom: 2 }}>
-                  ◈ VITALITY MATRIX ▾
-                </span>
-              )}
-            </div>
-
-            {/* Full KPI content — only rendered when sheet is open */}
-            {vitalityOpen && (
-              <>
-                {/* KPI cards grid — 2 columns */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "4px 14px 16px" }}>
-                  {kpiCards.map((k, i) => (
-                    <div key={i} style={{
-                      borderRadius: 10,
-                      background: "rgba(255,255,255,0.035)",
-                      border: `1px solid ${k.color}33`,
-                      padding: "10px 12px",
-                      animation: "whiteGoldRecode 2s ease-in-out infinite",
-                      animationDelay: `${i * 0.3}s`,
-                    }}>
-                      <div style={{ fontSize: 9, color: P.dim, marginBottom: 4, letterSpacing: "0.07em" }}>
-                        {k.label}
-                      </div>
-                      <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: k.color }}>
-                        {k.value}
-                      </div>
-                      {k.sub && (
-                        <div style={{ fontSize: 9, color: P.dim, marginTop: 3 }}>{k.sub}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Selected node mini-info */}
-                {selectedNode && (
-                  <div style={{ margin: "0 14px 16px", padding: "10px 12px", borderRadius: 10,
-                    background: `${P.sage}12`, border: `1px solid ${P.sage}33` }}>
-                    <div style={{ fontSize: 9, color: P.dim, marginBottom: 4 }}>SELECTED ORGANISM</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: P.sage, marginBottom: 2 }}>
-                      {selectedNode.id.length > 22 ? selectedNode.id.substring(0, 20) + "…" : selectedNode.id}
-                    </div>
-                    <div style={{ fontSize: 9, color: P.dim }}>
-                      Status: <span style={{ color: selectedNode.status === "active" ? P.sage : selectedNode.status === "mutant" ? P.mutation : P.terra }}>
-                        {selectedNode.status?.toUpperCase()}
-                      </span>
-                      {" · "} Drift: <span style={{ color: (selectedNode.driftScore ?? 0) > 15 ? P.amber : P.dim }}>
-                        {(selectedNode.driftScore ?? 0).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-                      <button onClick={() => { handleCrispr(selectedNode); setVitalityOpen(false); }}
-                        style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, fontFamily: "monospace",
-                          background: P.gold + "22", border: `1px solid ${P.gold}44`, color: P.gold, cursor: "pointer" }}>
-                        ⚡ CRISPR
-                      </button>
-                      <button onClick={() => { handleTrace(selectedNode); }}
-                        style={{ fontSize: 9, padding: "4px 8px", borderRadius: 6, fontFamily: "monospace",
-                          background: "rgba(255,255,255,0.05)", border: `1px solid ${P.border}`, color: P.dim, cursor: "pointer" }}>
-                        ◈ Trace
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })()}
 
       {/* ── Context menu ── */}
       {ctxMenu && (

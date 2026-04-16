@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
+import { ForensicProvider } from "@/contexts/ForensicContext";
 
 // Pages
 import DashboardPage from "@/pages/dashboard";
@@ -61,10 +62,12 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
+          <ForensicProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </ForensicProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
