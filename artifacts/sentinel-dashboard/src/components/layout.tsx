@@ -13,10 +13,11 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // Accent colours — unchanged across both themes
 const P = {
-  sage:  "#40B595",
-  amber: "#EBC06D",
-  terra: "#D96161",
-  gold:  "#FFD700",
+  sage:   "#40B595",
+  amber:  "#EBC06D",
+  terra:  "#D96161",
+  gold:   "#FFD700",
+  violet: "#8B5CF6",
 };
 
 interface PendingNotification {
@@ -185,14 +186,40 @@ function ForensicInspector() {
         {!agent ? (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            height: 240, textAlign: "center", padding: "0 24px", gap: 12,
+            height: 280, textAlign: "center", padding: "0 24px", gap: 22,
           }}>
-            <Shield style={{ width: 40, height: 40, opacity: 0.08, color: "var(--sv-text-dim)" }} />
-            <div style={{
-              fontSize: 10, fontFamily: "JetBrains Mono, monospace",
-              color: "var(--sv-empty-text)", lineHeight: 1.6,
-            }}>
-              Select an agent in the Swarm Map<br />to begin forensic analysis
+            {/* Radar-ring scanner */}
+            <div style={{ position: "relative", width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{
+                  position: "absolute",
+                  width: 64, height: 64,
+                  borderRadius: "50%",
+                  border: `1px solid rgba(139,92,246,${0.55 - i * 0.15})`,
+                  animation: `sovereign-scan 2.4s ease-out ${i * 0.7}s infinite`,
+                  transformOrigin: "center center",
+                }} />
+              ))}
+              <Fingerprint style={{ width: 22, height: 22, color: "#8B5CF6", opacity: 0.75, flexShrink: 0 }} />
+            </div>
+
+            {/* Labels */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+              <div style={{
+                fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                letterSpacing: "0.18em", textTransform: "uppercase",
+                color: "#8B5CF6",
+                animation: "sovereign-blink 2.2s step-end infinite",
+              }}>
+                Sovereign Scanning…
+              </div>
+              <div style={{
+                fontSize: 9, fontFamily: "JetBrains Mono, monospace",
+                color: "var(--sv-empty-text)", letterSpacing: "0.10em",
+                textTransform: "uppercase", lineHeight: 1.7,
+              }}>
+                Awaiting Node Selection
+              </div>
             </div>
           </div>
         ) : (
@@ -457,7 +484,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 href={item.path}
                 className={cn("nav-featured-item", active ? "nav-featured-active" : "nav-featured-inactive")}
               >
-                <item.icon style={{ width: 13, height: 13, flexShrink: 0, color: active ? P.sage : "var(--sv-text-dim)" }} />
+                <item.icon style={{ width: 13, height: 13, flexShrink: 0, color: active ? P.violet : "var(--sv-text-dim)" }} />
                 <span style={{ fontSize: 11, flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {item.label}
                 </span>
@@ -467,7 +494,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
                 {active && !hasBadge && (
-                  <div style={{ width: 3, height: 14, borderRadius: 2, background: P.sage, marginLeft: "auto", flexShrink: 0 }} />
+                  <div style={{ width: 3, height: 14, borderRadius: 2, background: P.violet, marginLeft: "auto", flexShrink: 0, boxShadow: `0 0 6px ${P.violet}88` }} />
                 )}
               </Link>
             );
@@ -491,7 +518,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     href={item.path}
                     className={cn("nav-secondary-item", active ? "nav-secondary-active" : "nav-secondary-inactive")}
                   >
-                    <item.icon style={{ width: 12, height: 12, flexShrink: 0, opacity: active ? 1 : 0.5, color: active ? P.sage : "var(--sv-text-dim)" }} />
+                    <item.icon style={{ width: 12, height: 12, flexShrink: 0, opacity: active ? 1 : 0.5, color: active ? P.violet : "var(--sv-text-dim)" }} />
                     <span style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.label}
                     </span>

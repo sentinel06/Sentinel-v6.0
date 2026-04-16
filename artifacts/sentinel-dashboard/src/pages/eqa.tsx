@@ -592,6 +592,7 @@ const EQAPage = React.memo(function EQAPage() {
   // Separate sealing (PDF generation) state — must not be reset by parent re-renders
   const [sealing,      setSealing]      = useState(false);
   const [sealProgress, setSealProgress] = useState(0);
+  const [sealVerified, setSealVerified] = useState(false);
 
   const genIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const sealIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -690,7 +691,15 @@ const EQAPage = React.memo(function EQAPage() {
       // Filename: SENTINEL_EQA_[TIMESTAMP]_VERIFIED.pdf
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       doc.save(`SENTINEL_EQA_${ts}_VERIFIED.pdf`);
-    } finally {
+
+      // Show "Seal Verified" completion signal for 2.4s
+      if (isMounted.current) {
+        setSealing(false);
+        setSealProgress(0);
+        setSealVerified(true);
+        setTimeout(() => { if (isMounted.current) setSealVerified(false); }, 2400);
+      }
+    } catch {
       if (sealIntervalRef.current) clearInterval(sealIntervalRef.current);
       if (isMounted.current) {
         setSealing(false);
@@ -735,16 +744,29 @@ const EQAPage = React.memo(function EQAPage() {
         {report && (
           <Button
             onClick={handleDownload}
-            disabled={sealing}
+            disabled={sealing || sealVerified}
             className="font-mono text-xs gap-2 whitespace-nowrap shrink-0 relative overflow-hidden"
             style={{
-              background: sealing ? `${C.sage}22` : C.sage,
-              color: sealing ? C.sage : "#000",
-              border: sealing ? `1px solid ${C.sage}50` : "none",
+              background: sealVerified ? C.sage
+                        : sealing     ? `${C.sage}22`
+                        : C.sage,
+              color:      sealVerified ? "#000"
+                        : sealing     ? C.sage
+                        : "#000",
+              border:     sealVerified ? "none"
+                        : sealing     ? `1px solid ${C.sage}50`
+                        : "none",
               minWidth: 220,
+              transition: "background 0.3s ease, color 0.3s ease",
+              animation: sealVerified ? "seal-flash 0.5s ease 2" : undefined,
             }}
           >
-            {sealing ? (
+            {sealVerified ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Seal Verified ✓</span>
+              </>
+            ) : sealing ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                 <span>SEALING LEDGER…</span>

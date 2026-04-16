@@ -1634,12 +1634,31 @@ export default function SwarmMapPage() {
                         : "●"}
                     </text>
 
-                    {/* Label */}
-                    <text x={node.x} y={node.y + r + 13}
-                      textAnchor="middle" fontSize="8" fill={P.dim}
-                      style={{ userSelect: "none", pointerEvents: "none" }}>
-                      {node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label}
-                    </text>
+                    {/* Label — JetBrains Mono with frosted chip background */}
+                    {(() => {
+                      const labelText = node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label;
+                      const chipW = labelText.length * 4.9 + 10;
+                      return (
+                        <>
+                          <rect
+                            x={node.x - chipW / 2}
+                            y={node.y + r + 4}
+                            width={chipW}
+                            height={11}
+                            rx={3}
+                            fill="rgba(8,10,18,0.72)"
+                            style={{ pointerEvents: "none" }}
+                          />
+                          <text x={node.x} y={node.y + r + 12.5}
+                            textAnchor="middle" fontSize="7.5"
+                            fontFamily="'JetBrains Mono', monospace"
+                            fill={P.dim}
+                            style={{ userSelect: "none", pointerEvents: "none" }}>
+                            {labelText}
+                          </text>
+                        </>
+                      );
+                    })()}
 
                     {/* Status badge — surging/recoded/afterglow/drift/fitness */}
                     {node.status !== "revoked" && !calc && (
