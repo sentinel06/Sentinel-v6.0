@@ -443,8 +443,6 @@ export default function SwarmMapPage() {
   const [, navigate] = useLocation();
   const { setAgent, setActiveMutations } = useForensic();
 
-  // ── Desktop-only: isMobile is always false ─────────────────────────────────
-  const isMobile = false;
   const [svgDims, setSvgDims]     = useState({ W: 900, H: 540 });
 
   useEffect(() => {
@@ -460,7 +458,13 @@ export default function SwarmMapPage() {
     window.addEventListener("resize", update, { passive: true });
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
-  const cx = svgDims.W / 2;
+  // Center the simulation in the visible stage, biased right to clear the
+  // sidebar. (window.innerWidth - 350) / 2 is the viewport center excluding
+  // the 350px Forensic Inspector; we clamp it to 75% of the measured SVG width
+  // so nodes can never be pulled off the right edge of the canvas.
+  const cx = svgDims.W > 0
+    ? Math.min(Math.round((window.innerWidth - 350) / 2), Math.floor(svgDims.W * 0.75))
+    : 450;
   const cy = svgDims.H / 2;
 
   // ── Touch interaction refs ─────────────────────────────────────────────────
@@ -742,28 +746,15 @@ export default function SwarmMapPage() {
     const { W, H } = svgDims;
     const RING = Math.min(85, W / 8);
 
-    // ── Initial positions ────────────────────────────────────────────────────
-    const maxDepth = Math.max(...nodes.map(n => n.generationDepth ?? 0), 1);
-    // Mobile ART: LUCA pinned at exactly 10% from top; descendants cascade below
-    const TOP_Y       = isMobile ? Math.round(H * 0.10) : cy;
-    const VERT_SPACING = isMobile
-      ? Math.min(Math.round((H * 0.85) / Math.max(maxDepth, 1)), 110)
-      : Math.min((H - 80) / Math.max(maxDepth, 1), 120);
-
+    // ── Initial positions ─────────────────────────────────────────────────────
     nodes.filter(n => n.isRoot).forEach(n => {
-      if (n.x == null) { n.x = cx; n.y = TOP_Y; }
-      if (isMobile) { n.fx = cx; n.fy = TOP_Y; }
+      if (n.x == null) { n.x = cx; n.y = cy; }
     });
     nodes.filter(n => !n.isRoot).forEach(n => {
       if (n.x == null) {
-        if (isMobile) {
-          n.x = cx + (Math.random() - 0.5) * 80;
-          n.y = TOP_Y + (n.generationDepth ?? 1) * VERT_SPACING;
-        } else {
-          const angle = Math.random() * Math.PI * 2;
-          const ring  = (n.generationDepth ?? 1) * RING;
-          n.x = cx + ring * Math.cos(angle); n.y = cy + ring * Math.sin(angle);
-        }
+        const angle = Math.random() * Math.PI * 2;
+        const ring  = (n.generationDepth ?? 1) * RING;
+        n.x = cx + ring * Math.cos(angle); n.y = cy + ring * Math.sin(angle);
       }
     });
 
@@ -795,39 +786,46 @@ export default function SwarmMapPage() {
           n.x = Math.max(r + margin, Math.min(W - r - margin, n.x ?? cx));
           n.y = Math.max(r + margin, Math.min(H - r - margin, n.y ?? cy));
         }
+        // Keep D3 drag-handle circles tracking each node's current position.
+        d3.select(svgRef.current!)
+          .selectAll<SVGCircleElement, SwarmNodeData>(".darwin-drag")
+          .attr("cx", d => d.x ?? cx)
+          .attr("cy", d => d.y ?? cy);
         setRenderTick(t => t + 1);
       });
 
-    // ── Layout strategy: Cascading Tree (mobile) vs Radial Phylogeny (desktop) ──
-    if (isMobile) {
-      // Stronger forces keep the vertical cascade from collapsing on small screens
-      sim.force("phylo_x", d3.forceX<SwarmNodeData>(cx).strength(0.45));
-      sim.force("phylo_y", d3.forceY<SwarmNodeData>(d => {
-        if (d.isRoot) return TOP_Y;
-        return TOP_Y + (d.generationDepth ?? 1) * VERT_SPACING;
-      }).strength(0.75));
-    } else {
-      sim.force("phylo_radial", d3.forceRadial<SwarmNodeData>(
-        d => {
-          if (d.isRoot) return 0;
-          const gen = d.generationDepth ?? 1;
-          return gen * RING + (1 - (d.fitnessScore ?? 0.5)) * 22;
-        }, cx, cy
-      ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25));
-    }
+    // ── Radial Phylogeny layout ───────────────────────────────────────────────
+    sim.force("phylo_radial", d3.forceRadial<SwarmNodeData>(
+      d => {
+        if (d.isRoot) return 0;
+        const gen = d.generationDepth ?? 1;
+        return gen * RING + (1 - (d.fitnessScore ?? 0.5)) * 22;
+      }, cx, cy
+    ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25));
 
     simRef.current = sim;
 
+    // ── Transparent drag-handle circles overlaid on each node ────────────────
+    // They have correct cx/cy/r so they intercept both drag AND click events.
     const svgSel = d3.select(svg);
     svgSel.selectAll<SVGCircleElement, SwarmNodeData>(".darwin-drag")
       .data(nodes, d => d.id)
-      .join("circle").attr("class", "darwin-drag")
-      .style("fill", "transparent").style("cursor", "grab")
+      .join("circle")
+        .attr("class", "darwin-drag")
+        .attr("cx", d => d.x ?? cx)
+        .attr("cy", d => d.y ?? cy)
+        .attr("r",  d => (d.radius ?? 14) + 6)
+        .style("fill", "transparent")
+        .style("cursor", "grab")
       .call(d3.drag<SVGCircleElement, SwarmNodeData>()
         .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag",  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
         .on("end",   (ev, d) => { if (!ev.active) sim.alphaTarget(0); if (!d.isRoot) { d.fx = null; d.fy = null; } })
-      );
+      )
+      .on("click", (event: MouseEvent, d: SwarmNodeData) => {
+        event.stopPropagation();
+        handleNodeClickRef.current(event as unknown as React.MouseEvent, d);
+      });
 
     return () => { sim.stop(); svgSel.selectAll(".darwin-drag").remove(); };
   }, [nodes.length, links.length, svgDims]);
@@ -933,6 +931,11 @@ export default function SwarmMapPage() {
       revokedReason: node.revokedReason,
     });
   }, [setAgent]);
+
+  // Keep a live ref so D3 native event handlers always call the latest version.
+  const handleNodeClickRef = useRef(handleNodeClick);
+  useEffect(() => { handleNodeClickRef.current = handleNodeClick; }, [handleNodeClick]);
+
   const handleNodeRightClick = useCallback((e: React.MouseEvent, node: SwarmNodeData) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ node, x: e.clientX, y: e.clientY }); setSelectedNode(null); }, []);
 
   const handleRevoke = useCallback(async (node: SwarmNodeData) => {
@@ -962,47 +965,22 @@ export default function SwarmMapPage() {
     return lineageAvgFitness(selectedNode.id, nodeMap, links);
   }, [selectedNode, nodeMap, links]);
 
-  // ── Smart Culling — Swarm Cluster aggregation (mobile only) ──────────────
-  // Groups of >5 healthy (sage) siblings → single proxy cluster node.
-  // Mutant (drift>15 or drift-locked) and Calcified nodes are NEVER collapsed.
-  const { clusterMap, clusteredIds } = useMemo(() => {
-    if (!isMobile) return { clusterMap: new Map<string, string[]>(), clusteredIds: new Set<string>() };
-    const now     = Date.now();
-    const cMap    = new Map<string, string[]>();   // parentId → [childIds eligible to cluster]
-    const cIds    = new Set<string>();
+  // ── Smart Culling — desktop always shows every node (no aggregation) ───────
+  const { clusterMap, clusteredIds } = useMemo(() => ({
+    clusterMap: new Map<string, string[]>(),
+    clusteredIds: new Set<string>(),
+  }), []);
 
-    const childMap = buildChildMap(links);
-    for (const [parentId, children] of childMap) {
-      const healthy = children.filter(cid => {
-        const n = nodeMap.get(cid);
-        if (!n) return false;
-        const drift   = n.drift ?? 0;
-        const last    = lastActivityRef.current.get(cid);
-        const calcif  = last != null && now - last > 300_000;
-        const mutant  = drift > 15 || n.status === "drift-locked";
-        const revoked = n.status === "revoked";
-        return !mutant && !calcif && !revoked;
-      });
-      if (healthy.length > 5) {
-        cMap.set(parentId, healthy);
-        healthy.forEach(id => cIds.add(id));
-      }
-    }
-    return { clusterMap: cMap, clusteredIds: cIds };
-  }, [isMobile, nodes, links, renderTick]);
-
-  // ── Long-press handlers (mobile) ──────────────────────────────────────────
+  // ── Long-press (touch) ─────────────────────────────────────────────────────
   const handleTouchStart = useCallback((e: React.TouchEvent, node: SwarmNodeData) => {
-    if (!isMobile) return;
     const t = e.touches[0];
     if (!t) return;
     touchStartRef.current = { x: t.clientX, y: t.clientY };
     longPressRef.current = setTimeout(() => {
-      navigator.vibrate?.(40); // haptic feedback if available
       setCtxMenu({ node, x: touchStartRef.current?.x ?? 0, y: (touchStartRef.current?.y ?? 0) - 10 });
       setSelectedNode(null);
     }, 500);
-  }, [isMobile]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!longPressRef.current || !touchStartRef.current) return;
@@ -1056,12 +1034,12 @@ export default function SwarmMapPage() {
         midY:  (t0.clientY + t1.clientY) / 2,
       };
       panStartRef.current = null; // cancel any active pan
-    } else if (e.touches.length === 1 && isMobile) {
+    } else if (e.touches.length === 1) {
       // Single touch: begin pan tracking
       const t = e.touches[0]!;
       panStartRef.current = { x: t.clientX, y: t.clientY, panX: panXY.x, panY: panXY.y };
     }
-  }, [zoom, panXY, isMobile]);
+  }, [zoom, panXY]);
 
   const handleSvgTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
     if (e.touches.length === 2 && pinchRef.current) {
@@ -1069,10 +1047,9 @@ export default function SwarmMapPage() {
       e.preventDefault();
       const newDist  = getPinchDist(e.touches);
       const ratio    = newDist / Math.max(pinchRef.current.dist, 1);
-      const minZoom  = isMobile ? 0.8 : 0.5;
-      const newScale = Math.max(minZoom, Math.min(4, pinchRef.current.scale * ratio));
+      const newScale = Math.max(0.5, Math.min(4, pinchRef.current.scale * ratio));
       setZoom(newScale);
-    } else if (e.touches.length === 1 && panStartRef.current && isMobile) {
+    } else if (e.touches.length === 1 && panStartRef.current) {
       // Single-touch pan with elastic-bounce prevention
       const t  = e.touches[0]!;
       const dx = t.clientX - panStartRef.current.x;
@@ -1084,7 +1061,7 @@ export default function SwarmMapPage() {
       const clamped = clampPan(raw.x, raw.y, zoom);
       setPanXY(clamped);
     }
-  }, [isMobile, clampPan, zoom]);
+  }, [clampPan, zoom]);
 
   const handleSvgTouchEnd = useCallback(() => {
     pinchRef.current = null;
@@ -1105,43 +1082,40 @@ export default function SwarmMapPage() {
   ];
 
   return (
-    <div className={`flex flex-col animate-in fade-in duration-500 ${isMobile ? "h-screen" : "h-[calc(100vh-6rem)] gap-4"}`}>
+    <div className="flex flex-col animate-in fade-in duration-500 h-[calc(100vh-6rem)] gap-4">
 
       {/* ── Header ── */}
-      <div className={`flex items-center justify-between shrink-0 ${isMobile ? "px-3 pt-3 pb-1" : ""}`}>
+      <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className={`font-bold font-mono tracking-tight flex items-center gap-2 ${isMobile ? "text-lg" : "text-2xl"}`}>
+          <h1 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
             <Dna className="w-5 h-5 shrink-0" style={{ color: P.sage }} />
             Project Darwin
             <span className="text-xs font-normal px-2 py-0.5 rounded ml-1"
               style={{ color: P.gold, background: P.gold + "18", border: `1px solid ${P.gold}33` }}>
-              {isMobile ? "Darwin" : "Evolutionary Prosperity Engine"}
+              Evolutionary Prosperity Engine
             </span>
           </h1>
-          {!isMobile && (
-            <p className="text-sm font-mono mt-1" style={{ color: P.dim }}>
-              Radial phylogeny · Vessel physics · Fitness gradient · CRISPR recoding · Natural selection
-            </p>
-          )}
+          <p className="text-sm font-mono mt-1" style={{ color: P.dim }}>
+            Radial phylogeny · Vessel physics · Fitness gradient · CRISPR recoding · Natural selection
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {revokeResult && !isMobile && (
+          {revokeResult && (
             <span className="text-[10px] font-mono px-2 py-1 rounded border"
               style={{ color: P.terra, borderColor: P.terra + "44", background: P.terra + "10" }}>
               💀 {revokeResult}
             </span>
           )}
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}
-            className={`font-mono gap-1.5 ${isMobile ? "text-[10px] px-2 py-1 h-7" : "text-xs"}`}>
+            className="font-mono gap-1.5 text-xs">
             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-            {!isMobile && "Refresh"}
+            Refresh
           </Button>
         </div>
       </div>
 
-      {/* ── KPI Bar (desktop only — mobile uses Vitality Sheet) ── */}
-      {!isMobile && (
-        <div className="grid grid-cols-6 gap-3 shrink-0">
+      {/* ── KPI Bar ── */}
+      <div className="grid grid-cols-6 gap-3 shrink-0">
           {kpiCards.map(({ label, value, sub, color, Icon }) => (
             <Card key={label} className="p-3 border-border/60 bg-card/50">
               <div className="flex items-center justify-between mb-1">
@@ -1153,17 +1127,16 @@ export default function SwarmMapPage() {
             </Card>
           ))}
         </div>
-      )}
 
       {/* ── Main layout ── */}
-      <div className={`flex flex-1 min-h-0 ${isMobile ? "flex-col" : "gap-4"}`}>
+      <div className="flex flex-1 min-h-0 gap-4">
 
         {/* ── SVG Canvas ── */}
-        <div className={`rounded-xl overflow-hidden relative ${isMobile ? "flex-1" : "flex-1"}`}
+        <div className="flex-1 rounded-xl overflow-hidden relative"
           style={{ border: `1px solid ${P.border}`, background: P.bg }}>
 
-          {/* Legend — compact on mobile */}
-          <div className={`absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2 font-mono px-2 py-1.5 rounded-lg ${isMobile ? "text-[8px]" : "text-[9px] gap-3 px-3"}`}
+          {/* Legend */}
+          <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-3 font-mono text-[9px] px-3 py-1.5 rounded-lg"
             style={{ background: "rgba(13,17,23,0.88)", border: `1px solid ${P.border}` }}>
             {[
               { color: P.sage,     label: "Healthy" },
@@ -1178,12 +1151,10 @@ export default function SwarmMapPage() {
                 <span style={{ color: P.dim }}>{label}</span>
               </span>
             ))}
-            {!isMobile && (
-              <>
-                <span className="opacity-30 mx-1">|</span>
-                <span style={{ color: P.dim }}>hover vine = lineage · right-click = CRISPR</span>
-              </>
-            )}
+            <>
+              <span className="opacity-30 mx-1">|</span>
+              <span style={{ color: P.dim }}>hover vine = lineage · right-click = CRISPR</span>
+            </>
           </div>
 
           {nodes.length === 0 && !loading && (
@@ -1237,49 +1208,27 @@ export default function SwarmMapPage() {
                 </filter>
               ))}
 
-              {/* ── Maladaptive Mutation distortion (desktop: feTurbulence warp) ── */}
-              {!isMobile && (
-                <>
-                  <filter id="mutation-warp" x="-30%" y="-30%" width="160%" height="160%">
-                    <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves={3}
-                      seed={turbSeed} result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale={8}
-                      xChannelSelector="R" yChannelSelector="G" result="warped" />
-                    <feFlood floodColor={P.mutation} result="flood" />
-                    <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                    <feGaussianBlur in="tintMask" stdDeviation={3} result="tintBlur" />
-                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
-                  </filter>
-                  <filter id="mutation-warp-severe" x="-40%" y="-40%" width="180%" height="180%">
-                    <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves={4}
-                      seed={turbSeed} result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale={14}
-                      xChannelSelector="R" yChannelSelector="G" result="warped" />
-                    <feFlood floodColor={P.mutation} result="flood" />
-                    <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
-                    <feGaussianBlur in="tintMask" stdDeviation={5} result="tintBlur" />
-                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
-                  </filter>
-                </>
-              )}
-              {/* Mobile ART: static violet-tint pulse — zero feTurbulence cost, 60 FPS safe */}
-              {isMobile && (
-                <>
-                  <filter id="mutation-warp" x="-20%" y="-20%" width="140%" height="140%">
-                    <feFlood floodColor={P.mutation} result="flood" />
-                    <feComposite in="flood" in2="SourceGraphic" operator="in" result="tintMask" />
-                    <feGaussianBlur in="tintMask" stdDeviation="4" result="tintBlur" />
-                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                  </filter>
-                  <filter id="mutation-warp-severe" x="-25%" y="-25%" width="150%" height="150%">
-                    <feFlood floodColor={P.mutation} result="flood" />
-                    <feComposite in="flood" in2="SourceGraphic" operator="in" result="tintMask" />
-                    <feGaussianBlur in="tintMask" stdDeviation="6" result="tintBlur" />
-                    <feBlend in="SourceGraphic" in2="tintBlur" mode="screen" result="blended" />
-                    <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="blended" /></feMerge>
-                  </filter>
-                </>
-              )}
+              {/* ── Maladaptive Mutation distortion (feTurbulence warp) ── */}
+              <filter id="mutation-warp" x="-30%" y="-30%" width="160%" height="160%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.065 0.055" numOctaves={3}
+                  seed={turbSeed} result="noise" />
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale={8}
+                  xChannelSelector="R" yChannelSelector="G" result="warped" />
+                <feFlood floodColor={P.mutation} result="flood" />
+                <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
+                <feGaussianBlur in="tintMask" stdDeviation={3} result="tintBlur" />
+                <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
+              </filter>
+              <filter id="mutation-warp-severe" x="-40%" y="-40%" width="180%" height="180%">
+                <feTurbulence type="turbulence" baseFrequency="0.09 0.07" numOctaves={4}
+                  seed={turbSeed} result="noise" />
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale={14}
+                  xChannelSelector="R" yChannelSelector="G" result="warped" />
+                <feFlood floodColor={P.mutation} result="flood" />
+                <feComposite in="flood" in2="warped" operator="in" result="tintMask" />
+                <feGaussianBlur in="tintMask" stdDeviation={5} result="tintBlur" />
+                <feMerge><feMergeNode in="tintBlur" /><feMergeNode in="warped" /></feMerge>
+              </filter>
 
               {/* Calcification desaturate filter */}
               <filter id="calcify" x="-10%" y="-10%" width="120%" height="120%">
@@ -1468,8 +1417,7 @@ export default function SwarmMapPage() {
                 py = pt.y;
               }
 
-              // 2× particle size on mobile for thumb-visibility
-              const pR = isMobile ? 2 : 1;
+              const pR = 1;
               return (
                 <g key={`surge-${surge.rootId}-${surge.startedAt}`}>
                   {/* Outer aura */}
@@ -1535,8 +1483,6 @@ export default function SwarmMapPage() {
             <g className="organisms">
               {nodes.map(node => {
                 if (!node.x || !node.y) return null;
-                // Mobile: skip clustered healthy nodes — rendered as proxy below
-                if (isMobile && clusteredIds.has(node.id)) return null;
 
                 const calc        = isCalcified(node.id);
                 const metamorphed = isMetamorphosed(node.id);
@@ -1688,14 +1634,12 @@ export default function SwarmMapPage() {
                         : "●"}
                     </text>
 
-                    {/* Label — Mobile ART: only shown for Mutant/Revoked/DriftLocked, 40% smaller */}
-                    {(!isMobile || isMut || node.status === "revoked" || node.status === "drift-locked") && (
-                      <text x={node.x} y={node.y + r + 13}
-                        textAnchor="middle" fontSize={isMobile ? "5" : "8"} fill={isMobile && (isMut || node.status === "revoked") ? P.mutation : P.dim}
-                        style={{ userSelect: "none", pointerEvents: "none" }}>
-                        {node.label.length > (isMobile ? 10 : 14) ? node.label.slice(0, isMobile ? 8 : 12) + "…" : node.label}
-                      </text>
-                    )}
+                    {/* Label */}
+                    <text x={node.x} y={node.y + r + 13}
+                      textAnchor="middle" fontSize="8" fill={P.dim}
+                      style={{ userSelect: "none", pointerEvents: "none" }}>
+                      {node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label}
+                    </text>
 
                     {/* Status badge — surging/recoded/afterglow/drift/fitness */}
                     {node.status !== "revoked" && !calc && (
@@ -1726,43 +1670,6 @@ export default function SwarmMapPage() {
                 );
               })}
 
-              {/* ── Swarm Cluster proxy nodes (mobile aggregation) ── */}
-              {isMobile && Array.from(clusterMap.entries()).map(([parentId, memberIds]) => {
-                const parent = nodeMap.get(parentId);
-                if (!parent?.x || !parent?.y) return null;
-                // Centroid of cluster members
-                const members = memberIds.map(id => nodeMap.get(id)).filter(Boolean) as SwarmNodeData[];
-                if (!members.length) return null;
-                const cx2 = members.reduce((s, n) => s + (n.x ?? 0), 0) / members.length;
-                const cy2 = members.reduce((s, n) => s + (n.y ?? 0), 0) / members.length;
-                const cr  = 18; // cluster radius
-
-                return (
-                  <g key={`cluster-${parentId}`} style={{ cursor: "pointer" }}
-                    onClick={e => { e.stopPropagation(); }}>
-                    {/* Outer ring */}
-                    <circle cx={cx2} cy={cy2} r={cr + 6}
-                      fill="none" stroke={P.sage} strokeWidth="1" strokeDasharray="3,4" opacity="0.4" />
-                    {/* Cluster body */}
-                    <circle cx={cx2} cy={cy2} r={cr}
-                      fill={P.sage} fillOpacity="0.18"
-                      stroke={P.sage} strokeWidth="1.5" strokeOpacity="0.7"
-                      filter="url(#fg-sage)" />
-                    {/* Count badge */}
-                    <text x={cx2} y={cy2 - 3}
-                      textAnchor="middle" dominantBaseline="central"
-                      fontSize="9" fontWeight="bold" fill={P.sage}
-                      style={{ userSelect: "none", pointerEvents: "none" }}>
-                      +{memberIds.length}
-                    </text>
-                    <text x={cx2} y={cy2 + 9}
-                      textAnchor="middle" fontSize="7" fill={P.dim}
-                      style={{ userSelect: "none", pointerEvents: "none" }}>
-                      Agents
-                    </text>
-                  </g>
-                );
-              })}
             </g>
 
             {/* Close pinch-to-zoom group */}
@@ -1771,7 +1678,7 @@ export default function SwarmMapPage() {
         </div>
 
         {/* ── Right panel (desktop only) ── */}
-        <div className={`shrink-0 flex flex-col gap-2 min-h-0 ${isMobile ? "hidden" : "w-80"}`}>
+        <div className="shrink-0 w-80 flex flex-col gap-2 min-h-0">
 
           {/* Node info */}
           {selectedNode && (() => {

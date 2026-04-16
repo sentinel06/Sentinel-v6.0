@@ -813,7 +813,7 @@ const EQAPage = React.memo(function EQAPage() {
           }}
         >
           {loading
-            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating…</>
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />SEALING LEDGER…</>
             : <><Activity className="w-3.5 h-3.5" />Generate EQA</>}
         </Button>
       </div>
