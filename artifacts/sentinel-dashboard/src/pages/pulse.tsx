@@ -13,7 +13,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  Radio, RefreshCw, Zap, Clock,
+  Radio, Zap, Clock,
   CheckCircle2, AlertTriangle, XCircle,
   Shield, Activity, Fingerprint, ShieldCheck,
 } from "lucide-react";
@@ -297,7 +297,7 @@ export default function PulsePage() {
 
   useEffect(() => {
     fetchPulses();
-    intervalRef.current = setInterval(fetchPulses, 30_000);
+    intervalRef.current = setInterval(fetchPulses, 2_500);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [fetchPulses]);
 
@@ -354,10 +354,6 @@ export default function PulsePage() {
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <Button size="sm" variant="outline" onClick={fetchPulses} className="font-mono text-xs gap-1.5 h-8">
-              <RefreshCw className="w-3.5 h-3.5" />
-              Refresh
-            </Button>
             <Button
               size="sm"
               onClick={handleFireNow}
@@ -376,7 +372,7 @@ export default function PulsePage() {
           )}
           {lastRefresh && (
             <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: C.dimText }}>
-              refreshed {lastRefresh.toLocaleTimeString()} · auto in 30s
+              live · synced {lastRefresh.toLocaleTimeString()}
             </div>
           )}
         </div>

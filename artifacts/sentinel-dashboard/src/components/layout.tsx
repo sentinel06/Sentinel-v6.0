@@ -26,10 +26,10 @@ interface PendingNotification {
 }
 
 // ── Risk Horizon ──────────────────────────────────────────────────────────────
-function RiskHorizon({ activeMutations }: { activeMutations: number }) {
+function RiskHorizon({ activeMutations, ledgerTampered }: { activeMutations: number; ledgerTampered: boolean }) {
   const state =
     activeMutations > 5 ? "breach" :
-    activeMutations >= 3 ? "warning" : "calm";
+    (ledgerTampered || activeMutations >= 3) ? "warning" : "calm";
 
   const gradient =
     state === "breach"
@@ -363,7 +363,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [pendingNotifications, setPendingNotifications] = useState<PendingNotification[]>([]);
   const [killActive, setKillActive] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
-  const { activeMutations } = useForensic();
+  const { activeMutations, lastSync, ledgerTampered } = useForensic();
 
   useEffect(() => {
     const ws = new WebSocket(
@@ -408,7 +408,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       transition: "background 0.3s ease",
     }}>
       {/* Risk Horizon */}
-      <RiskHorizon activeMutations={activeMutations} />
+      <RiskHorizon activeMutations={activeMutations} ledgerTampered={ledgerTampered} />
 
       {/* ── Sidebar ── */}
       <aside style={{
@@ -538,6 +538,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   transition: "background 0.3s ease, border-color 0.3s ease",
                 }}
               />
+            </div>
+
+            <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
+
+            {/* LIVE indicator */}
+            <div
+              title={lastSync ? `System Synchronized: ${lastSync.toLocaleTimeString()}` : "Synchronizing…"}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0 10px", height: 32, borderRadius: 8,
+                border: "1px solid rgba(64,181,149,0.28)",
+                background: "rgba(64,181,149,0.08)",
+                cursor: "help",
+              }}
+            >
+              <span className="live-dot" style={{
+                width: 7, height: 7, borderRadius: "50%",
+                background: P.sage, boxShadow: `0 0 6px ${P.sage}cc`,
+                flexShrink: 0,
+              }} />
+              <span style={{
+                fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                letterSpacing: "0.18em", color: P.sage,
+              }}>
+                LIVE
+              </span>
             </div>
 
             <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />

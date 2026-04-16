@@ -14,7 +14,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   ShieldCheck, ShieldAlert, CheckCircle2, XCircle,
-  Zap, Activity, RefreshCw, Lock, Cpu, Radio, FileText,
+  Zap, Activity, Lock, Cpu, Radio, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -614,7 +614,7 @@ export default function StatusPage() {
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 30_000);
+    intervalRef.current = setInterval(fetchStatus, 2_500);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [fetchStatus]);
 
@@ -731,12 +731,6 @@ export default function StatusPage() {
 
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <Button
-              size="sm" variant="outline" onClick={fetchStatus}
-              className="font-mono text-xs gap-1.5 h-8"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh
-            </Button>
             <Button
               size="sm" onClick={handleFirePulse} disabled={pulseFiring}
               className="font-mono text-xs gap-1.5 h-8"

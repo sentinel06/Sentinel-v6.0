@@ -13,7 +13,6 @@ import {
   Globe,
   Star,
   Building2,
-  RefreshCw,
   ChevronRight,
   Activity,
   Trash2,
@@ -598,7 +597,7 @@ function PartnerHealthFeed() {
 
   useEffect(() => {
     fetchHealth();
-    const id = setInterval(fetchHealth, 30_000);
+    const id = setInterval(fetchHealth, 2_500);
     return () => clearInterval(id);
   }, [fetchHealth]);
 
@@ -613,13 +612,12 @@ function PartnerHealthFeed() {
           <span className="text-[10px] font-mono text-muted-foreground">
             Updated {lastRefresh.toLocaleTimeString()}
           </span>
-          <button
-            onClick={fetchHealth}
-            disabled={loading}
-            className="p-1 rounded hover:bg-muted transition-colors"
-          >
-            <RefreshCw className={`w-3 h-3 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
-          </button>
+          <span className="inline-flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded border"
+            style={{ color: "#40B595", borderColor: "#40B59544", background: "#40B59510" }}
+            title="Auto-sync every 2.5s">
+            <span className="live-dot w-1 h-1 rounded-full" style={{ background: "#40B595", boxShadow: "0 0 4px #40B595cc" }} />
+            LIVE
+          </span>
         </div>
       </div>
 

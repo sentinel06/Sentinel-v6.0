@@ -432,6 +432,32 @@ h1, h2, h3, h4, h5, h6 {
   50%       { opacity: 0.75; }
 }
 
+/* LIVE pulse indicator */
+@keyframes live-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(64, 181, 149, 0.8), 0 0 0 0 rgba(64, 181, 149, 0.55);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 10px rgba(64, 181, 149, 1), 0 0 0 6px rgba(64, 181, 149, 0);
+  }
+}
+.live-dot {
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+/* Swarm Map node spawn-in fade */
+@keyframes swarm-node-spawn {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.swarm-node-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: swarm-node-spawn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* ── Global 3D Button Treatment ──────────────────────────────────────────── */
 .btn-3d {
   position: relative;

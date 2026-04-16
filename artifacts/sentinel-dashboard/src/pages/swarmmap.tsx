@@ -18,7 +18,7 @@ import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Network, RefreshCw, Skull, Activity, X,
+  Network, Skull, Activity, X,
   ChevronRight, Fingerprint, Dna, TreePine, Flame, Zap,
 } from "lucide-react";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -531,7 +531,7 @@ export default function SwarmMapPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchData(); const id = setInterval(fetchData, 12_000); return () => clearInterval(id); }, [fetchData]);
+  useEffect(() => { fetchData(); const id = setInterval(fetchData, 2_500); return () => clearInterval(id); }, [fetchData]);
 
   // ── Focus from other views ────────────────────────────────────────────────
   useEffect(() => {
@@ -1109,11 +1109,12 @@ export default function SwarmMapPage() {
               💀 {revokeResult}
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={() => fetchData()} type="button"
-            className="font-mono gap-1.5 text-xs cursor-pointer">
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
+            style={{ color: P.sage, borderColor: P.sage + "44", background: P.sage + "10" }}
+            title="Live auto-sync every 2.5s">
+            <span className="live-dot inline-block w-1.5 h-1.5 rounded-full" style={{ background: P.sage, boxShadow: `0 0 6px ${P.sage}cc` }} />
+            LIVE · AUTO-SYNC
+          </span>
         </div>
       </div>
 
@@ -1604,6 +1605,8 @@ export default function SwarmMapPage() {
                       stroke={displayColor} strokeWidth={node.isRoot ? 2.5 : 2}
                       strokeOpacity={strokeOpacity}
                       filter={nodeFilter ?? `url(#${filterId})`}
+                      className="swarm-node-body"
+                      style={{ transition: "fill 0.5s ease, stroke 0.5s ease, fill-opacity 0.5s ease, stroke-opacity 0.5s ease" }}
                     />
 
                     {/* Inner nucleus — fitness × brightness; afterglow adds warm gold tint */}
