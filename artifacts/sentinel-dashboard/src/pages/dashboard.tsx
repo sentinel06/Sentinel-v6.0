@@ -307,7 +307,7 @@ export default function DashboardPage() {
         {/* Live Feed */}
         <Card className="lg:col-span-2 flex flex-col overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm">
           <div className="p-4 border-b border-border/60 flex items-center justify-between bg-muted/20">
-            <div className="flex items-center gap-2 font-mono text-sm font-medium">
+            <div className="flex items-center gap-2 font-mono text-sm font-medium" style={{ color: "var(--sv-text-primary)" }}>
               <Activity className="w-4 h-4 text-primary" />
               INCOMING PACKETS
             </div>
