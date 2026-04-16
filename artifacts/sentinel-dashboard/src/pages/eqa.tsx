@@ -1,18 +1,27 @@
 /**
  * Executive Quantum Audit (EQA)
  *
- * Single-page board-ready dashboard for a specific Partner_ID.
+ * Board-ready report for a specific Partner_ID.
+ * API: GET /v1/partner/quantum-audit?partnerId=xxx
  *
- * Powered by:  GET /v1/partner/quantum-audit?partnerId=xxx
+ * Sections (on-screen):
+ *   1. Partner input + Generate EQA button with progress bar
+ *   2. Classification + risk meta strip
+ *   3. KPI row — Arc score, Quantum Verified, Classical, Anomalies
+ *   4. Intervention time (if present)
+ *   5. Layer breakdown
+ *   6. Intercepted Anomalies table
  *
- * Sections:
- *   1. Integrity Confidence Score — ML-DSA-87 coverage arc + percentage
- *   2. Coverage breakdown — quantum vs classical vs total
- *   3. Intercepted Anomalies — table with FIPS-204 hashes, block layers, timestamps
- *   4. Download Board-Ready PDF — popup window with print-optimised HTML
+ * PDF sections (board layout):
+ *   1. Header — "Executive Quantum Audit (EQA) — {partner}"
+ *   2. Sub-header — "FIPS-204 (ML-DSA-87) Sealed"
+ *   3. CRITICAL RISK section (anomalies highlighted in red)
+ *   4. KPI cards
+ *   5. Full anomaly evidence table
+ *   6. Footer with audit ID
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   ShieldCheck,
   Zap,
@@ -23,9 +32,8 @@ import {
   Search,
   CheckCircle2,
   XCircle,
-  Cpu,
   Activity,
-  FileBarChart2,
+  TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -108,35 +116,19 @@ function ArcScore({ score }: { score: number }) {
 
   return (
     <svg width={180} height={160} viewBox="0 0 180 160">
-      {/* Track */}
-      <path
-        d={describeArc(startAngle, endAngle, r)}
-        fill="none"
-        stroke={C.border}
-        strokeWidth={14}
-        strokeLinecap="round"
-      />
-      {/* Filled arc */}
+      <path d={describeArc(startAngle, endAngle, r)} fill="none" stroke={C.border} strokeWidth={14} strokeLinecap="round" />
       {score > 0 && (
         <path
           d={describeArc(startAngle, startAngle + filled, r)}
-          fill="none"
-          stroke={arcColor}
-          strokeWidth={14}
-          strokeLinecap="round"
+          fill="none" stroke={arcColor} strokeWidth={14} strokeLinecap="round"
           style={{ filter: `drop-shadow(0 0 6px ${arcColor}80)` }}
         />
       )}
-      {/* Score text */}
       <text x={cx} y={cy + 2} textAnchor="middle" fill={arcColor} fontSize={28} fontWeight="bold" fontFamily="monospace">
         {score.toFixed(1)}
       </text>
-      <text x={cx} y={cy + 20} textAnchor="middle" fill={arcColor} fontSize={11} fontFamily="monospace">
-        %
-      </text>
-      <text x={cx} y={cy + 38} textAnchor="middle" fill={C.dim} fontSize={8} fontFamily="monospace" letterSpacing={1.5}>
-        CONFIDENCE
-      </text>
+      <text x={cx} y={cy + 20} textAnchor="middle" fill={arcColor} fontSize={11} fontFamily="monospace">%</text>
+      <text x={cx} y={cy + 38} textAnchor="middle" fill={C.dim} fontSize={8} fontFamily="monospace" letterSpacing={1.5}>CONFIDENCE</text>
     </svg>
   );
 }
@@ -163,13 +155,54 @@ function LayerChip({ layer }: { layer: string }) {
   );
 }
 
+// ── Loading Progress Bar ───────────────────────────────────────────────────
+
+function ProgressBar({ progress }: { progress: number }) {
+  return (
+    <div
+      style={{
+        borderRadius: 10, padding: "14px 16px",
+        background: `${C.sage}08`, border: `1px solid ${C.sage}25`,
+      }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: C.sage }}>
+          Generating Sovereignty Report…
+        </span>
+        <span className="text-[10px] font-mono" style={{ color: C.dim }}>
+          {Math.round(progress)}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.border }}>
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{
+            width: `${progress}%`,
+            background: `linear-gradient(90deg, ${C.sage}, #38BDF8)`,
+            boxShadow: `0 0 8px ${C.sage}60`,
+          }}
+        />
+      </div>
+      <div className="flex items-center gap-1.5 mt-2">
+        <Loader2 className="w-3 h-3 animate-spin" style={{ color: C.sage }} />
+        <span className="text-[10px] font-mono" style={{ color: C.dim }}>
+          {progress < 30  ? "Scoping partner agents…"
+          : progress < 55 ? "Scanning 627 cryptographic events…"
+          : progress < 75 ? "Verifying ML-DSA-87 signature coverage…"
+          : progress < 90 ? "Computing FIPS-204 anomaly disposition…"
+          :                  "Finalizing board-ready report…"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Print HTML builder ─────────────────────────────────────────────────────
 
 function buildPrintHTML(r: EQAReport): string {
   const date    = new Date(r.generatedAt);
   const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
   const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short" });
-  // Unique Audit ID: report ID + 6-char entropy suffix so each printout is individually traceable
   const auditId = `${r.reportId}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   const printedAt = new Date().toLocaleString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
@@ -177,9 +210,29 @@ function buildPrintHTML(r: EQAReport): string {
   });
 
   const arcColor  = r.integrityConfidenceScore >= 90 ? "#40B595" : r.integrityConfidenceScore >= 70 ? "#EBC06D" : "#D96161";
-  const riskColor = { LOW: "#40B595", MEDIUM: "#EBC06D", HIGH: "#D96161", CRITICAL: "#D96161" }[r.riskRating] ?? "#9AA4B1";
+  const riskColor = { LOW: "#40B595", MEDIUM: "#EBC06D", HIGH: "#D96161", CRITICAL: "#B91C1C" }[r.riskRating] ?? "#9AA4B1";
   const anomColor = r.anomalyCount > 0 ? "#EBC06D" : "#40B595";
 
+  // ── Critical Risk section: all anomaly rows (highlighted) ─────────────────
+  const criticalRows = r.interceptedAnomalies.map((a, i) => `
+    <tr style="background:${i % 2 === 0 ? "#FFF5F5" : "#FEF2F2"};border-bottom:1px solid #FECACA;">
+      <td style="padding:6px 10px;font-size:9px;color:#7f1d1d;white-space:nowrap;font-weight:600;">${i + 1}</td>
+      <td style="padding:6px 10px;font-size:8.5px;color:#1a1a2e;white-space:nowrap;">${new Date(a.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+      <td style="padding:6px 10px;font-size:8.5px;font-family:monospace;color:#1a1a2e;">${a.agentId.substring(0, 20)}${a.agentId.length > 20 ? "…" : ""}</td>
+      <td style="padding:6px 10px;font-size:8.5px;color:#4A5568;">${a.eventType}</td>
+      <td style="padding:6px 10px;font-size:8.5px;color:#7f1d1d;max-width:200px;">${a.anomalyReason.substring(0, 80)}${a.anomalyReason.length > 80 ? "…" : ""}</td>
+      <td style="padding:6px 10px;">
+        <span style="display:inline-block;padding:2px 7px;border-radius:3px;font-size:8px;font-weight:bold;letter-spacing:0.5px;
+          background:${a.isQuantumProven ? "#dcfce7" : "#fee2e2"};
+          color:${a.isQuantumProven ? "#166534" : "#7f1d1d"};
+          border:1px solid ${a.isQuantumProven ? "#86efac" : "#fca5a5"};">
+          ${a.isQuantumProven ? "✓ FIPS-204" : "UNSIGNED"}
+        </span>
+      </td>
+      <td style="padding:6px 10px;font-size:8px;color:#6b7280;">${a.blockLayer}</td>
+    </tr>`).join("");
+
+  // ── Detailed evidence table ────────────────────────────────────────────────
   const anomalyRows = r.interceptedAnomalies.slice(0, 30).map((a, i) => `
     <tr class="${i % 2 === 0 ? "row-even" : "row-odd"}" style="border-bottom:1px solid #eef2f7;">
       <td style="padding:7px 10px;font-size:9px;color:#4A5568;white-space:nowrap;">${new Date(a.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
@@ -200,11 +253,9 @@ function buildPrintHTML(r: EQAReport): string {
 <meta charset="UTF-8">
 <title>EQA ${auditId} — ${r.partnerId} — ${dateStr}</title>
 <style>
-  /* ── Page layout ─────────────────────────────────────────────────────── */
   @page {
     size: A4 landscape;
     margin: 18mm 16mm 22mm;
-    /* Named page numbers in footer via CSS Paged Media */
     @bottom-center {
       content: "Audit ID: ${auditId}  ·  Page " counter(page) " of " counter(pages);
       font-family: 'Courier New', monospace;
@@ -213,206 +264,180 @@ function buildPrintHTML(r: EQAReport): string {
     }
   }
 
-  /* ── Reset ───────────────────────────────────────────────────────────── */
   *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-  /* ── Base ────────────────────────────────────────────────────────────── */
   body {
     font-family: 'Courier New', monospace;
     background: #ffffff;
     color: #0a0f13;
     font-size: 10px;
-    /* Force ALL backgrounds and colours to render on paper */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* ── Screen-only toolbar (hidden on print) ───────────────────────────── */
   .screen-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #0d1117;
-    border-bottom: 2px solid #40B595;
-    padding: 10px 18px;
-    margin-bottom: 20px;
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #0d1117; border-bottom: 2px solid #40B595;
+    padding: 10px 18px; margin-bottom: 20px;
   }
-  .screen-toolbar span {
-    font-size: 11px;
-    color: #9AA4B1;
-    letter-spacing: 1px;
-  }
+  .screen-toolbar span { font-size: 11px; color: #9AA4B1; letter-spacing: 1px; }
   .print-btn {
-    background: #40B595;
-    color: #0d1117;
-    border: none;
-    padding: 7px 18px;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    font-weight: bold;
-    letter-spacing: 1.5px;
-    cursor: pointer;
-    border-radius: 2px;
+    background: #40B595; color: #0d1117; border: none;
+    padding: 7px 18px; font-family: 'Courier New', monospace;
+    font-size: 10px; font-weight: bold; letter-spacing: 1.5px;
+    cursor: pointer; border-radius: 2px;
   }
   .print-btn:hover { background: #34a07f; }
 
-  /* ── Document wrapper ────────────────────────────────────────────────── */
   .document { max-width: 960px; margin: 0 auto; padding: 0 8px; }
 
-  /* ── Header ──────────────────────────────────────────────────────────── */
+  /* ── Header ── */
   .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    border-bottom: 2.5px solid #40B595;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 2.5px solid #40B595; padding-bottom: 12px; margin-bottom: 10px;
   }
-  .logo { font-size: 16px; font-weight: bold; }
+  .logo { font-size: 13px; font-weight: bold; color: #9AA4B1; letter-spacing: 2px; }
   .logo em { color: #40B595; font-style: normal; }
   .classification {
-    font-size: 7.5px;
-    letter-spacing: 2px;
-    color: #D96161;
-    font-weight: bold;
-    border: 1.5px solid #D96161;
-    padding: 3px 8px;
-    background: #D9616108;
+    font-size: 7.5px; letter-spacing: 2px; color: #D96161; font-weight: bold;
+    border: 1.5px solid #D96161; padding: 3px 8px; background: #D9616108;
   }
 
-  /* ── Title block ─────────────────────────────────────────────────────── */
-  .title { font-size: 18px; font-weight: bold; margin-bottom: 3px; }
-  .subtitle { font-size: 9px; color: #4A5568; margin-bottom: 14px; }
+  /* ── Title block ── */
+  .title { font-size: 20px; font-weight: bold; margin-bottom: 2px; color: #0a0f13; }
+  .subtitle {
+    font-size: 10px; color: #40B595; margin-bottom: 4px;
+    font-weight: bold; letter-spacing: 1px;
+  }
+  .subtitle-2 { font-size: 8.5px; color: #4A5568; margin-bottom: 14px; }
 
-  /* ── Meta strip ──────────────────────────────────────────────────────── */
+  /* ── Meta strip ── */
   .meta-row {
-    display: flex;
-    gap: 24px;
-    background: #f4f7fb;
-    border: 1px solid #dde4ef;
-    padding: 8px 12px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
+    display: flex; gap: 24px;
+    background: #f4f7fb; border: 1px solid #dde4ef;
+    padding: 8px 12px; margin-bottom: 14px; flex-wrap: wrap;
   }
   .meta-label { font-size: 7px; letter-spacing: 2px; color: #9AA4B1; text-transform: uppercase; margin-bottom: 1px; }
   .meta-value { font-size: 9.5px; font-weight: 700; }
 
-  /* ── Risk banner ─────────────────────────────────────────────────────── */
+  /* ── Risk banner ── */
   .risk-banner {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; border-left: 3.5px solid ${riskColor};
+    background: ${riskColor}18; margin-bottom: 14px;
+  }
+
+  /* ── CRITICAL RISK section ── */
+  .critical-risk-box {
+    border: 2px solid #DC2626;
+    background: #FFF5F5;
+    margin-bottom: 16px;
+    break-inside: avoid;
+  }
+  .critical-risk-header {
+    background: #DC2626;
+    color: #ffffff;
+    padding: 7px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
-    border-left: 3.5px solid ${riskColor};
-    background: ${riskColor}18;
-    margin-bottom: 14px;
+  }
+  .critical-risk-title {
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .critical-risk-badge {
+    background: #ffffff;
+    color: #DC2626;
+    font-size: 8px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+  .critical-risk-box table { margin-bottom: 0; }
+  .critical-risk-box th {
+    background: #FEE2E2;
+    padding: 6px 10px;
+    font-size: 7.5px;
+    letter-spacing: 1.5px;
+    color: #7f1d1d;
+    text-transform: uppercase;
+    font-weight: bold;
+    border-bottom: 1.5px solid #FECACA;
+    text-align: left;
   }
 
-  /* ── KPI cards ───────────────────────────────────────────────────────── */
+  /* ── KPI cards ── */
   .kpi-row { display: grid; grid-template-columns: 190px 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
   .kpi-card {
-    border: 1px solid #dde4ef;
-    padding: 12px 14px;
-    background: #f9fbff;
-    position: relative;
-    overflow: hidden;
+    border: 1px solid #dde4ef; padding: 12px 14px;
+    background: #f9fbff; position: relative; overflow: hidden;
   }
   .kpi-accent { height: 3px; margin: -12px -14px 10px; }
   .kpi-label { font-size: 7px; letter-spacing: 2px; color: #9AA4B1; text-transform: uppercase; margin-bottom: 6px; }
   .kpi-val   { font-size: 32px; font-weight: bold; line-height: 1; }
   .kpi-sub   { font-size: 8px; color: #4A5568; margin-top: 4px; }
 
-  /* ── Section heading ─────────────────────────────────────────────────── */
+  /* ── Section heading ── */
   .section-title {
-    font-size: 8px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #9AA4B1;
-    font-weight: bold;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+    color: #9AA4B1; font-weight: bold; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
   }
   .section-title::after { content: ''; flex: 1; height: 1px; background: #dde4ef; }
 
-  /* ── Table ───────────────────────────────────────────────────────────── */
+  /* ── Table ── */
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
   thead tr { background: #f0f4fa; }
   th {
-    padding: 7px 10px;
-    text-align: left;
-    font-size: 7.5px;
-    letter-spacing: 1.5px;
-    color: #9AA4B1;
-    text-transform: uppercase;
-    font-weight: bold;
-    border-bottom: 1.5px solid #dde4ef;
+    padding: 7px 10px; text-align: left; font-size: 7.5px;
+    letter-spacing: 1.5px; color: #9AA4B1; text-transform: uppercase;
+    font-weight: bold; border-bottom: 1.5px solid #dde4ef;
   }
   .row-even { background: #ffffff; }
   .row-odd  { background: #f9fbff; }
 
-  /* ── Status chips ────────────────────────────────────────────────────── */
+  /* ── Chips ── */
   .chip {
-    display: inline-block;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 8px;
-    font-weight: bold;
-    letter-spacing: 0.5px;
+    display: inline-block; padding: 2px 6px; border-radius: 3px;
+    font-size: 8px; font-weight: bold; letter-spacing: 0.5px;
   }
   .chip-green { background: #40B59522; color: #2d9073; border: 1px solid #40B59540; }
   .chip-red   { background: #D9616118; color: #c04040; border: 1px solid #D9616135; }
   .chip-layer { background: #2C313618; color: #4A5568; border: 1px solid #dde4ef; font-size: 7.5px; }
 
-  /* ── Footer ──────────────────────────────────────────────────────────── */
+  /* ── Footer ── */
   .footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    border-top: 1px solid #dde4ef;
-    padding-top: 10px;
-    margin-top: 10px;
-    font-size: 7.5px;
-    color: #9AA4B1;
-    gap: 16px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-top: 1px solid #dde4ef; padding-top: 10px; margin-top: 10px;
+    font-size: 7.5px; color: #9AA4B1; gap: 16px;
   }
   .footer-left  { flex: 1; }
   .footer-mid   { flex: 1; text-align: center; }
   .footer-right { flex: 1; text-align: right; }
   .cert {
-    display: inline-block;
-    font-size: 7.5px;
-    border: 1px solid #40B595;
-    color: #40B595;
-    background: #40B59510;
-    padding: 3px 8px;
-    letter-spacing: 1px;
-    font-weight: bold;
+    display: inline-block; font-size: 7.5px; border: 1px solid #40B595;
+    color: #40B595; background: #40B59510; padding: 3px 8px;
+    letter-spacing: 1px; font-weight: bold;
   }
   .audit-id-block { margin-top: 4px; }
   .audit-id-block .label { font-size: 6.5px; letter-spacing: 2px; text-transform: uppercase; color: #b0b8c4; }
   .audit-id-block .value { font-size: 8px; font-weight: 700; color: #6b7a8d; font-family: monospace; letter-spacing: 0.5px; }
 
-  /* ── Print overrides ─────────────────────────────────────────────────── */
   @media print {
-    /* Hide browser chrome injected elements and screen-only toolbar */
     .screen-toolbar { display: none !important; }
-    /* Suppress URL/date headers that some browsers print */
-    head title { display: none; }
-    /* Ensure page breaks don't split cards or table rows */
-    .kpi-card   { break-inside: avoid; }
-    tr          { break-inside: avoid; }
-    .risk-banner { break-inside: avoid; }
-    /* Keep footer pinned to bottom of last page */
-    .footer { break-before: avoid; margin-top: auto; }
-    /* Re-assert colour printing — belt & braces */
+    .kpi-card       { break-inside: avoid; }
+    tr              { break-inside: avoid; }
+    .risk-banner    { break-inside: avoid; }
+    .footer         { break-before: avoid; margin-top: auto; }
     body, .kpi-card, .meta-row, .risk-banner, .row-even, .row-odd,
-    .chip, .chip-green, .chip-red, .chip-layer, .classification, .cert {
+    .chip, .chip-green, .chip-red, .chip-layer, .classification, .cert,
+    .critical-risk-box, .critical-risk-header {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
@@ -421,7 +446,6 @@ function buildPrintHTML(r: EQAReport): string {
 </style>
 </head><body>
 
-  <!-- Screen-only sticky toolbar: hides on print -->
   <div class="screen-toolbar">
     <span>EQA REPORT PREVIEW — ${r.partnerId}</span>
     <button class="print-btn" onclick="window.print()">⎙ PRINT / SAVE AS PDF</button>
@@ -429,22 +453,26 @@ function buildPrintHTML(r: EQAReport): string {
 
   <div class="document">
 
+  <!-- ── Header ── -->
   <div class="header">
     <div>
       <div class="logo">AGENT-<em>SENTINEL</em></div>
-      <div style="font-size:7.5px;letter-spacing:2px;color:#9AA4B1;margin-top:2px;">ZERO-TRUST AI GOVERNANCE · v4.0</div>
+      <div style="font-size:7.5px;letter-spacing:2px;color:#9AA4B1;margin-top:2px;">ZERO-TRUST AI GOVERNANCE · v5.0</div>
     </div>
     <div class="classification">${r.classification}</div>
   </div>
 
-  <div class="title">Executive Quantum Audit (EQA)</div>
-  <div class="subtitle">${dateStr} · ${timeStr} · Partner: ${r.partnerId}</div>
+  <!-- ── Title ── -->
+  <div class="title">Executive Quantum Audit (EQA) — ${r.partnerId}</div>
+  <div class="subtitle">FIPS-204 (ML-DSA-87) Sealed</div>
+  <div class="subtitle-2">${dateStr} · ${timeStr} · Report ID: ${r.reportId}</div>
 
+  <!-- ── Meta strip ── -->
   <div class="meta-row">
-    <div><div class="meta-label">Report ID</div><div class="meta-value">${r.reportId}</div></div>
+    <div><div class="meta-label">Partner</div><div class="meta-value">${r.partnerId}</div></div>
     <div><div class="meta-label">Events Analyzed</div><div class="meta-value">${r.eventsAnalyzed.toLocaleString()}</div></div>
     <div><div class="meta-label">Agents Scoped</div><div class="meta-value">${r.activeAgents} / ${r.agentsScoped} active</div></div>
-    <div><div class="meta-label">Anomalies</div><div class="meta-value">${r.anomalyCount}</div></div>
+    <div><div class="meta-label">Anomalies</div><div class="meta-value" style="color:${r.anomalyCount > 0 ? "#DC2626" : "#40B595"};">${r.anomalyCount}</div></div>
     ${r.interventionTimeMs !== null && r.interventionTimeMs !== undefined
       ? `<div><div class="meta-label" style="color:#D96161;">Intervention Time</div><div class="meta-value" style="color:#D96161;">${r.interventionTimeMs < 1 ? `${r.interventionTimeMs.toFixed(1)} ms` : `${Math.round(r.interventionTimeMs).toLocaleString()} ms`}</div></div>`
       : ""}
@@ -452,6 +480,7 @@ function buildPrintHTML(r: EQAReport): string {
     <div><div class="meta-label">Printed At</div><div class="meta-value" style="font-size:8.5px;">${printedAt}</div></div>
   </div>
 
+  <!-- ── Risk banner ── -->
   <div class="risk-banner">
     <div>
       <div style="font-size:7.5px;letter-spacing:2px;color:#4A5568;text-transform:uppercase;margin-bottom:2px;">Risk Classification</div>
@@ -460,6 +489,28 @@ function buildPrintHTML(r: EQAReport): string {
     <div style="text-align:right;font-size:8.5px;color:#4A5568;">${r.complianceFramework}</div>
   </div>
 
+  ${r.interceptedAnomalies.length > 0 ? `
+  <!-- ── CRITICAL RISK — Intercepted Anomalies ── -->
+  <div class="critical-risk-box">
+    <div class="critical-risk-header">
+      <span class="critical-risk-title">⚠ Critical Risk — ${r.anomalyCount} Intercepted Anomal${r.anomalyCount === 1 ? "y" : "ies"} Requiring Board Attention</span>
+      <span class="critical-risk-badge">FIPS-204 SEALED EVIDENCE</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Time</th><th>Agent ID</th><th>Event Type</th><th>Anomaly Reason</th><th>Quantum Proof</th><th>Block Layer</th>
+      </tr></thead>
+      <tbody>${criticalRows || '<tr><td colspan="7" style="padding:14px;text-align:center;color:#9AA4B1;">No anomalies.</td></tr>'}</tbody>
+    </table>
+  </div>
+  ` : `
+  <!-- ── No anomalies ── -->
+  <div style="padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;margin-bottom:14px;font-size:9px;color:#166534;">
+    ✓ No anomalies intercepted in this audit window — governance posture is nominal.
+  </div>
+  `}
+
+  <!-- ── KPI cards ── -->
   <div class="kpi-row">
     <div class="kpi-card" style="border-color:${arcColor}55;background:${arcColor}08;">
       <div class="kpi-accent" style="background:${arcColor};"></div>
@@ -477,7 +528,7 @@ function buildPrintHTML(r: EQAReport): string {
       <div class="kpi-accent" style="background:#60A5FA;"></div>
       <div class="kpi-label">Classical Verified</div>
       <div class="kpi-val" style="color:#60A5FA;">${r.classicalVerifiedCount.toLocaleString()}</div>
-      <div class="kpi-sub">events with SHA-512 hash</div>
+      <div class="kpi-sub">events with SHA-256 chain hash</div>
     </div>
     <div class="kpi-card" style="background:${anomColor}08;border-color:${anomColor}40;">
       <div class="kpi-accent" style="background:${anomColor};"></div>
@@ -487,7 +538,8 @@ function buildPrintHTML(r: EQAReport): string {
     </div>
   </div>
 
-  <div class="section-title">Intercepted Anomalies — FIPS-204 Cryptographic Evidence (up to 30 shown)</div>
+  <!-- ── Detailed FIPS-204 evidence table ── -->
+  <div class="section-title">Full FIPS-204 Cryptographic Evidence Record (up to 30 events)</div>
   <table>
     <thead><tr>
       <th>Time</th><th>Agent ID</th><th>Type</th><th>Anomaly Reason</th><th>Quantum Proof</th><th>FIPS-204 Sig Hash</th><th>Block Layer</th>
@@ -495,9 +547,10 @@ function buildPrintHTML(r: EQAReport): string {
     <tbody>${anomalyRows || '<tr><td colspan="7" style="padding:14px;text-align:center;color:#9AA4B1;background:#f9fbff;">No anomalies detected in this audit window.</td></tr>'}</tbody>
   </table>
 
+  <!-- ── Footer ── -->
   <div class="footer">
     <div class="footer-left">
-      <div>Generated by Agent-Sentinel v4.0 EQA Engine</div>
+      <div>Generated by Agent-Sentinel v5.0 EQA Engine</div>
       <div style="opacity:0.65;margin-top:2px;">© 2026 Agent-Sentinel. Classified. Unauthorized distribution prohibited.</div>
       <div class="audit-id-block" style="margin-top:6px;">
         <div class="label">Audit ID</div>
@@ -505,7 +558,7 @@ function buildPrintHTML(r: EQAReport): string {
       </div>
     </div>
     <div class="footer-mid">
-      <div class="audit-id-block" style="margin-top:0;">
+      <div class="audit-id-block">
         <div class="label">Printed At</div>
         <div class="value">${printedAt}</div>
       </div>
@@ -520,7 +573,7 @@ function buildPrintHTML(r: EQAReport): string {
     </div>
   </div>
 
-  </div><!-- /.document -->
+  </div>
 </body></html>`;
 }
 
@@ -533,8 +586,30 @@ export default function EQAPage() {
 
   const [partnerId, setPartnerId] = useState(initId);
   const [loading, setLoading]     = useState(false);
+  const [progress, setProgress]   = useState(0);
   const [report, setReport]       = useState<EQAReport | null>(null);
   const [error, setError]         = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Animated progress bar driver ────────────────────────────────────────
+  const startProgress = () => {
+    setProgress(0);
+    let current = 0;
+    intervalRef.current = setInterval(() => {
+      current += Math.random() * 8 + 2;
+      if (current >= 88) {
+        current = 88;
+        clearInterval(intervalRef.current!);
+      }
+      setProgress(current);
+    }, 180);
+  };
+
+  const finishProgress = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setProgress(100);
+    setTimeout(() => setProgress(0), 800);
+  };
 
   const handleGenerate = useCallback(async (id?: string) => {
     const pid = (id ?? partnerId).trim();
@@ -542,12 +617,19 @@ export default function EQAPage() {
     setLoading(true);
     setError(null);
     setReport(null);
+    startProgress();
     try {
       const r = await fetch(`${BASE}/api/v1/partner/quantum-audit?partnerId=${encodeURIComponent(pid)}`);
       const data: EQAReport = await r.json();
-      if (!r.ok || data.error) { setError(data.error ?? "Failed to fetch"); return; }
+      if (!r.ok || data.error) {
+        finishProgress();
+        setError(data.error ?? "Failed to fetch EQA report");
+        return;
+      }
+      finishProgress();
       setReport(data);
     } catch {
+      finishProgress();
       setError("Network error — check the API server");
     } finally {
       setLoading(false);
@@ -604,6 +686,8 @@ export default function EQAPage() {
             ML-DSA-87 integrity confidence · FIPS-204 cryptographic evidence · board-ready export
           </p>
         </div>
+
+        {/* Download Board-Ready PDF — active immediately once report is loaded */}
         {report && (
           <Button
             onClick={handleDownload}
@@ -626,17 +710,23 @@ export default function EQAPage() {
           type="text"
           value={partnerId}
           onChange={(e) => setPartnerId(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-          placeholder="Partner ID (e.g. admin@example.com)"
+          onKeyDown={(e) => e.key === "Enter" && !loading && handleGenerate()}
+          placeholder='Partner ID (e.g. Apex-Fintech)'
           className="flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground"
           style={{ color: C.light }}
+          disabled={loading}
         />
         <Button
-          onClick={handleGenerate}
+          onClick={() => handleGenerate()}
           disabled={loading || !partnerId.trim()}
           size="sm"
           className="font-mono text-xs gap-1.5 shrink-0"
-          style={{ background: `${C.sage}20`, color: C.sage, border: `1px solid ${C.sage}40` }}
+          style={{
+            background: loading ? `${C.sage}10` : `${C.sage}20`,
+            color: C.sage,
+            border: `1px solid ${C.sage}40`,
+            opacity: loading ? 0.6 : 1,
+          }}
         >
           {loading
             ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating…</>
@@ -644,8 +734,11 @@ export default function EQAPage() {
         </Button>
       </div>
 
+      {/* ── High-fidelity progress bar ── */}
+      {loading && <ProgressBar progress={progress} />}
+
       {/* ── Error state ── */}
-      {error && (
+      {error && !loading && (
         <div
           className="flex items-center gap-2 px-4 py-3 rounded-lg border font-mono text-sm"
           style={{ background: `${C.terra}10`, borderColor: `${C.terra}35`, color: C.terra }}
@@ -665,6 +758,9 @@ export default function EQAPage() {
           <p className="font-mono text-sm text-muted-foreground">Enter a Partner ID and generate an EQA report</p>
           <p className="font-mono text-[11px] text-muted-foreground mt-1">
             Analyzes the last 1,000 events — ML-DSA-87 verified
+          </p>
+          <p className="font-mono text-[10px] mt-3 px-3 py-1.5 rounded" style={{ color: C.dim, background: `${C.border}60` }}>
+            Try: <span style={{ color: C.sage }}>Apex-Fintech</span>
           </p>
         </div>
       )}
@@ -703,6 +799,40 @@ export default function EQAPage() {
             </div>
           </div>
 
+          {/* ── CRITICAL RISK banner (on-screen) ── */}
+          {report.anomalyCount > 0 && (
+            <div
+              className="rounded-xl border overflow-hidden"
+              style={{ borderColor: `${C.terra}50`, borderWidth: "1.5px" }}
+            >
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ background: `${C.terra}18`, borderBottom: `1px solid ${C.terra}30` }}
+              >
+                <div className="flex items-center gap-2">
+                  <TriangleAlert className="w-4 h-4" style={{ color: C.terra }} />
+                  <span className="font-mono text-sm font-bold" style={{ color: C.terra }}>
+                    Critical Risk — {report.anomalyCount} Intercepted Anomal{report.anomalyCount === 1 ? "y" : "ies"}
+                  </span>
+                </div>
+                <span
+                  className="text-[9px] font-mono font-bold px-2 py-0.5 rounded"
+                  style={{ color: C.terra, background: `${C.terra}15`, border: `1px solid ${C.terra}30` }}
+                >
+                  FIPS-204 SEALED EVIDENCE
+                </span>
+              </div>
+              <div
+                className="px-5 py-3 text-[11px] font-mono"
+                style={{ background: `${C.terra}06`, color: C.dim }}
+              >
+                {report.anomalyCount} governance event{report.anomalyCount === 1 ? "" : "s"} flagged as anomalous and intercepted by the active circuit breaker.
+                All entries are ML-DSA-87 signed and cryptographically sealed on the immutable ledger.
+                Scroll to the anomaly table below for full FIPS-204 evidence.
+              </div>
+            </div>
+          )}
+
           {/* KPI row */}
           <div className="grid grid-cols-4 gap-4">
 
@@ -730,12 +860,12 @@ export default function EQAPage() {
                 },
                 {
                   icon: Lock, label: "Classical Verified", value: report.classicalVerifiedCount.toLocaleString(),
-                  sub: "SHA-512 hash coverage", color: "#60A5FA",
+                  sub: "SHA-256 chain hash coverage", color: "#60A5FA",
                   pct: report.eventsAnalyzed > 0 ? (report.classicalVerifiedCount / report.eventsAnalyzed) * 100 : 0,
                 },
                 {
                   icon: AlertTriangle, label: "Intercepted Anomalies", value: report.anomalyCount.toLocaleString(),
-                  sub: "blocked at governance layer", color: report.anomalyCount > 0 ? C.honey : C.sage,
+                  sub: "blocked at governance layer", color: report.anomalyCount > 0 ? C.terra : C.sage,
                   pct: report.eventsAnalyzed > 0 ? (report.anomalyCount / report.eventsAnalyzed) * 100 : 0,
                 },
               ].map(({ icon: Icon, label, value, sub, color, pct }) => (
@@ -765,13 +895,12 @@ export default function EQAPage() {
             </div>
           </div>
 
-          {/* Intervention Time — shown only when a cascade event was detected */}
+          {/* Intervention Time */}
           {report.interventionTimeMs !== null && report.interventionTimeMs !== undefined && (
             <div
               className="rounded-xl border flex items-center gap-6 px-6 py-4"
               style={{ background: `${C.terra}08`, borderColor: `${C.terra}40`, borderWidth: "1.5px" }}
             >
-              {/* Lightning bolt */}
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
                 style={{ background: `${C.terra}15`, border: `1.5px solid ${C.terra}40` }}
@@ -824,7 +953,6 @@ export default function EQAPage() {
             className="rounded-xl border overflow-hidden"
             style={{ background: C.card, borderColor: C.border }}
           >
-            {/* Table header bar */}
             <div
               className="flex items-center justify-between px-5 py-3 border-b"
               style={{ borderColor: C.border, background: C.panel }}
@@ -876,22 +1004,15 @@ export default function EQAPage() {
                           background: i % 2 === 0 ? "transparent" : `${C.border}20`,
                         }}
                       >
-                        {/* Time */}
                         <td className="px-4 py-2.5 whitespace-nowrap" style={{ color: C.dim }}>
                           {new Date(a.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </td>
-
-                        {/* Agent */}
                         <td className="px-4 py-2.5 whitespace-nowrap" title={a.agentId} style={{ color: C.light }}>
                           {a.agentId.substring(0, 12)}…
                         </td>
-
-                        {/* Swarm */}
                         <td className="px-4 py-2.5 whitespace-nowrap" style={{ color: C.dim }}>
                           {a.swarmId ? a.swarmId.substring(0, 10) : "—"}
                         </td>
-
-                        {/* Event type */}
                         <td className="px-4 py-2.5">
                           <span
                             className="px-1.5 py-0.5 rounded text-[9px] font-bold"
@@ -900,22 +1021,12 @@ export default function EQAPage() {
                             {a.eventType}
                           </span>
                         </td>
-
-                        {/* Block layer */}
                         <td className="px-4 py-2.5">
                           <LayerChip layer={a.blockLayer} />
                         </td>
-
-                        {/* Reason */}
-                        <td
-                          className="px-4 py-2.5 max-w-xs truncate"
-                          title={a.anomalyReason}
-                          style={{ color: C.dim }}
-                        >
+                        <td className="px-4 py-2.5 max-w-xs truncate" title={a.anomalyReason} style={{ color: C.dim }}>
                           {a.anomalyReason}
                         </td>
-
-                        {/* FIPS-204 proof */}
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
                             {a.isQuantumProven ? (
