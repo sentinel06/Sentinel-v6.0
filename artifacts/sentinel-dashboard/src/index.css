@@ -144,6 +144,30 @@
   --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* ── Sovereign surface tokens (light mode) ─────────────────────────────── */
+  --sv-root-bg:              #EDF1F5;
+  --sv-sidebar-bg:           rgba(244,247,250,0.92);
+  --sv-sidebar-border:       rgba(0,0,0,0.1);
+  --sv-header-bg:            rgba(244,247,250,0.85);
+  --sv-inspector-bg:         rgba(237,241,245,0.95);
+  --sv-inspector-border:     rgba(0,0,0,0.09);
+  --sv-panel-border:         rgba(0,0,0,0.09);
+  --sv-section-label:        rgba(70,85,100,0.65);
+  --sv-btn-bg:               rgba(0,0,0,0.04);
+  --sv-btn-border:           rgba(0,0,0,0.12);
+  --sv-search-bg:            rgba(0,0,0,0.04);
+  --sv-search-border:        rgba(0,0,0,0.1);
+  --sv-search-text:          rgba(15,25,35,0.75);
+  --sv-search-icon:          rgba(15,25,35,0.3);
+  --sv-text-primary:         #0F1923;
+  --sv-text-dim:             #5A6677;
+  --sv-notif-bg:             rgba(244,247,250,0.97);
+  --sv-notif-border:         rgba(0,0,0,0.1);
+  --sv-separator:            rgba(0,0,0,0.07);
+  --sv-footer-bg:            rgba(0,0,0,0.03);
+  --sv-breadcrumb-divider:   rgba(0,0,0,0.2);
+  --sv-empty-text:           rgba(15,25,35,0.35);
 }
 
 .dark {
@@ -206,6 +230,30 @@
   --zen-warning: #EBC06D;          /* honey gold */
   --zen-error: #D96161;            /* dusty terracotta */
   --zen-stream-bg: #1F2226;        /* live stream card bg */
+
+  /* ── Sovereign surface tokens (dark mode) ──────────────────────────────── */
+  --sv-root-bg:              #0a0a0a;
+  --sv-sidebar-bg:           rgba(10,12,20,0.84);
+  --sv-sidebar-border:       rgba(255,255,255,0.08);
+  --sv-header-bg:            rgba(10,12,20,0.78);
+  --sv-inspector-bg:         rgba(10,12,18,0.88);
+  --sv-inspector-border:     rgba(255,255,255,0.08);
+  --sv-panel-border:         rgba(255,255,255,0.08);
+  --sv-section-label:        rgba(154,164,177,0.66);
+  --sv-btn-bg:               rgba(255,255,255,0.05);
+  --sv-btn-border:           rgba(255,255,255,0.1);
+  --sv-search-bg:            rgba(255,255,255,0.05);
+  --sv-search-border:        rgba(255,255,255,0.08);
+  --sv-search-text:          rgba(255,255,255,0.75);
+  --sv-search-icon:          rgba(255,255,255,0.25);
+  --sv-text-primary:         #ffffff;
+  --sv-text-dim:             #9AA4B1;
+  --sv-notif-bg:             rgba(10,12,20,0.97);
+  --sv-notif-border:         rgba(255,255,255,0.1);
+  --sv-separator:            rgba(255,255,255,0.06);
+  --sv-footer-bg:            rgba(255,255,255,0.02);
+  --sv-breadcrumb-divider:   rgba(255,255,255,0.2);
+  --sv-empty-text:           rgba(255,255,255,0.35);
 }
 
 @layer base {
@@ -329,12 +377,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-featured-inactive {
-  color: #9AA4B1;
+  color: var(--sv-text-dim);
 }
 
 .nav-featured-inactive:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: var(--sv-btn-bg);
+  color: var(--sv-text-primary);
 }
 
 .nav-secondary-item {
@@ -356,12 +404,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-secondary-inactive {
-  color: #9AA4B1;
+  color: var(--sv-text-dim);
 }
 
 .nav-secondary-inactive:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #e0e6ed;
+  background: var(--sv-btn-bg);
+  color: var(--sv-text-primary);
 }
 
 /* Risk Horizon warning pulse */

@@ -11,13 +11,12 @@ import { useForensic } from "@/contexts/ForensicContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+// Accent colours — unchanged across both themes
 const P = {
-  sage:   "#40B595",
-  amber:  "#EBC06D",
-  terra:  "#D96161",
-  dim:    "#9AA4B1",
-  gold:   "#FFD700",
-  border: "rgba(255,255,255,0.08)",
+  sage:  "#40B595",
+  amber: "#EBC06D",
+  terra: "#D96161",
+  gold:  "#FFD700",
 };
 
 interface PendingNotification {
@@ -28,8 +27,12 @@ interface PendingNotification {
 
 // ── Sovereign Switch ──────────────────────────────────────────────────────────
 function SovereignSwitch() {
-  const { theme, setTheme } = useTheme();
-  const isDark = theme !== "light";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const isDark = mounted ? (resolvedTheme ?? theme) !== "light" : true;
+
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
@@ -37,22 +40,32 @@ function SovereignSwitch() {
       style={{
         width: 34, height: 34,
         display: "flex", alignItems: "center", justifyContent: "center",
-        borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
-        background: "rgba(255,255,255,0.05)",
+        borderRadius: 8,
+        border: "1px solid var(--sv-btn-border)",
+        background: "var(--sv-btn-bg)",
         cursor: "pointer", transition: "background 0.2s",
+        overflow: "hidden",
       }}
     >
-      {isDark
-        ? <Sun style={{ width: 15, height: 15, color: "#facc15" }} />
-        : <Moon style={{ width: 15, height: 15, color: "#93c5fd" }} />
-      }
+      <div
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "transform 0.3s ease, opacity 0.2s ease",
+          transform: isDark ? "rotate(0deg)" : "rotate(180deg)",
+        }}
+      >
+        {isDark
+          ? <Sun  style={{ width: 15, height: 15, color: "#facc15" }} />
+          : <Moon style={{ width: 15, height: 15, color: "#93c5fd" }} />
+        }
+      </div>
     </button>
   );
 }
 
 // ── Risk Horizon ──────────────────────────────────────────────────────────────
 function RiskHorizon({ activeMutations }: { activeMutations: number }) {
-  const state: "calm" | "warning" | "breach" =
+  const state =
     activeMutations > 5 ? "breach" :
     activeMutations >= 3 ? "warning" : "calm";
 
@@ -60,8 +73,8 @@ function RiskHorizon({ activeMutations }: { activeMutations: number }) {
     state === "breach"
       ? "radial-gradient(ellipse at 0% 0%, rgba(122,0,0,0.55) 0%, transparent 60%), radial-gradient(ellipse at 100% 100%, rgba(122,0,0,0.45) 0%, transparent 60%)"
       : state === "warning"
-      ? "radial-gradient(circle, rgba(255,191,0,0.15) 0%, transparent 70%)"
-      : "transparent";
+      ? "radial-gradient(circle, rgba(255,191,0,0.12) 0%, transparent 70%)"
+      : "none";
 
   return (
     <div
@@ -123,55 +136,62 @@ function ForensicInspector() {
   const statusColor =
     agent?.status === "active"  ? P.sage :
     agent?.status === "mutant"  ? "#C084FC" :
-    agent?.status === "revoked" ? P.terra : P.dim;
+    agent?.status === "revoked" ? P.terra : "var(--sv-text-dim)";
 
   const driftColor =
-    !agent        ? P.dim :
-    agent.drift > 15 ? P.amber :
-    agent.drift > 5  ? "#EBC06D88" : P.sage;
+    !agent              ? "var(--sv-text-dim)" :
+    agent.drift > 15    ? P.amber :
+    agent.drift > 5     ? "#EBC06D88" : P.sage;
 
   const fitnessColor =
-    !agent                    ? P.dim :
+    !agent                    ? "var(--sv-text-dim)" :
     agent.fitnessScore > 0.7  ? P.sage :
     agent.fitnessScore > 0.4  ? P.amber : P.terra;
 
   return (
-    <aside
-      style={{
-        width: 350, flexShrink: 0, display: "flex", flexDirection: "column",
-        height: "100%", overflow: "hidden",
-        background: "rgba(10,12,18,0.88)",
-        backdropFilter: "blur(16px)",
-        borderLeft: "1px solid rgba(255,255,255,0.08)",
-        zIndex: 20,
-      }}
-    >
+    <aside style={{
+      width: 350, flexShrink: 0, display: "flex", flexDirection: "column",
+      height: "100%", overflow: "hidden",
+      background: "var(--sv-inspector-bg)",
+      backdropFilter: "blur(16px)",
+      borderLeft: "1px solid var(--sv-inspector-border)",
+      zIndex: 20, transition: "background 0.3s ease",
+    }}>
       {/* Header */}
       <div style={{
         flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)",
-        background: "rgba(255,255,255,0.02)",
+        padding: "10px 16px", borderBottom: "1px solid var(--sv-panel-border)",
+        background: "var(--sv-footer-bg)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Fingerprint style={{ width: 13, height: 13, color: P.sage }} />
-          <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: P.sage }}>
+          <span style={{
+            fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+            letterSpacing: "0.12em", textTransform: "uppercase", color: P.sage,
+          }}>
             Forensic Inspector
           </span>
         </div>
         {agent && (
           <button onClick={() => { setAgent(null); setAction(null); }}
-            style={{ opacity: 0.4, cursor: "pointer", background: "none", border: "none", color: P.dim, display: "flex" }}>
+            style={{ opacity: 0.4, cursor: "pointer", background: "none", border: "none", color: "var(--sv-text-dim)", display: "flex" }}>
             <X style={{ width: 13, height: 13 }} />
           </button>
         )}
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}>
+      <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "var(--sv-panel-border) transparent" }}>
         {!agent ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 240, textAlign: "center", padding: "0 24px", gap: 12 }}>
-            <Shield style={{ width: 40, height: 40, opacity: 0.08, color: P.dim }} />
-            <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", opacity: 0.35, color: P.dim, lineHeight: 1.6 }}>
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            height: 240, textAlign: "center", padding: "0 24px", gap: 12,
+          }}>
+            <Shield style={{ width: 40, height: 40, opacity: 0.08, color: "var(--sv-text-dim)" }} />
+            <div style={{
+              fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+              color: "var(--sv-empty-text)", lineHeight: 1.6,
+            }}>
               Select an agent in the Swarm Map<br />to begin forensic analysis
             </div>
           </div>
@@ -194,23 +214,23 @@ function ForensicInspector() {
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", opacity: 0.45, color: P.dim, wordBreak: "break-all" }}>
+              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", wordBreak: "break-all", opacity: 0.7 }}>
                 {agent.id}
               </div>
             </div>
 
-            {/* Real-time stats header */}
-            <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.dim + "88" }}>
+            {/* Stats label */}
+            <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sv-section-label)" }}>
               Real-time Stats
             </div>
 
             {/* Fitness bar */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", marginBottom: 4 }}>
-                <span style={{ color: P.dim }}>Organism Fitness</span>
+                <span style={{ color: "var(--sv-text-dim)" }}>Organism Fitness</span>
                 <span style={{ color: fitnessColor }}>{(agent.fitnessScore * 100).toFixed(0)}%</span>
               </div>
-              <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "rgba(255,255,255,0.08)" }}>
+              <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "var(--sv-panel-border)" }}>
                 <div style={{ height: "100%", borderRadius: 3, width: `${agent.fitnessScore * 100}%`, background: `linear-gradient(90deg,${P.terra},${P.amber},${P.sage})`, transition: "width 0.6s ease" }} />
               </div>
             </div>
@@ -218,10 +238,10 @@ function ForensicInspector() {
             {/* Drift bar */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", marginBottom: 4 }}>
-                <span style={{ color: P.dim }}>Genetic Drift</span>
+                <span style={{ color: "var(--sv-text-dim)" }}>Genetic Drift</span>
                 <span style={{ color: driftColor }}>{(agent.drift ?? 0).toFixed(1)}%</span>
               </div>
-              <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "rgba(255,255,255,0.08)" }}>
+              <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "var(--sv-panel-border)" }}>
                 <div style={{ height: "100%", borderRadius: 3, width: `${Math.min(agent.drift ?? 0, 100)}%`, background: driftColor, transition: "width 0.6s ease" }} />
               </div>
             </div>
@@ -235,17 +255,17 @@ function ForensicInspector() {
               { label: "Registered", value: new Date(agent.createdAt).toLocaleString() },
               ...(agent.revokedAt ? [{ label: "Dissolved", value: new Date(agent.revokedAt).toLocaleString(), color: P.terra }] : []),
             ].map(({ label, value, color: c }) => (
-              <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10, paddingBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.1em", textTransform: "uppercase", width: 72, flexShrink: 0, paddingTop: 1, color: P.dim }}>
+              <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10, paddingBottom: 8, borderBottom: "1px solid var(--sv-panel-border)" }}>
+                <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.1em", textTransform: "uppercase", width: 72, flexShrink: 0, paddingTop: 1, color: "var(--sv-text-dim)" }}>
                   {label}
                 </span>
-                <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, wordBreak: "break-all", color: c ?? "#cdd5e0" }}>
+                <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, wordBreak: "break-all", color: c ?? "var(--sv-text-primary)" }}>
                   {value}
                 </span>
               </div>
             ))}
 
-            {/* FIPS-204 Quantum Signature Badge */}
+            {/* FIPS-204 Badge */}
             <div style={{ borderRadius: 10, padding: 12, background: "rgba(64,181,149,0.07)", border: "1px solid rgba(64,181,149,0.2)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                 <span style={{ fontSize: 10 }}>⚡</span>
@@ -254,16 +274,16 @@ function ForensicInspector() {
                 </span>
               </div>
               {[
-                { label: "PQ Signature",     value: "VERIFIED ✓",       valueColor: P.sage },
-                { label: "Lattice Scheme",   value: "Dilithium-87",     valueColor: "#cdd5e0" },
-                { label: "Quantum Resist.",  value: "POST-QUANTUM ✓",   valueColor: P.sage },
+                { label: "PQ Signature",    value: "VERIFIED ✓",     valueColor: P.sage },
+                { label: "Lattice Scheme",  value: "Dilithium-87",   valueColor: "var(--sv-text-primary)" },
+                { label: "Quantum Resist.", value: "POST-QUANTUM ✓", valueColor: P.sage },
               ].map(({ label, value, valueColor }) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", marginBottom: 3 }}>
-                  <span style={{ color: P.dim }}>{label}</span>
+                  <span style={{ color: "var(--sv-text-dim)" }}>{label}</span>
                   <span style={{ color: valueColor }}>{value}</span>
                 </div>
               ))}
-              <div style={{ marginTop: 8, padding: "3px 8px", borderRadius: 4, background: "rgba(64,181,149,0.08)", fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: P.sage + "77", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              <div style={{ marginTop: 8, padding: "3px 8px", borderRadius: 4, background: "rgba(64,181,149,0.08)", fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: P.sage + "99", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 title="ML-DSA-87 lattice-based signature">
                 {agent.id.substring(0, 28)}…
               </div>
@@ -279,35 +299,26 @@ function ForensicInspector() {
                 border: `1px solid ${action === "RECODE_SENT" ? P.amber : P.terra}44`,
               }}>
                 {action === "TERMINATED" ? "💀 Cellular Dissolution Sent" :
-                 action === "RECODE_SENT" ? "⚡ CRISPR Recode Dispatched" :
-                 "⚠ Command failed"}
+                 action === "RECODE_SENT" ? "⚡ CRISPR Recode Dispatched" : "⚠ Command failed"}
               </div>
             )}
 
             {/* Interdiction controls */}
             <div>
-              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.dim + "88", marginBottom: 8 }}>
+              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sv-section-label)", marginBottom: 8 }}>
                 Interdiction Controls
               </div>
 
               {agent.status === "active" && (
-                <button
-                  onClick={recode}
-                  className="forensic-btn forensic-btn-recode"
-                >
+                <button onClick={recode} className="forensic-btn forensic-btn-recode">
                   <Dna style={{ width: 13, height: 13, color: P.gold, flexShrink: 0 }} />
-                  <span style={{ color: "#FFF8C5" }}>Apply CRISPR Recode</span>
+                  <span style={{ color: "#c8a800" }}>Apply CRISPR Recode</span>
                   <ChevronRight style={{ width: 11, height: 11, marginLeft: "auto", opacity: 0.35 }} />
                 </button>
               )}
 
               {agent.status === "active" && (
-                <button
-                  onClick={terminate}
-                  disabled={revoking}
-                  className="forensic-btn forensic-btn-terminate"
-                  style={{ opacity: revoking ? 0.4 : 1 }}
-                >
+                <button onClick={terminate} disabled={revoking} className="forensic-btn forensic-btn-terminate" style={{ opacity: revoking ? 0.4 : 1 }}>
                   <Skull style={{ width: 13, height: 13, color: P.terra, flexShrink: 0 }} />
                   <span style={{ color: P.terra }}>{revoking ? "Dissolving…" : "Terminate Agent"}</span>
                   <ChevronRight style={{ width: 11, height: 11, marginLeft: "auto", opacity: 0.35 }} />
@@ -315,7 +326,7 @@ function ForensicInspector() {
               )}
 
               {agent.status !== "active" && (
-                <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", textAlign: "center", padding: "12px 0", opacity: 0.35, color: P.dim }}>
+                <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", textAlign: "center", padding: "12px 0", color: "var(--sv-text-dim)", opacity: 0.6 }}>
                   Agent is {agent.status} — no actions available
                 </div>
               )}
@@ -401,36 +412,40 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const currentLabel = allItems.find((i) => i.path === location)?.label?.toUpperCase() ?? "OVERVIEW";
 
   return (
-    <div
-      className="dark"
-      style={{
-        display: "flex", flexDirection: "row", height: "100vh",
-        minWidth: 1280, width: "100%", overflow: "hidden",
-        background: "#0a0a0a", position: "relative",
-      }}
-    >
+    <div style={{
+      display: "flex", flexDirection: "row", height: "100vh",
+      minWidth: 1280, width: "100%", overflow: "hidden",
+      background: "var(--sv-root-bg)",
+      position: "relative",
+      transition: "background 0.3s ease",
+    }}>
       {/* Risk Horizon */}
       <RiskHorizon activeMutations={activeMutations} />
 
       {/* ── Sidebar ── */}
-      <aside
-        style={{
-          width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
-          height: "100%", position: "relative", zIndex: 20,
-          background: "rgba(10,12,20,0.84)",
-          backdropFilter: "blur(12px)",
-          borderRight: "1px solid rgba(255,255,255,0.08)",
-        }}
-      >
+      <aside style={{
+        width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
+        height: "100%", position: "relative", zIndex: 20,
+        background: "var(--sv-sidebar-bg)",
+        backdropFilter: "blur(12px)",
+        borderRight: "1px solid var(--sv-sidebar-border)",
+        transition: "background 0.3s ease, border-color 0.3s ease",
+      }}>
         {/* Logo */}
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "0 20px", height: 56, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
+          padding: "0 20px", height: 56,
+          borderBottom: "1px solid var(--sv-panel-border)",
+        }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: P.sage, boxShadow: `0 0 6px ${P.sage}88` }} />
-          <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "-0.01em", color: "#fff" }}>AGENT-SENTINEL</span>
+          <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "-0.01em", color: "var(--sv-text-primary)" }}>
+            AGENT-SENTINEL
+          </span>
         </div>
 
         {/* Featured nav */}
         <div style={{ padding: "14px 10px 6px" }}>
-          <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.dim + "77", padding: "0 8px", marginBottom: 6 }}>
+          <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sv-section-label)", padding: "0 8px", marginBottom: 6 }}>
             Command
           </div>
           {NAV_FEATURED.map((item) => {
@@ -440,13 +455,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.path}
                 href={item.path}
-                className={cn(
-                  "nav-featured-item",
-                  active ? "nav-featured-active" : "nav-featured-inactive"
-                )}
+                className={cn("nav-featured-item", active ? "nav-featured-active" : "nav-featured-inactive")}
               >
-                <item.icon style={{ width: 13, height: 13, flexShrink: 0, color: active ? P.sage : P.dim }} />
-                <span style={{ fontSize: 11, flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+                <item.icon style={{ width: 13, height: 13, flexShrink: 0, color: active ? P.sage : "var(--sv-text-dim)" }} />
+                <span style={{ fontSize: 11, flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {item.label}
+                </span>
                 {hasBadge && (
                   <span className="animate-pulse" style={{ padding: "1px 5px", borderRadius: 4, background: P.terra, color: "#fff", fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, flexShrink: 0 }}>
                     {pendingNotifications.length}
@@ -460,13 +474,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           })}
         </div>
 
-        <div style={{ height: 1, margin: "4px 12px", background: "rgba(255,255,255,0.06)" }} />
+        <div style={{ height: 1, margin: "4px 12px", background: "var(--sv-separator)" }} />
 
         {/* Secondary groups */}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 8px", scrollbarWidth: "none" }}>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.dim + "66", padding: "0 8px", marginBottom: 4 }}>
+              <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sv-section-label)", padding: "0 8px", marginBottom: 4 }}>
                 {group.label}
               </div>
               {group.items.map((item) => {
@@ -477,8 +491,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     href={item.path}
                     className={cn("nav-secondary-item", active ? "nav-secondary-active" : "nav-secondary-inactive")}
                   >
-                    <item.icon style={{ width: 12, height: 12, flexShrink: 0, opacity: active ? 1 : 0.5, color: active ? P.sage : P.dim }} />
-                    <span style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+                    <item.icon style={{ width: 12, height: 12, flexShrink: 0, opacity: active ? 1 : 0.5, color: active ? P.sage : "var(--sv-text-dim)" }} />
+                    <span style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.label}
+                    </span>
                   </Link>
                 );
               })}
@@ -486,8 +502,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </div>
 
-        {/* Status footer */}
-        <div style={{ flexShrink: 0, padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)", display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Footer */}
+        <div style={{
+          flexShrink: 0, padding: "10px 16px",
+          borderTop: "1px solid var(--sv-panel-border)",
+          background: "var(--sv-footer-bg)",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
           <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: killActive ? P.terra : P.sage }} />
           <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: killActive ? P.terra : P.sage }}>
             {killActive ? "KILL-SWITCH ACTIVE" : "SYSTEMS NOMINAL"}
@@ -500,43 +521,52 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header style={{
           flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0 20px", height: 56, borderBottom: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(10,12,20,0.78)", backdropFilter: "blur(12px)",
+          padding: "0 20px", height: 56,
+          borderBottom: "1px solid var(--sv-panel-border)",
+          background: "var(--sv-header-bg)",
+          backdropFilter: "blur(12px)",
+          transition: "background 0.3s ease",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
-            <span style={{ color: P.dim }}>{currentLabel}</span>
-            <span style={{ color: "rgba(255,255,255,0.2)" }}>/</span>
-            <span style={{ color: "#fff", fontWeight: 600 }}>OVERVIEW</span>
+            <span style={{ color: "var(--sv-text-dim)" }}>{currentLabel}</span>
+            <span style={{ color: "var(--sv-breadcrumb-divider)" }}>/</span>
+            <span style={{ color: "var(--sv-text-primary)", fontWeight: 600 }}>OVERVIEW</span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {/* Search */}
             <div style={{ position: "relative" }}>
-              <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "rgba(255,255,255,0.25)", pointerEvents: "none" }} />
+              <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--sv-search-icon)", pointerEvents: "none" }} />
               <input
                 type="text"
                 placeholder="Search logs, hashes, traces…"
                 style={{
                   width: 220, height: 32, fontSize: 11, fontFamily: "JetBrains Mono, monospace",
-                  paddingLeft: 30, paddingRight: 12, borderRadius: 8, color: "rgba(255,255,255,0.75)",
-                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                  paddingLeft: 30, paddingRight: 12, borderRadius: 8,
+                  color: "var(--sv-search-text)",
+                  background: "var(--sv-search-bg)",
+                  border: "1px solid var(--sv-search-border)",
                   outline: "none",
+                  transition: "background 0.3s ease, border-color 0.3s ease",
                 }}
               />
             </div>
 
-            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
+            <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
 
             {/* Bell */}
             <button
               onClick={() => setShowNotif(!showNotif)}
               style={{
                 width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)",
+                borderRadius: 8,
+                border: "1px solid var(--sv-btn-border)",
+                background: "var(--sv-btn-bg)",
                 cursor: "pointer", position: "relative",
+                transition: "background 0.2s",
               }}
             >
-              <Bell style={{ width: 14, height: 14, color: "rgba(255,255,255,0.4)" }} />
+              <Bell style={{ width: 14, height: 14, color: "var(--sv-text-dim)" }} />
               {pendingNotifications.length > 0 && (
                 <span className="animate-pulse" style={{ position: "absolute", top: 6, right: 6, width: 6, height: 6, borderRadius: "50%", background: P.terra }} />
               )}
@@ -552,21 +582,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div style={{
             position: "absolute", top: 56, right: 16, width: 300, zIndex: 50,
             borderRadius: 12, overflow: "hidden",
-            background: "rgba(10,12,20,0.97)", backdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+            background: "var(--sv-notif-bg)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid var(--sv-notif-border)",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--sv-panel-border)" }}>
               <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: P.terra, display: "flex", alignItems: "center", gap: 5 }}>
                 <ShieldAlert style={{ width: 11, height: 11 }} />
                 PENDING APPROVALS ({pendingNotifications.length})
               </span>
-              <button onClick={() => setShowNotif(false)} style={{ opacity: 0.4, cursor: "pointer", background: "none", border: "none", color: "#fff", display: "flex" }}>
+              <button onClick={() => setShowNotif(false)} style={{ opacity: 0.4, cursor: "pointer", background: "none", border: "none", color: "var(--sv-text-dim)", display: "flex" }}>
                 <X style={{ width: 13, height: 13 }} />
               </button>
             </div>
             {pendingNotifications.map((n) => (
-              <div key={n.id} style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "#fff", fontWeight: 700 }}>{n.agentId}</div>
+              <div key={n.id} style={{ padding: "10px 16px", borderBottom: "1px solid var(--sv-panel-border)" }}>
+                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-primary)", fontWeight: 700 }}>{n.agentId}</div>
                 <div style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: P.terra, marginTop: 2 }}>wants to: {n.actionType}</div>
                 <Link href="/warroom" style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: P.sage, marginTop: 4, display: "block" }} onClick={() => setShowNotif(false)}>
                   → Go to War Room to approve/deny
