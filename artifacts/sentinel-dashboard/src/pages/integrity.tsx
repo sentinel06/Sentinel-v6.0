@@ -51,7 +51,8 @@ export default function IntegrityPage() {
     try {
       const r = await fetch(`${BASE}/api/v1/admin/chain-reconstruct`, {
         method: "POST",
-        headers: { "X-Sovereign-Reconstruct": "true" },
+        headers: { "X-Sovereign-Reconstruct": "true", "Content-Type": "application/json" },
+        body: JSON.stringify({ forceSeal: true }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Reconstruction failed");

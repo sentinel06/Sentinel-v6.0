@@ -8,11 +8,15 @@
  * after a seeding incident where entries were written with an incorrect hash
  * function (SHA-512) or wrong chain format.
  *
- * Safety:
- *   - Disabled the immutability trigger only for the duration of this
- *     operation (single transaction, re-enabled in finally block).
- *   - Only available in development (NODE_ENV !== "production").
- *   - Requires the X-Sovereign-Reconstruct: true header as an extra guard.
+ * Safety guards (all three must pass):
+ *   1. ALLOW_CHAIN_RECONSTRUCT env var must be exactly "true"
+ *   2. X-Sovereign-Reconstruct: true header must be present
+ *   3. The immutability trigger is re-enabled in a finally block — always.
+ *
+ * Body params:
+ *   forceSeal {boolean} — if true, seals even the partial tail block (< 512
+ *                         entries).  Required when the total ledger size is
+ *                         less than BLOCK_SIZE and you need a verified state.
  */
 
 import { Router } from "express";
@@ -25,18 +29,25 @@ import { logger } from "../lib/logger.js";
 const router = Router();
 
 router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
-  // ── Guard: dev-only ───────────────────────────────────────────────────────
-  if (process.env.NODE_ENV === "production") {
-    res.status(403).json({ error: "Reconstruction is disabled in production." });
+  // ── Guard 1: explicit opt-in env flag ─────────────────────────────────────
+  if (process.env.ALLOW_CHAIN_RECONSTRUCT !== "true") {
+    res.status(403).json({
+      error: "Reconstruction is disabled. Set ALLOW_CHAIN_RECONSTRUCT=true to enable.",
+    });
     return;
   }
+
+  // ── Guard 2: magic header ─────────────────────────────────────────────────
   if (req.headers["x-sovereign-reconstruct"] !== "true") {
     res.status(400).json({ error: "Missing required X-Sovereign-Reconstruct: true header." });
     return;
   }
 
+  // ── Optional: force-seal even partial tail blocks ─────────────────────────
+  const forceSeal = req.body?.forceSeal === true;
+
   const startedAt = Date.now();
-  logger.info("Sovereign Ledger Reconstruction Protocol — INITIATED");
+  logger.info({ forceSeal }, "Sovereign Ledger Reconstruction Protocol — INITIATED");
 
   try {
     // ── 1. Fetch all entries in canonical order ───────────────────────────
@@ -66,16 +77,12 @@ router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
     }
 
     // ── 3. Suspend immutability trigger & apply updates ───────────────────
-    //    We use raw SQL so Drizzle's type layer doesn't interfere, and we wrap
-    //    everything in a transaction so a partial failure rolls back cleanly.
     let entriesPatched = 0;
 
     await db.transaction(async (tx) => {
-      // Disable trigger for this session (SECURITY NOTE: restored in finally)
       await tx.execute(sql`ALTER TABLE audit_logs DISABLE TRIGGER ALL`);
 
       try {
-        // Apply hash corrections in batches of 100
         const BATCH = 100;
         for (let i = 0; i < updates.length; i += BATCH) {
           const chunk = updates.slice(i, i + BATCH);
@@ -90,7 +97,7 @@ router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
           entriesPatched += chunk.length;
         }
       } finally {
-        // ALWAYS re-enable the trigger — even if the loop throws
+        // ALWAYS re-enable the trigger
         await tx.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER ALL`);
       }
     });
@@ -101,19 +108,26 @@ router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
     await db.delete(merkleCheckpointsTable);
     logger.info("Stale Merkle checkpoints cleared");
 
-    // ── 5. Reseal completed Merkle blocks ─────────────────────────────────
-    //    Re-fetch entries (now with corrected hashes) and seal each full block.
+    // ── 5. Reseal Merkle blocks ───────────────────────────────────────────
+    //    Re-fetch entries (now with corrected hashes).
+    //    Seal every full block (BLOCK_SIZE entries).
+    //    If forceSeal=true, also seal the partial tail as a smaller block.
     const freshEntries = await db
       .select({ id: auditLogsTable.id, currentHash: auditLogsTable.currentHash })
       .from(auditLogsTable)
       .orderBy(asc(auditLogsTable.timestamp));
 
-    const totalBlocks = Math.floor(freshEntries.length / BLOCK_SIZE);
+    const fullBlocks  = Math.floor(freshEntries.length / BLOCK_SIZE);
+    const tailSize    = freshEntries.length - fullBlocks * BLOCK_SIZE;
     let blocksSealedCount = 0;
 
-    for (let blockIdx = 0; blockIdx < totalBlocks; blockIdx++) {
+    const blocksToSeal = forceSeal && tailSize > 0 ? fullBlocks + 1 : fullBlocks;
+
+    for (let blockIdx = 0; blockIdx < blocksToSeal; blockIdx++) {
       const offset = blockIdx * BLOCK_SIZE;
-      const block  = freshEntries.slice(offset, offset + BLOCK_SIZE);
+      const block  = freshEntries.slice(offset, offset + BLOCK_SIZE); // tail block may be < BLOCK_SIZE
+      if (block.length === 0) continue;
+
       const leafHashes = block.map((e) => e.currentHash);
       const merkleRoot = buildMerkleRoot(leafHashes);
 
@@ -127,34 +141,37 @@ router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
 
       blocksSealedCount++;
       logger.info(
-        { blockIdx, entryCount: block.length, root: merkleRoot.slice(0, 16) + "…" },
-        "Merkle block resealed",
+        { blockIdx, entryCount: block.length, root: merkleRoot.slice(0, 16) + "…", forced: blockIdx === fullBlocks },
+        "Merkle block sealed",
       );
     }
 
     const durationMs = Date.now() - startedAt;
 
     logger.info(
-      { entriesPatched, blocksSealedCount, durationMs },
+      { entriesPatched, blocksSealedCount, forceSeal, durationMs },
       "Sovereign Ledger Reconstruction Protocol — COMPLETE",
     );
+
+    const partialSealed = forceSeal && tailSize > 0;
 
     res.json({
       status:          "SOVEREIGN_VERIFIED",
       entriesPatched,
       blocksResealed:  blocksSealedCount,
-      partialTailSize: freshEntries.length - totalBlocks * BLOCK_SIZE,
+      partialTailSize: partialSealed ? 0 : tailSize,
+      partialForceSealed: partialSealed,
       totalEntries:    freshEntries.length,
       durationMs,
       message:
         `Chain reconstructed. ${entriesPatched} hashes corrected using ` +
         `SHA-256(timestamp|agentId|payload|prevHash). ` +
-        `${blocksSealedCount} Merkle block(s) resealed. ` +
-        `Trigger re-enabled. Run POST /api/v1/integrity/verify to confirm.`,
+        `${blocksSealedCount} Merkle block(s) sealed` +
+        (partialSealed ? ` (including force-sealed tail of ${tailSize} entries)` : "") +
+        `. Trigger re-enabled. Run POST /api/v1/integrity/verify to confirm.`,
     });
   } catch (err: any) {
     logger.error({ err }, "Chain reconstruction FAILED");
-    // Best-effort: try to re-enable the trigger if something went wrong outside the tx
     try {
       await db.execute(sql`ALTER TABLE audit_logs ENABLE TRIGGER ALL`);
     } catch {}
