@@ -767,10 +767,6 @@ export default function SwarmMapPage() {
       }
     });
 
-    // ── Force multipliers ─────────────────────────────────────────────────────
-    const linkStrMult  = isMobile ? 1.4 : 1.0;
-    const chargeMult   = isMobile ? 1.5 : 1.0;
-
     simRef.current?.stop();
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
       .force("link", d3.forceLink<SwarmNodeData, SwarmLink>(links)
@@ -778,35 +774,26 @@ export default function SwarmMapPage() {
         .distance(d => {
           const src = d.source as SwarmNodeData; const tgt = d.target as SwarmNodeData;
           const drift = Math.max(src.drift ?? 0, tgt.drift ?? 0);
-          return isMobile
-            ? VERT_SPACING * 0.85 + drift * 0.4
-            : RING * 0.9 + drift * 0.85;
+          return RING * 0.9 + drift * 0.85;
         })
         .strength(d => {
           const src = d.source as SwarmNodeData; const tgt = d.target as SwarmNodeData;
           const f = ((src.fitnessScore ?? 0.5) + (tgt.fitnessScore ?? 0.5)) / 2;
-          return (0.12 + f * 0.48) * linkStrMult;
+          return 0.12 + f * 0.48;
         })
       )
-      .force("charge", d3.forceManyBody<SwarmNodeData>()
-        .strength(d => (d.status === "revoked" ? -600 : d.isRoot ? -800 : -200 - (d.fitnessScore ?? 0.5) * 60) * chargeMult)
-      )
-      // forceCenter disabled on mobile — phylo_x/phylo_y handle centering
-      .force("center", d3.forceCenter(cx, cy).strength(isMobile ? 0.0 : 0.015))
-      // Mobile ART: 3× collide radius to prevent node overlap in vertical cascade
-      .force("collide", d3.forceCollide<SwarmNodeData>().radius(d => {
-        const base = d.radius ?? 14;
-        return isMobile ? base * 3 + 8 : base + 10;
-      }))
+      .force("charge", d3.forceManyBody<SwarmNodeData>().strength(-800))
+      .force("center", d3.forceCenter(cx, cy).strength(0.08))
+      .force("collide", d3.forceCollide<SwarmNodeData>().radius(100).strength(0.8))
       .alphaDecay(0.010)
-      .velocityDecay(isMobile ? 0.55 : 0.44)
+      .velocityDecay(0.44)
       .on("tick", () => {
         tickRef.current++;
-        const margin = isMobile ? 12 : 24;
+        const margin = 24;
         for (const n of nodes) {
           const r = n.radius ?? 14;
           n.x = Math.max(r + margin, Math.min(W - r - margin, n.x ?? cx));
-          n.y = Math.max(r + margin, Math.min(H - r - margin, n.y ?? (isMobile ? TOP_Y : cy)));
+          n.y = Math.max(r + margin, Math.min(H - r - margin, n.y ?? cy));
         }
         setRenderTick(t => t + 1);
       });
