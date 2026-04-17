@@ -58,6 +58,37 @@ interface SwarmLink {
   source: string | SwarmNodeData;
   target: string | SwarmNodeData;
 }
+
+// ── v6.0 Chaos Mode — synthetic stress-test fleet ─────────────────────────
+function generateChaosFleet(count: number, cx: number, cy: number, baseRadius: number): SwarmNodeData[] {
+  const out: SwarmNodeData[] = [];
+  const clusters = ["chaos-finance", "chaos-ops", "chaos-legal", "chaos-research"];
+  const now = new Date().toISOString();
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const ring  = baseRadius + (i % 18) * 16;
+    const swarmId = clusters[i % clusters.length];
+    out.push({
+      id: `chaos-${swarmId}-${i.toString(36)}`,
+      label: `χ-${i.toString(36)}`,
+      status: "active",
+      swarmId,
+      rootSwarmId: swarmId,
+      parentUid: null,
+      createdAt: now,
+      revokedAt: null,
+      revokedReason: null,
+      isRoot: false,
+      radius: 4,
+      drift: Math.random() * 18,
+      fitnessScore: 0.4 + Math.random() * 0.55,
+      generationDepth: 1 + (i % 6),
+      x: cx + ring * Math.cos(angle),
+      y: cy + ring * Math.sin(angle),
+    });
+  }
+  return out;
+}
 interface StreamPacket {
   t: string; a: string; e: string; d: number; h: string;
   q: boolean; p: string | null; x: boolean; r: boolean;
@@ -413,6 +444,8 @@ export default function SwarmMapPage() {
   const [ctxMenu,         setCtxMenu]         = useState<{ node: SwarmNodeData; x: number; y: number } | null>(null);
   const [revoking,        setRevoking]        = useState(false);
   const [revokeResult,    setRevokeResult]    = useState<string | null>(null);
+  const [chaosCount,      setChaosCount]      = useState(0);
+  const [chaosFps,        setChaosFps]        = useState(60);
   const [hoveredLinkIdx,  setHoveredLinkIdx]  = useState<number | null>(null);
   const [lineageTip,      setLineageTip]      = useState<{ x: number; y: number; rate: number; label: string } | null>(null);
 
@@ -532,6 +565,27 @@ export default function SwarmMapPage() {
   }, []);
 
   useEffect(() => { fetchData(); const id = setInterval(fetchData, 2_500); return () => clearInterval(id); }, [fetchData]);
+
+  // ── v6.0 FPS Sampler ── measure rAF frame-rate for chaos-mode stress tests
+  useEffect(() => {
+    let raf = 0; let frames = 0; let last = performance.now();
+    const loop = () => {
+      frames++;
+      const now = performance.now();
+      if (now - last >= 1000) {
+        const sample = (frames * 1000) / (now - last);
+        setChaosFps(prev => {
+          const safePrev = Number.isFinite(prev) ? prev : sample;
+          const next = safePrev * 0.5 + sample * 0.5;
+          return Number.isFinite(next) ? next : 60;
+        });
+        frames = 0; last = now;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // ── Focus from other views ────────────────────────────────────────────────
   useEffect(() => {
@@ -1088,8 +1142,8 @@ export default function SwarmMapPage() {
     <div className="flex flex-col animate-in fade-in duration-500 h-[calc(100vh-6rem)] gap-4">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
+      <div className="flex items-start justify-between shrink-0 gap-3 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
             <Dna className="w-5 h-5 shrink-0" style={{ color: P.sage }} />
             Project Darwin
@@ -1109,6 +1163,36 @@ export default function SwarmMapPage() {
               💀 {revokeResult}
             </span>
           )}
+          {/* ── Chaos Mode Stress-Test ── */}
+          <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
+            style={{
+              color: chaosFps < 50 ? "#FCA5A5" : chaosFps < 58 ? P.amber : P.sage,
+              borderColor: (chaosFps < 50 ? "#B91C1C" : chaosFps < 58 ? P.amber : P.sage) + "44",
+              background: (chaosFps < 50 ? "#B91C1C" : chaosFps < 58 ? P.amber : P.sage) + "10",
+            }}
+            title="D3 physics framerate">
+            {chaosFps.toFixed(0)} FPS · {nodes.length} nodes
+          </span>
+          <button
+            onClick={() => {
+              if (chaosCount > 0) {
+                setNodes(prev => prev.filter(n => !n.id.startsWith("chaos-")));
+                setChaosCount(0);
+              } else {
+                const fleet = generateChaosFleet(1024, cx, cy, Math.min(120, svgDims.W / 6));
+                setNodes(prev => [...prev, ...fleet]);
+                setChaosCount(1024);
+              }
+            }}
+            className="font-mono text-[10px] px-2 py-1 rounded border transition-all hover:opacity-80"
+            style={{
+              color: chaosCount > 0 ? "#FCA5A5" : "#C084FC",
+              borderColor: chaosCount > 0 ? "#B91C1C66" : "#8B5CF666",
+              background: chaosCount > 0 ? "#B91C1C18" : "#8B5CF618",
+            }}
+            title="Spawn 1,024 synthetic agents to stress-test the D3 physics engine">
+            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 1024×"}
+          </button>
           <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
             style={{ color: P.sage, borderColor: P.sage + "44", background: P.sage + "10" }}
             title="Live auto-sync every 2.5s">
@@ -1189,7 +1273,7 @@ export default function SwarmMapPage() {
                   </span>
                   <span className="font-mono text-[8px] ml-auto" style={{ color: "#F87171" }}>SOVEREIGN TOKEN REVOKED</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   {qNodes.slice(0, 12).map(n => (
                     <button
                       key={n.id}
@@ -1591,6 +1675,10 @@ export default function SwarmMapPage() {
                 const isQuarantined = quarantinedIds.has(node.id) || (node.drift ?? 0) > 25;
                 const inCluster = currentCluster === "ALL" || node.swarmId === currentCluster;
 
+                // ── v6.0 Hard Severance ── physically pull quarantined out of canvas + cluster filter
+                if (isQuarantined && !node.isRoot) return null;
+                if (!inCluster) return null;
+
                 const displayColor = isQuarantined
                   ? "#B91C1C"
                   : isSurging
@@ -1828,7 +1916,7 @@ export default function SwarmMapPage() {
                   <div className="text-[10px] font-mono opacity-60">{wsConnected ? "Awaiting genome events…" : "Connecting…"}</div>
                 </div>
               )}
-              {streamEvents.map((ev, idx) => {
+              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).map((ev, idx) => {
                 const isBreach = ev.r;
                 const isDrift  = ev.d > 15 && !isBreach;
                 const color    = isBreach ? P.terra : isDrift ? P.amber : P.sage;
