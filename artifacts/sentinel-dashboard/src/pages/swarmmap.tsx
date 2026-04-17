@@ -14,7 +14,7 @@ import React, {
   useEffect, useRef, useState, useCallback, useMemo,
 } from "react";
 import * as d3 from "d3";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -472,7 +472,36 @@ export default function SwarmMapPage() {
   const [wsConnected,      setWsConnected]      = useState(false);
   const [focusedStreamId,  setFocusedStreamId]  = useState<string | null>(null);
   const driftHistoryRef    = useRef<Map<string, number[]>>(new Map());
+  // Telemetry buffer for chaos-load throttling: collects packets while
+  // nodes.length > 100 and is drained every 500ms into a single batch event.
+  const telemetryBufferRef = useRef<StreamPacket[]>([]);
   const feedRef            = useRef<HTMLDivElement>(null);
+
+  // ── Telemetry Throttler ─────────────────────────────────────────────────
+  // Every 500ms, drain the chaos-mode packet buffer and emit ONE batch event
+  // representing all suppressed packets. Keeps the Genome Telemetry feed
+  // legible at 1,024+ nodes instead of strobing past unreadably.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const buf = telemetryBufferRef.current;
+      if (buf.length === 0) return;
+      const batched = buf.splice(0, buf.length);
+      const sample = batched[0];
+      const avgDrift = batched.reduce((s, p) => s + (p.d ?? 0), 0) / batched.length;
+      const summary: StreamPacket = {
+        ...sample,
+        ts: Date.now(),
+        a: `BATCH-${batched.length}`,
+        d: avgDrift,
+        // Preserve original packet shape; consumers tolerate unknown fields
+      } as StreamPacket;
+      setStreamEvents(prev => [summary, ...prev].slice(0, 150));
+    }, 500);
+    return () => {
+      window.clearInterval(id);
+      telemetryBufferRef.current = [];
+    };
+  }, []);
 
   const [, navigate] = useLocation();
   const { setAgent, setActiveMutations, currentCluster, quarantinedIds } = useForensic();
@@ -748,7 +777,15 @@ export default function SwarmMapPage() {
               hist.set(p.a, [...(hist.get(p.a) ?? []).slice(-9), p.d]);
               la.set(p.a, now);
             }
-            setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
+            // Telemetry throttler: under chaos load (>100 nodes) we buffer packets
+            // into a queue and let a 500ms RAF-driven flusher emit a single batch
+            // event so the feed stays legible instead of strobing illegibly.
+            const liveNodeCount = simRef.current?.nodes()?.length ?? 0;
+            if (liveNodeCount > 100) {
+              telemetryBufferRef.current.push(...packets);
+            } else {
+              setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
+            }
           }
 
           // ── Project Genesis: ZEN_GOLD_SPARK (successful task / birth) ──
@@ -1325,9 +1362,62 @@ export default function SwarmMapPage() {
           </div>
 
           {nodes.length === 0 && !loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ color: P.dim }}>
-              <TreePine className="w-12 h-12 mb-4 opacity-20" />
-              <span className="font-mono text-sm">No organisms in the ecosystem</span>
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center text-center px-8"
+              style={{
+                background:
+                  "radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, rgba(13,17,23,0.0) 65%)",
+              }}
+            >
+              {/* Sovereign radar pulse */}
+              <div className="relative mb-6" style={{ width: 84, height: 84 }}>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      border: `1px solid rgba(139,92,246,${0.45 - i * 0.12})`,
+                      animation: `sovereign-scan 2.6s ease-out ${i * 0.75}s infinite`,
+                    }}
+                  />
+                ))}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <TreePine className="w-9 h-9" style={{ color: "#8B5CF6", opacity: 0.85 }} />
+                </div>
+              </div>
+
+              {/* Glass alert card */}
+              <div
+                className="rounded-xl px-6 py-5 backdrop-blur-md max-w-md"
+                style={{
+                  background: "rgba(139,92,246,0.06)",
+                  border: "1px solid rgba(139,92,246,0.28)",
+                  boxShadow: "0 0 32px rgba(139,92,246,0.12)",
+                }}
+              >
+                <div
+                  className="font-mono text-[10px] font-bold tracking-[0.22em] uppercase mb-2"
+                  style={{ color: "#8B5CF6" }}
+                >
+                  ◆ Sovereign Alert
+                </div>
+                <div className="font-mono text-base font-bold text-white mb-2">
+                  CLUSTER VACANT
+                </div>
+                <div className="font-mono text-xs leading-relaxed" style={{ color: P.dim }}>
+                  Awaiting Neural Deployment.
+                  <br />
+                  Initialize this swarm via{" "}
+                  <Link
+                    to="/partner-onboarding"
+                    className="underline decoration-dotted hover:opacity-100"
+                    style={{ color: "#EBC06D", opacity: 0.9 }}
+                  >
+                    Alpha Onboarding
+                  </Link>{" "}
+                  or seed via the Sovereign Induction briefing.
+                </div>
+              </div>
             </div>
           )}
 

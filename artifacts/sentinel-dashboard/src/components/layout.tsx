@@ -194,15 +194,40 @@ function OperatorBadge() {
 }
 
 // ── Forensic Inspector ────────────────────────────────────────────────────────
+// Routes where the inspector adds operational context (live agents, traces, swarm).
+// On governance/admin routes the inspector is hidden entirely so it cannot show
+// stale "Rogue-Drill-Alpha" detail next to a Compliance report or Hash Chain view.
+const INSPECTOR_ROUTES = new Set([
+  "/",
+  "/traces",
+  "/topology",
+  "/swarmmap",
+  "/pulse",
+  "/status",
+  "/warroom",
+]);
+
 function ForensicInspector() {
+  const [location] = useLocation();
   const {
     agent, setAgent,
     agentHistory, scrubIndex, setScrubIndex,
     weightVerified,
   } = useForensic();
+
   const [revoking, setRevoking] = useState(false);
   const [action, setAction] = useState<string | null>(null);
   const prevAgentId = useRef<string | null>(null);
+
+  // Auto-clear selection when navigating to a different route, so the inspector
+  // never shows a stale node next to an unrelated page.
+  const prevLocationRef = useRef(location);
+  useEffect(() => {
+    if (prevLocationRef.current !== location) {
+      if (agent) setAgent(null);
+      prevLocationRef.current = location;
+    }
+  }, [location, agent, setAgent]);
 
   // Active history for the selected agent (excludes the live snapshot)
   const history = agent ? (agentHistory[agent.id] ?? []) : [];
@@ -266,6 +291,9 @@ function ForensicInspector() {
     !agent                ? "var(--sv-text-dim)" :
     showFitness > 0.7     ? P.sage :
     showFitness > 0.4     ? P.amber : P.terra;
+
+  // Hide the inspector entirely on governance/admin routes (after all hooks).
+  if (!INSPECTOR_ROUTES.has(location)) return null;
 
   return (
     <aside style={{
@@ -875,7 +903,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Page content */}
-        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: 20, background: "transparent" }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: 20,
+            paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px) + 80px)",
+            background: "transparent",
+          }}
+        >
           {children}
         </div>
       </div>

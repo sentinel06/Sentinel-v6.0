@@ -97,30 +97,48 @@ function overallBadge(s: CheckStatus) {
 
 // ── Lock screen ────────────────────────────────────────────────────────────
 
+const DEMO_KEY = "SENTINEL-DEMO-GOLDEN-2026";
+
 function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData) => void }) {
   const [keyInput, setKeyInput] = useState("");
   const [loading, setLoading]   = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [showKey, setShowKey]   = useState(false);
 
+  const unlockWithKey = useCallback(async (key: string) => {
+    setError(null);
+    const r = await fetch(`${BASE}/api/v1/partner/onboarding?key=${encodeURIComponent(key)}`);
+    const d = await r.json();
+    if (!r.ok || !d.authorized) {
+      throw new Error(d.error ?? "Invalid key. Access denied.");
+    }
+    onUnlock(key, d as OnboardingData);
+  }, [onUnlock]);
+
   const handleUnlock = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
-      const r = await fetch(`${BASE}/api/v1/partner/onboarding?key=${encodeURIComponent(keyInput.trim())}`);
-      const d = await r.json();
-      if (!r.ok || !d.authorized) {
-        setError(d.error ?? "Invalid key. Access denied.");
-        return;
-      }
-      onUnlock(keyInput.trim(), d as OnboardingData);
-    } catch {
-      setError("Network error — API server unreachable.");
+      await unlockWithKey(keyInput.trim());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error — API server unreachable.");
     } finally {
       setLoading(false);
     }
-  }, [keyInput, onUnlock]);
+  }, [keyInput, unlockWithKey]);
+
+  const handleGuestAuditor = useCallback(async () => {
+    setGuestLoading(true);
+    setKeyInput(DEMO_KEY);
+    try {
+      await unlockWithKey(DEMO_KEY);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo key unavailable — contact Sentinel support.");
+    } finally {
+      setGuestLoading(false);
+    }
+  }, [unlockWithKey]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6"
@@ -190,7 +208,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
 
           <button
             type="submit"
-            disabled={loading || !keyInput.trim()}
+            disabled={loading || guestLoading || !keyInput.trim()}
             className="w-full h-11 rounded-lg font-mono text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition-all"
             style={{
               background: keyInput.trim() ? P.gold : P.border,
@@ -202,6 +220,37 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
               : <><Unlock className="w-4 h-4" /> Unlock Onboarding Suite</>}
           </button>
+
+          {/* ── Divider ── */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px" style={{ background: P.border }} />
+            <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: P.dim }}>
+              or
+            </span>
+            <div className="flex-1 h-px" style={{ background: P.border }} />
+          </div>
+
+          {/* ── Guest Auditor (M&A Data Room demo bypass) ── */}
+          <button
+            type="button"
+            onClick={handleGuestAuditor}
+            disabled={loading || guestLoading}
+            className="w-full h-11 rounded-lg font-mono text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 transition-all"
+            style={{
+              background: "transparent",
+              color: P.sage,
+              border: `1px solid ${P.sage}55`,
+              boxShadow: `inset 0 0 12px ${P.sage}10`,
+            }}
+          >
+            {guestLoading
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Provisioning Guest Session…</>
+              : <><Shield className="w-4 h-4" /> Login as Guest Auditor</>}
+          </button>
+          <p className="text-[10px] font-mono text-center -mt-1" style={{ color: P.dim }}>
+            Read-only M&amp;A demo session · auto-fills{" "}
+            <span style={{ color: P.gold }}>{DEMO_KEY}</span>
+          </p>
 
           <p className="text-[10px] font-mono text-center" style={{ color: P.dim }}>
             This portal is restricted to Apex-Fintech alpha partners.
