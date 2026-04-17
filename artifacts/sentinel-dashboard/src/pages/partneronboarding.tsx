@@ -245,7 +245,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
           >
             {guestLoading
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Provisioning Guest Session…</>
-              : <><Shield className="w-4 h-4" /> Login as Guest Auditor</>}
+              : <><Shield className="w-4 h-4" /> LOG IN AS GUEST AUDITOR</>}
           </button>
           <p className="text-[10px] font-mono text-center -mt-1" style={{ color: P.dim }}>
             Read-only M&amp;A demo session · auto-fills{" "}

@@ -478,9 +478,10 @@ export default function SwarmMapPage() {
   const feedRef            = useRef<HTMLDivElement>(null);
 
   // ── Telemetry Throttler ─────────────────────────────────────────────────
-  // Every 500ms, drain the chaos-mode packet buffer and emit ONE batch event
-  // representing all suppressed packets. Keeps the Genome Telemetry feed
-  // legible at 1,024+ nodes instead of strobing past unreadably.
+  // Every 1000ms, drain the chaos-mode packet buffer and emit ONE batch event
+  // representing all suppressed packets. Renders as a human-readable summary
+  // line ("42 Synthetic Nodes Revoked") so the Genome Telemetry feed stays
+  // legible at 1k+ nodes instead of strobing past unreadably.
   useEffect(() => {
     const id = window.setInterval(() => {
       const buf = telemetryBufferRef.current;
@@ -491,12 +492,12 @@ export default function SwarmMapPage() {
       const summary: StreamPacket = {
         ...sample,
         ts: Date.now(),
-        a: `BATCH-${batched.length}`,
+        a: `BATCH:${batched.length} Synthetic Nodes Revoked`,
         d: avgDrift,
         // Preserve original packet shape; consumers tolerate unknown fields
       } as StreamPacket;
       setStreamEvents(prev => [summary, ...prev].slice(0, 150));
-    }, 500);
+    }, 1000);
     return () => {
       window.clearInterval(id);
       telemetryBufferRef.current = [];
@@ -777,12 +778,12 @@ export default function SwarmMapPage() {
               hist.set(p.a, [...(hist.get(p.a) ?? []).slice(-9), p.d]);
               la.set(p.a, now);
             }
-            // Telemetry throttler / Summary Mode: under chaos load (>500 nodes)
-            // we buffer packets into a queue and let a 500ms flusher emit a
-            // single BATCH-N summary event, switching the feed into "Summary
-            // Mode" so it stays legible instead of strobing illegibly.
+            // Telemetry throttler / Summary Mode: under chaos load (>100 nodes)
+            // packets are buffered and flushed every 1000ms as a single
+            // human-readable batch event ("42 Synthetic Nodes Revoked")
+            // instead of strobing past illegibly.
             const liveNodeCount = simRef.current?.nodes()?.length ?? 0;
-            if (liveNodeCount > 500) {
+            if (liveNodeCount > 100) {
               telemetryBufferRef.current.push(...packets);
             } else {
               setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
@@ -1411,14 +1412,14 @@ export default function SwarmMapPage() {
                   Sovereign Alert
                 </div>
                 <div
-                  className="font-mono text-base font-bold mb-2"
-                  style={{ color: "#fff", letterSpacing: "0.06em" }}
+                  className="font-mono text-sm font-bold mb-2"
+                  style={{ color: "#fff", letterSpacing: "0.05em", lineHeight: 1.4 }}
                 >
-                  SWARM STATUS: <span style={{ color: "#8B5CF6" }}>STANDBY</span>
+                  SWARM STATUS: <span style={{ color: "#8B5CF6" }}>DORMANT</span>
+                  <span style={{ color: P.dim, margin: "0 6px" }}>·</span>
+                  <span style={{ color: "#fff" }}>AWAITING NEURAL DEPLOYMENT</span>
                 </div>
                 <div className="font-mono text-xs leading-relaxed" style={{ color: P.dim }}>
-                  Awaiting Neural Deployment.
-                  <br />
                   Initialize this swarm via{" "}
                   <Link
                     to="/partner-onboarding"
@@ -2115,7 +2116,7 @@ export default function SwarmMapPage() {
                 <span className="text-[9px] font-mono font-bold tracking-widest uppercase" style={{ color: P.sage }}>
                   GENOME TELEMETRY
                 </span>
-                {nodes.length > 500 && (
+                {nodes.length > 100 && (
                   <span
                     className="text-[8px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
                     style={{
@@ -2123,7 +2124,7 @@ export default function SwarmMapPage() {
                       background: "#EBC06D14",
                       border: "1px solid #EBC06D55",
                     }}
-                    title={`Summary Mode active — packets batched every 500ms (${nodes.length} nodes)`}
+                    title={`Summary Mode active — packets batched every 1000ms (${nodes.length} nodes)`}
                   >
                     ⚡ SUMMARY MODE
                   </span>

@@ -993,15 +993,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Page content — pb-24 + safe-area inset prevents Replit/mobile overlay HUD obscuring */}
+        {/* Page content — pb-[100px] + safe-area inset prevents Replit/mobile overlay HUD obscuring */}
         <div
-          className="pb-24"
+          className="pb-[100px]"
           style={{
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
             padding: 20,
-            paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
             background: "transparent",
           }}
         >
