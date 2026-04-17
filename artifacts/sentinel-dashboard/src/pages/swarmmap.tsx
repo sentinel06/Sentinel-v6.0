@@ -446,6 +446,7 @@ export default function SwarmMapPage() {
   const [revokeResult,    setRevokeResult]    = useState<string | null>(null);
   const [chaosCount,      setChaosCount]      = useState(0);
   const [chaosFps,        setChaosFps]        = useState(60);
+  const [chaosLoading,    setChaosLoading]    = useState(false);   // physics warm-start overlay
   const [hoveredLinkIdx,  setHoveredLinkIdx]  = useState<number | null>(null);
   const [lineageTip,      setLineageTip]      = useState<{ x: number; y: number; rate: number; label: string } | null>(null);
 
@@ -846,6 +847,18 @@ export default function SwarmMapPage() {
     });
 
     simRef.current?.stop();
+
+    // ── Chaos-aware physics ─────────────────────────────────────────────────
+    // With 1,024 synthetic nodes the default forces explode the swarm — drop
+    // the long-range repulsion to -200, keep collide tight (radius 5) so the
+    // cloud stays dense, and accelerate alpha decay so the layout settles fast.
+    const chaosActive   = chaosCount > 0;
+    const chargeStrength = chaosActive ? -200 : -800;
+    const collideRadius  = chaosActive ? 5    : 100;
+    const collideStrength = chaosActive ? 0.95 : 0.8;
+    const alphaDecay     = chaosActive ? 0.035 : 0.010;
+    const velocityDecay  = chaosActive ? 0.55  : 0.44;
+
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
       .force("link", d3.forceLink<SwarmNodeData, SwarmLink>(links)
         .id(d => d.id)
@@ -860,11 +873,11 @@ export default function SwarmMapPage() {
           return 0.12 + f * 0.48;
         })
       )
-      .force("charge", d3.forceManyBody<SwarmNodeData>().strength(-800))
+      .force("charge", d3.forceManyBody<SwarmNodeData>().strength(chargeStrength))
       .force("center", d3.forceCenter(cx, cy).strength(0.08))
-      .force("collide", d3.forceCollide<SwarmNodeData>().radius(100).strength(0.8))
-      .alphaDecay(0.010)
-      .velocityDecay(0.44)
+      .force("collide", d3.forceCollide<SwarmNodeData>().radius(collideRadius).strength(collideStrength))
+      .alphaDecay(alphaDecay)
+      .velocityDecay(velocityDecay)
       .on("tick", () => {
         tickRef.current++;
         const margin = 24;
@@ -891,6 +904,16 @@ export default function SwarmMapPage() {
     ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25));
 
     simRef.current = sim;
+
+    // ── Explicit warm-start ───────────────────────────────────────────────────
+    // d3.forceSimulation already starts at alpha 1, but some browsers can
+    // throttle the very first tick if the construction happens off the rAF
+    // boundary. An explicit nodes() + alpha(1).restart() guarantees D3 will
+    // compute coordinates for every node (especially the 1,024 chaos agents
+    // appended in the same render) on the next frame instead of leaving them
+    // at (NaN, NaN) and invisible.
+    sim.nodes(nodes);
+    sim.alpha(1).restart();
 
     // ── Transparent drag-handle circles overlaid on each node ────────────────
     // They have correct cx/cy/r so they intercept both drag AND click events.
@@ -1204,17 +1227,43 @@ export default function SwarmMapPage() {
             {chaosFps.toFixed(0)} FPS · {nodes.length} nodes
           </span>
           <button
+            disabled={chaosLoading}
             onClick={() => {
+              if (chaosLoading) return;
               if (chaosCount > 0) {
-                setNodes(prev => prev.filter(n => !n.id.startsWith("chaos-")));
-                setChaosCount(0);
+                // ── EXIT CHAOS — filter back to original core agents ──
+                setChaosLoading(true);
+                requestAnimationFrame(() => {
+                  setNodes(prev => prev.filter(n => !n.id.startsWith("chaos-")));
+                  setChaosCount(0);
+                  // Brief warm-up so the UI shows the cleanup pulse, then release
+                  setTimeout(() => {
+                    simRef.current?.alpha(1).restart();
+                    setChaosLoading(false);
+                  }, 300);
+                });
               } else {
-                const fleet = generateChaosFleet(1024, cx, cy, Math.min(120, svgDims.W / 6));
-                setNodes(prev => [...prev, ...fleet]);
-                setChaosCount(1024);
+                // ── ENTER CHAOS — append 1,024 synthetic agents ──
+                // Show loading overlay BEFORE the heavy state update, batch the
+                // append on the next animation frame so the overlay paints first.
+                setChaosLoading(true);
+                requestAnimationFrame(() => {
+                  const fleet = generateChaosFleet(
+                    1024, cx, cy, Math.min(120, svgDims.W / 6),
+                  );
+                  // Functional update — append to existing nodes, never overwrite.
+                  setNodes(prev => [...prev.filter(n => !n.id.startsWith("chaos-")), ...fleet]);
+                  setChaosCount(1024);
+                  // ~500ms physics baseline calculation; D3 effect re-runs and
+                  // calls sim.alpha(1).restart() so the new fleet gets coords.
+                  setTimeout(() => {
+                    simRef.current?.alpha(1).restart();
+                    setChaosLoading(false);
+                  }, 500);
+                });
               }
             }}
-            className="font-mono text-[10px] px-2 py-1 rounded border transition-all hover:opacity-80"
+            className="font-mono text-[10px] px-2 py-1 rounded border transition-all hover:opacity-80 disabled:opacity-60 disabled:cursor-progress"
             style={{
               color: chaosCount > 0 ? "#FCA5A5" : "#C084FC",
               borderColor: chaosCount > 0 ? "#B91C1C66" : "#8B5CF666",
@@ -1279,6 +1328,38 @@ export default function SwarmMapPage() {
             <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ color: P.dim }}>
               <TreePine className="w-12 h-12 mb-4 opacity-20" />
               <span className="font-mono text-sm">No organisms in the ecosystem</span>
+            </div>
+          )}
+
+          {/* ── Chaos warm-start loading overlay ── */}
+          {chaosLoading && (
+            <div
+              className="absolute inset-0 z-30 flex flex-col items-center justify-center backdrop-blur-sm pointer-events-none"
+              style={{ background: "rgba(13,17,23,0.78)" }}
+            >
+              <div className="relative w-14 h-14 mb-4">
+                <div
+                  className="absolute inset-0 rounded-full animate-spin"
+                  style={{
+                    border: `2px solid ${chaosCount > 0 ? "#B91C1C44" : "#8B5CF644"}`,
+                    borderTopColor: chaosCount > 0 ? "#FCA5A5" : "#C084FC",
+                    boxShadow: `0 0 22px ${chaosCount > 0 ? "#B91C1C66" : "#8B5CF688"}`,
+                  }}
+                />
+                <div
+                  className="absolute inset-2 rounded-full animate-pulse"
+                  style={{ background: `radial-gradient(circle, ${chaosCount > 0 ? "#B91C1C33" : "#8B5CF633"} 0%, transparent 70%)` }}
+                />
+              </div>
+              <span
+                className="font-mono text-[11px] uppercase tracking-[0.22em]"
+                style={{ color: chaosCount > 0 ? "#FCA5A5" : "#C084FC" }}
+              >
+                {chaosCount > 0 ? "Releasing chaos fleet…" : "Calibrating 1,024-node physics…"}
+              </span>
+              <span className="font-mono text-[9px] mt-1.5" style={{ color: P.dim, letterSpacing: "0.18em" }}>
+                D3 SIMULATION · ALPHA = 1.0 · WARM START
+              </span>
             </div>
           )}
 
