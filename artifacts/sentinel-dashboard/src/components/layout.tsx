@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
 import SovereignInduction from "./SovereignInduction";
+import { DataRoomExport } from "./DataRoomExport";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -714,6 +715,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         }}>
           {/* Operator HEX-ID badge */}
           <OperatorBadge />
+          {/* Sovereign Data Room export (Certified Operator only) */}
+          <DataRoomExport />
           <div style={{
             padding: "10px 16px",
             display: "flex", alignItems: "center", gap: 8,
