@@ -556,7 +556,10 @@ export default function SwarmMapPage() {
         for (const n of enriched) { prevStatus.set(n.id, n.status); prevSet.add(n.id); }
 
         const posMap = new Map(prev.map(n => [n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy }]));
-        return enriched.map(n => { const pos = posMap.get(n.id); return pos ? { ...n, ...pos } : n; });
+        const merged = enriched.map(n => { const pos = posMap.get(n.id); return pos ? { ...n, ...pos } : n; });
+        // ── v6.0: preserve any synthetic induction-drill rogues across refreshes ──
+        const synthetic = prev.filter(n => n.id.startsWith("induction-rogue-"));
+        return synthetic.length ? [...merged, ...synthetic] : merged;
       });
       setLinks(rawLinks);
     } catch (err) {
@@ -565,6 +568,33 @@ export default function SwarmMapPage() {
   }, []);
 
   useEffect(() => { fetchData(); const id = setInterval(fetchData, 2_500); return () => clearInterval(id); }, [fetchData]);
+
+  // ── v6.0 Induction Drill ── synthetic rogue agent spawn + drift escalation
+  useEffect(() => {
+    const onSpawn = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string; label: string };
+      if (!detail) return;
+      const angle = Math.random() * Math.PI * 2;
+      const ring = 60 + Math.random() * 40;
+      const rogue: SwarmNodeData = {
+        id: detail.id, label: detail.label, status: "active",
+        swarmId: "induction-drill", rootSwarmId: "induction-drill", parentUid: null,
+        createdAt: new Date().toISOString(), revokedAt: null, revokedReason: null,
+        isRoot: false, radius: 12, drift: 2, fitnessScore: 0.7, generationDepth: 1,
+        x: cx + ring * Math.cos(angle), y: cy + ring * Math.sin(angle),
+      };
+      setNodes(prev => [...prev.filter(n => n.id !== detail.id), rogue]);
+      // Escalate drift over ~2s to dramatically cross the 25% threshold
+      let d = 2;
+      const tick = setInterval(() => {
+        d += 4;
+        setNodes(prev => prev.map(n => n.id === detail.id ? { ...n, drift: d } : n));
+        if (d >= 30) clearInterval(tick);
+      }, 220);
+    };
+    window.addEventListener("sentinel:induction-spawn", onSpawn);
+    return () => window.removeEventListener("sentinel:induction-spawn", onSpawn);
+  }, [cx, cy]);
 
   // ── v6.0 FPS Sampler ── measure rAF frame-rate for chaos-mode stress tests
   useEffect(() => {
@@ -1220,7 +1250,7 @@ export default function SwarmMapPage() {
       <div className="flex flex-1 min-h-0 gap-4">
 
         {/* ── SVG Canvas ── */}
-        <div className="flex-1 rounded-xl overflow-hidden relative"
+        <div data-tour-id="swarm-canvas" className="flex-1 rounded-xl overflow-hidden relative"
           style={{ border: `1px solid ${P.border}`, background: P.bg }}>
 
           {/* Legend */}
@@ -1257,7 +1287,7 @@ export default function SwarmMapPage() {
             const qNodes = nodes.filter(n => quarantinedIds.has(n.id) || (n.drift ?? 0) > 25);
             if (qNodes.length === 0) return null;
             return (
-              <div className="absolute left-3 right-3 bottom-3 z-20 quarantine-zone"
+              <div data-tour-id="quarantine-zone" className="absolute left-3 right-3 bottom-3 z-20 quarantine-zone"
                 style={{
                   background: "rgba(185,28,28,0.10)",
                   border: "1px solid rgba(185,28,28,0.45)",
@@ -1277,6 +1307,7 @@ export default function SwarmMapPage() {
                   {qNodes.slice(0, 12).map(n => (
                     <button
                       key={n.id}
+                      data-rogue-id={n.id.startsWith("induction-rogue-") ? n.id : undefined}
                       onClick={() => setAgent({
                         id: n.id, label: n.label, status: n.status,
                         drift: n.drift ?? 0, fitnessScore: n.fitnessScore ?? 0,

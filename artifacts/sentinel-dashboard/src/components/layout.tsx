@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
+import SovereignInduction from "./SovereignInduction";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -322,7 +323,7 @@ function ForensicInspector() {
 
             {/* ── Neural Replay (Timeline Scrubber) ────────────── */}
             {history.length > 1 && (
-              <div style={{ borderRadius: 10, padding: 10, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.22)" }}>
+              <div data-tour-id="neural-replay" style={{ borderRadius: 10, padding: 10, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.22)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.violet, fontWeight: 700 }}>
                     🕰 Neural Replay
@@ -695,6 +696,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             {/* LIVE indicator */}
             <div
+              data-tour-id="live-pulse"
               title={lastSync ? `System Synchronized: ${lastSync.toLocaleTimeString()}` : "Synchronizing…"}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
@@ -779,6 +781,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Forensic Inspector ── */}
       <ForensicInspector />
+
+      {/* ── Sovereign Induction Onboarding ── */}
+      <SovereignInduction />
     </div>
   );
 }

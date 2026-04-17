@@ -76,6 +76,9 @@ interface ForensicContextType {
   setScrubIndex: (i: number | null) => void;
 
   weightVerified: (agentId: string) => { ok: boolean; hash: string };
+
+  // V6.0 Induction — synthetic rogue quarantine for the onboarding drill
+  induceRogueQuarantine: (agentId: string, label: string, drift: number) => void;
 }
 
 const ForensicContext = createContext<ForensicContextType>({
@@ -97,6 +100,7 @@ const ForensicContext = createContext<ForensicContextType>({
   scrubIndex: null,
   setScrubIndex: () => {},
   weightVerified: () => ({ ok: true, hash: "" }),
+  induceRogueQuarantine: () => {},
 });
 
 // ── Synthetic SLSA L4 model-weight hash ──────────────────────────────────────
@@ -297,6 +301,29 @@ export function ForensicProvider({ children }: { children: React.ReactNode }) {
     return list;
   }, [agents]);
 
+  const induceRogueQuarantine = useCallback((agentId: string, label: string, drift: number) => {
+    setQuarantinedIds(prev => {
+      if (prev.has(agentId)) return prev;
+      const next = new Set(prev); next.add(agentId);
+      try { localStorage.setItem(LS_QIDS, JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
+    setQuarantineLog(prev => {
+      const evt: QuarantineEvent = {
+        id: `induct-${Date.now()}`,
+        agentId, agentLabel: label,
+        swarmId: "induction-drill",
+        drift,
+        ts: Date.now(),
+        interventionMs: 0.4,
+        reason: "INDUCTION_DRILL · synthetic rogue auto-interdicted by Sovereign Watcher",
+      };
+      const out = [evt, ...prev].slice(0, 200);
+      try { localStorage.setItem(LS_QLOG, JSON.stringify(out)); } catch {}
+      return out;
+    });
+  }, []);
+
   const value: ForensicContextType = {
     agent, setAgent,
     activeMutations, setActiveMutations,
@@ -306,6 +333,7 @@ export function ForensicProvider({ children }: { children: React.ReactNode }) {
     agentHistory, pushSnapshot,
     scrubIndex, setScrubIndex,
     weightVerified: syntheticWeightHash,
+    induceRogueQuarantine,
   };
 
   return (

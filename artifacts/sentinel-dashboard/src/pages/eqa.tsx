@@ -905,6 +905,7 @@ const EQAPage = React.memo(function EQAPage() {
           disabled={loading || sealing}
         />
         <Button
+          data-tour-id="generate-eqa"
           onClick={() => handleGenerate()}
           disabled={loading || sealing || !partnerId.trim()}
           size="sm"
