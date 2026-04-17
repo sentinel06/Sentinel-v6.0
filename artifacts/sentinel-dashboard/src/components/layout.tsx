@@ -50,12 +50,93 @@ function RiskHorizon({ activeMutations, ledgerTampered }: { activeMutations: num
   );
 }
 
+// ── Cluster Switcher (V6.0 multi-cluster sovereignty) ───────────────────────
+function ClusterSwitcher() {
+  const { clusters, currentCluster, setCurrentCluster } = useForensic();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const current = clusters.find(c => c.id === currentCluster) ?? clusters[0];
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Switch swarm cluster"
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          height: 32, padding: "0 10px", borderRadius: 8,
+          border: "1px solid rgba(139,92,246,0.32)",
+          background: "rgba(139,92,246,0.10)",
+          cursor: "pointer", color: P.violet,
+          fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+          letterSpacing: "0.12em", textTransform: "uppercase",
+        }}
+      >
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: P.violet, boxShadow: `0 0 6px ${P.violet}aa` }} />
+        <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {current?.label ?? "ALL"}
+        </span>
+        <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: 38, right: 0, minWidth: 240,
+          maxHeight: 320, overflowY: "auto", zIndex: 100,
+          borderRadius: 10, padding: 4,
+          background: "rgba(13,17,23,0.96)", backdropFilter: "blur(20px)",
+          border: "1px solid rgba(139,92,246,0.30)",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.5), 0 0 24px rgba(139,92,246,0.15)",
+        }}>
+          {clusters.map(c => (
+            <button
+              key={c.id}
+              onClick={() => { setCurrentCluster(c.id); setOpen(false); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                width: "100%", padding: "8px 10px", borderRadius: 6,
+                border: "none", cursor: "pointer", marginBottom: 1,
+                background: c.id === currentCluster ? "rgba(139,92,246,0.18)" : "transparent",
+                color: c.id === currentCluster ? P.violet : "#cdd5e0",
+                fontSize: 10, fontFamily: "JetBrains Mono, monospace",
+                textAlign: "left",
+              }}
+              onMouseEnter={e => { if (c.id !== currentCluster) (e.currentTarget as HTMLButtonElement).style.background = "rgba(139,92,246,0.08)"; }}
+              onMouseLeave={e => { if (c.id !== currentCluster) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+            >
+              <span>{c.label}</span>
+              {c.id === currentCluster && <span style={{ color: P.violet, fontSize: 11 }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Forensic Inspector ────────────────────────────────────────────────────────
 function ForensicInspector() {
-  const { agent, setAgent } = useForensic();
+  const {
+    agent, setAgent,
+    agentHistory, scrubIndex, setScrubIndex,
+    weightVerified,
+  } = useForensic();
   const [revoking, setRevoking] = useState(false);
   const [action, setAction] = useState<string | null>(null);
   const prevAgentId = useRef<string | null>(null);
+
+  // Active history for the selected agent (excludes the live snapshot)
+  const history = agent ? (agentHistory[agent.id] ?? []) : [];
+  const scrubSnap = (scrubIndex !== null && history[scrubIndex]) ? history[scrubIndex] : null;
+  const wv = agent ? weightVerified(agent.id) : null;
 
   useEffect(() => {
     if (agent?.id !== prevAgentId.current) {
@@ -100,22 +181,27 @@ function ForensicInspector() {
     agent?.status === "mutant"  ? "#C084FC" :
     agent?.status === "revoked" ? P.terra : "var(--sv-text-dim)";
 
+  // Use scrubbed snapshot for stat displays when scrubbing
+  const showDrift   = scrubSnap?.drift   ?? agent?.drift   ?? 0;
+  const showFitness = scrubSnap?.fitnessScore ?? agent?.fitnessScore ?? 0;
+
   const driftColor =
     !agent              ? "var(--sv-text-dim)" :
-    agent.drift > 15    ? P.amber :
-    agent.drift > 5     ? "#EBC06D88" : P.sage;
+    showDrift > 25      ? P.terra :
+    showDrift > 15      ? P.amber :
+    showDrift > 5       ? "#EBC06D88" : P.sage;
 
   const fitnessColor =
-    !agent                    ? "var(--sv-text-dim)" :
-    agent.fitnessScore > 0.7  ? P.sage :
-    agent.fitnessScore > 0.4  ? P.amber : P.terra;
+    !agent                ? "var(--sv-text-dim)" :
+    showFitness > 0.7     ? P.sage :
+    showFitness > 0.4     ? P.amber : P.terra;
 
   return (
     <aside style={{
       width: 350, flexShrink: 0, display: "flex", flexDirection: "column",
       height: "100%", overflow: "hidden",
       background: "var(--sv-inspector-bg)",
-      backdropFilter: "blur(16px)",
+      backdropFilter: "blur(20px)",
       borderLeft: "1px solid var(--sv-inspector-border)",
       zIndex: 20, transition: "background 0.3s ease",
     }}>
@@ -215,24 +301,78 @@ function ForensicInspector() {
             {/* Fitness bar */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", marginBottom: 4 }}>
-                <span style={{ color: "var(--sv-text-dim)" }}>Organism Fitness</span>
-                <span style={{ color: fitnessColor }}>{(agent.fitnessScore * 100).toFixed(0)}%</span>
+                <span style={{ color: "var(--sv-text-dim)" }}>Organism Fitness {scrubSnap && <span style={{ color: P.violet }}>· REPLAY</span>}</span>
+                <span style={{ color: fitnessColor }}>{(showFitness * 100).toFixed(0)}%</span>
               </div>
               <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "var(--sv-panel-border)" }}>
-                <div style={{ height: "100%", borderRadius: 3, width: `${agent.fitnessScore * 100}%`, background: `linear-gradient(90deg,${P.terra},${P.amber},${P.sage})`, transition: "width 0.6s ease" }} />
+                <div style={{ height: "100%", borderRadius: 3, width: `${showFitness * 100}%`, background: `linear-gradient(90deg,${P.terra},${P.amber},${P.sage})`, transition: "width 0.6s ease" }} />
               </div>
             </div>
 
             {/* Drift bar */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", marginBottom: 4 }}>
-                <span style={{ color: "var(--sv-text-dim)" }}>Genetic Drift</span>
-                <span style={{ color: driftColor }}>{(agent.drift ?? 0).toFixed(1)}%</span>
+                <span style={{ color: "var(--sv-text-dim)" }}>Cognitive Drift {showDrift > 25 && <span style={{ color: P.terra }}>⚠ QUARANTINE</span>}</span>
+                <span style={{ color: driftColor }}>{showDrift.toFixed(1)}%</span>
               </div>
               <div style={{ height: 5, borderRadius: 3, overflow: "hidden", background: "var(--sv-panel-border)" }}>
-                <div style={{ height: "100%", borderRadius: 3, width: `${Math.min(agent.drift ?? 0, 100)}%`, background: driftColor, transition: "width 0.6s ease" }} />
+                <div style={{ height: "100%", borderRadius: 3, width: `${Math.min(showDrift, 100)}%`, background: driftColor, transition: "width 0.6s ease" }} />
               </div>
             </div>
+
+            {/* ── Neural Replay (Timeline Scrubber) ────────────── */}
+            {history.length > 1 && (
+              <div style={{ borderRadius: 10, padding: 10, background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.22)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: P.violet, fontWeight: 700 }}>
+                    🕰 Neural Replay
+                  </span>
+                  <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: scrubSnap ? P.violet : P.sage }}>
+                    {scrubSnap ? new Date(scrubSnap.ts).toLocaleTimeString() : "LIVE"}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={history.length - 1}
+                  value={scrubIndex ?? history.length - 1}
+                  onChange={e => {
+                    const v = Number(e.target.value);
+                    const next = v === history.length - 1 ? null : v;
+                    setScrubIndex(next);
+                    window.dispatchEvent(new CustomEvent("sentinel:scrub", { detail: { agentId: agent.id, index: next, snap: history[v] ?? null } }));
+                  }}
+                  style={{ width: "100%", accentColor: P.violet, cursor: "pointer" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", marginTop: 3 }}>
+                  <span>−{((history.length - 1) * 2.5).toFixed(0)}s</span>
+                  <button
+                    onClick={() => { setScrubIndex(null); window.dispatchEvent(new CustomEvent("sentinel:scrub", { detail: { agentId: agent.id, index: null, snap: null } })); }}
+                    style={{ background: "none", border: "none", color: P.violet, cursor: "pointer", fontSize: 8, fontFamily: "JetBrains Mono, monospace" }}
+                  >
+                    ▶ LIVE
+                  </button>
+                  <span>NOW</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── SLSA L4 Model Weight Verification ────────────── */}
+            {wv && (
+              <div style={{ borderRadius: 10, padding: 10, background: wv.ok ? "rgba(64,181,149,0.07)" : "rgba(217,97,97,0.10)", border: `1px solid ${wv.ok ? "rgba(64,181,149,0.22)" : "rgba(217,97,97,0.32)"}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", letterSpacing: "0.12em", textTransform: "uppercase", color: wv.ok ? P.sage : P.terra, fontWeight: 700 }}>
+                    {wv.ok ? "🛡 Weight Verified · SLSA L4" : "⚠ Shadow-Tune Detected"}
+                  </span>
+                  <span style={{ fontSize: 7, fontFamily: "JetBrains Mono, monospace", color: wv.ok ? P.sage : P.terra }}>
+                    {wv.ok ? "PASS" : "FAIL"}
+                  </span>
+                </div>
+                <div style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", wordBreak: "break-all", lineHeight: 1.5 }}>
+                  {wv.hash}
+                </div>
+              </div>
+            )}
 
             {/* Stat rows */}
             {[
@@ -411,24 +551,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <RiskHorizon activeMutations={activeMutations} ledgerTampered={ledgerTampered} />
 
       {/* ── Sidebar ── */}
-      <aside style={{
+      <aside className="sentinel-scanline" style={{
         width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
         height: "100%", position: "relative", zIndex: 20,
         background: "var(--sv-sidebar-bg)",
-        backdropFilter: "blur(12px)",
+        backdropFilter: "blur(20px)",
         borderRight: "1px solid var(--sv-sidebar-border)",
         transition: "background 0.3s ease, border-color 0.3s ease",
       }}>
         {/* Logo */}
         <div style={{
           flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
-          padding: "0 20px", height: 56,
+          padding: "0 16px", height: 56,
           borderBottom: "1px solid var(--sv-panel-border)",
+          position: "relative", zIndex: 1,
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: P.sage, boxShadow: `0 0 6px ${P.sage}88` }} />
-          <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "-0.01em", color: "var(--sv-text-primary)" }}>
-            AGENT-SENTINEL
-          </span>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: P.sage, boxShadow: `0 0 6px ${P.sage}88`, flexShrink: 0 }} />
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
+            <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "-0.01em", color: "var(--sv-text-primary)" }}>
+              SENTINEL v6.0
+            </span>
+            <span style={{ fontSize: 7.5, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, letterSpacing: "0.18em", color: P.violet, textTransform: "uppercase" }}>
+              Neural Sovereignty
+            </span>
+          </div>
         </div>
 
         {/* Featured nav */}
@@ -522,6 +668,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Cluster switcher */}
+            <ClusterSwitcher />
+
+            <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
+
             {/* Search */}
             <div style={{ position: "relative" }}>
               <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--sv-search-icon)", pointerEvents: "none" }} />

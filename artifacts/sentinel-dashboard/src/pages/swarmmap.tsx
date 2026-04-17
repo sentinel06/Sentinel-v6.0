@@ -441,7 +441,7 @@ export default function SwarmMapPage() {
   const feedRef            = useRef<HTMLDivElement>(null);
 
   const [, navigate] = useLocation();
-  const { setAgent, setActiveMutations } = useForensic();
+  const { setAgent, setActiveMutations, currentCluster, quarantinedIds } = useForensic();
 
   const [svgDims, setSvgDims]     = useState({ W: 900, H: 540 });
 
@@ -1168,6 +1168,59 @@ export default function SwarmMapPage() {
             </div>
           )}
 
+          {/* ── Quarantine Zone ── */}
+          {(() => {
+            const qNodes = nodes.filter(n => quarantinedIds.has(n.id) || (n.drift ?? 0) > 25);
+            if (qNodes.length === 0) return null;
+            return (
+              <div className="absolute left-3 right-3 bottom-3 z-20 quarantine-zone"
+                style={{
+                  background: "rgba(185,28,28,0.10)",
+                  border: "1px solid rgba(185,28,28,0.45)",
+                  borderRadius: 10,
+                  padding: "8px 12px",
+                  boxShadow: "0 0 22px rgba(185,28,28,0.20), inset 0 0 18px rgba(185,28,28,0.05)",
+                  backdropFilter: "blur(20px)",
+                }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="live-dot inline-block w-2 h-2 rounded-full" style={{ background: "#B91C1C", boxShadow: "0 0 8px #B91C1C" }} />
+                  <span className="font-mono font-bold text-[10px] tracking-widest uppercase" style={{ color: "#F87171" }}>
+                    🚨 Autonomous Quarantine Zone · {qNodes.length} interdiction{qNodes.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="font-mono text-[8px] ml-auto" style={{ color: "#F87171" }}>SOVEREIGN TOKEN REVOKED</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {qNodes.slice(0, 12).map(n => (
+                    <button
+                      key={n.id}
+                      onClick={() => setAgent({
+                        id: n.id, label: n.label, status: n.status,
+                        drift: n.drift ?? 0, fitnessScore: n.fitnessScore ?? 0,
+                        generationDepth: n.generationDepth ?? 0, isRoot: n.isRoot,
+                        swarmId: n.swarmId, parentUid: n.parentUid,
+                        createdAt: n.createdAt, revokedAt: n.revokedAt, revokedReason: n.revokedReason,
+                      } as any)}
+                      className="font-mono text-[9px] px-2 py-0.5 rounded cursor-pointer"
+                      style={{
+                        background: "rgba(185,28,28,0.18)",
+                        border: "1px solid rgba(185,28,28,0.45)",
+                        color: "#FCA5A5",
+                      }}
+                      title={`Drift ${(n.drift ?? 0).toFixed(1)}% · ${n.id}`}
+                    >
+                      {n.label.length > 16 ? n.label.substring(0, 16) + "…" : n.label} · {(n.drift ?? 0).toFixed(0)}%
+                    </button>
+                  ))}
+                  {qNodes.length > 12 && (
+                    <span className="font-mono text-[9px] px-2 py-0.5" style={{ color: "#F87171" }}>
+                      +{qNodes.length - 12} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Lineage tooltip */}
           {lineageTip && (
             <div className="absolute z-20 pointer-events-none px-3 py-2 rounded-lg text-[10px] font-mono"
@@ -1535,14 +1588,21 @@ export default function SwarmMapPage() {
                 const calcFilter = (calc && !isSurging && !metamorphed) ? "url(#calcify)" : undefined;
                 const nodeFilter = calcFilter ?? mutFilter;
 
-                const displayColor = isSurging
+                const isQuarantined = quarantinedIds.has(node.id) || (node.drift ?? 0) > 25;
+                const inCluster = currentCluster === "ALL" || node.swarmId === currentCluster;
+
+                const displayColor = isQuarantined
+                  ? "#B91C1C"
+                  : isSurging
                   ? P.whiteGold
                   : metamorphed ? P.sage
                   : calc ? P.calcite
                   : color;
 
-                const fillOpacity   = calc && !metamorphed ? 0.2 : 0.28 + f * 0.2;
-                const strokeOpacity = calc && !metamorphed ? 0.35 : 1;
+                const baseFillOp   = calc && !metamorphed ? 0.2 : 0.28 + f * 0.2;
+                const baseStrokeOp = calc && !metamorphed ? 0.35 : 1;
+                const fillOpacity   = inCluster ? baseFillOp   : baseFillOp   * 0.18;
+                const strokeOpacity = inCluster ? baseStrokeOp : baseStrokeOp * 0.18;
 
                 return (
                   <g key={node.id} style={{ cursor: "pointer" }}
