@@ -300,13 +300,20 @@ function ForensicInspector() {
   // Full 350px panel only appears when a node is selected for forensic review.
   const collapsed = !agent;
 
-  // Global alert tallies (shown in collapsed/strip mode)
-  const quarantinedCount = quarantinedIds.size;
+  // Global Risk Summary tallies (shown in collapsed/strip mode)
+  const quarantinedCount = quarantinedIds.size;       // Total Interdictions
   const mutationCount    = activeMutations;
   const alertCount       = quarantinedCount + mutationCount + (ledgerTampered ? 1 : 0);
   const alertColor       = ledgerTampered ? P.terra
                          : alertCount > 0 ? P.amber
                          : P.sage;
+  // Cluster Health %: ledger tamper is fatal, otherwise penalize per active risk
+  const clusterHealth    = ledgerTampered
+    ? 0
+    : Math.max(0, Math.min(100, 100 - quarantinedCount * 5 - mutationCount * 3));
+  const healthColor      = clusterHealth >= 90 ? P.sage
+                         : clusterHealth >= 60 ? P.amber
+                         : P.terra;
 
   if (collapsed) {
     return (
@@ -328,7 +335,7 @@ function ForensicInspector() {
           writingMode: "vertical-rl", transform: "rotate(180deg)",
           opacity: 0.85, marginBottom: 4,
         }}>
-          Global Alerts
+          Global Risk Summary
         </div>
 
         {/* Pulsing alert dot */}
@@ -347,12 +354,26 @@ function ForensicInspector() {
 
         {/* Tally rail */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-          {/* Quarantined */}
-          <div title={`${quarantinedCount} quarantined agent${quarantinedCount === 1 ? "" : "s"}`}
+          {/* Cluster Health % */}
+          <div title={`Cluster Health: ${clusterHealth}%`}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <Activity style={{ width: 14, height: 14, color: healthColor, opacity: 0.9 }} />
+            <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: healthColor }}>
+              {clusterHealth}%
+            </span>
+            <span style={{ fontSize: 6, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              HLTH
+            </span>
+          </div>
+          {/* Total Interdictions (quarantined) */}
+          <div title={`Total Interdictions: ${quarantinedCount} agent${quarantinedCount === 1 ? "" : "s"}`}
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
             <Skull style={{ width: 14, height: 14, color: quarantinedCount > 0 ? P.terra : "var(--sv-text-dim)", opacity: quarantinedCount > 0 ? 1 : 0.4 }} />
             <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: quarantinedCount > 0 ? P.terra : "var(--sv-text-dim)" }}>
               {quarantinedCount}
+            </span>
+            <span style={{ fontSize: 6, fontFamily: "JetBrains Mono, monospace", color: "var(--sv-text-dim)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              INTD
             </span>
           </div>
           {/* Mutations */}
@@ -993,15 +1014,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Page content — pb-[100px] + safe-area inset prevents Replit/mobile overlay HUD obscuring */}
+        {/* Page content — pb-24 + safe-area inset prevents Replit/mobile overlay HUD obscuring */}
         <div
-          className="pb-[100px]"
+          className="pb-24"
           style={{
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
             padding: 20,
-            paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))",
             background: "transparent",
           }}
         >

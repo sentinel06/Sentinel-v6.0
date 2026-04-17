@@ -227,7 +227,9 @@ function synthesizeChaosEvents(seed: Array<{ id: string; agentId: string; agentL
 }
 
 function buildIntegrityLedgerJsonLd(agents: Array<{ id: string; label: string; swarmId: string | null }>, fingerprint: string) {
-  const now = new Date().toISOString();
+  // Click-time ts proves non-stale snapshot — same numeric anchor used in id and ts fields
+  const tsNow = Date.now();
+  const now = new Date(tsNow).toISOString();
   return {
     "@context": {
       "@vocab": "https://agent-sentinel.io/schema/v6/",
@@ -235,8 +237,9 @@ function buildIntegrityLedgerJsonLd(agents: Array<{ id: string; label: string; s
       "sec":    "https://w3id.org/security/v2",
     },
     "@type":               "IntegrityLedger",
-    "id":                  `urn:sentinel:ledger:${Date.now()}`,
+    "id":                  `urn:sentinel:ledger:${tsNow}`,
     "version":             "v6.0-neural-sovereignty",
+    "ts":                  tsNow,
     "issuedAt":            now,
     "cryptographicSeal":   { "algorithm": "ML-DSA-87", "fingerprint": fingerprint, "standard": "FIPS-204" },
     "merkleRoot":          "0x" + Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join(""),

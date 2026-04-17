@@ -489,10 +489,12 @@ export default function SwarmMapPage() {
       const batched = buf.splice(0, buf.length);
       const sample = batched[0];
       const avgDrift = batched.reduce((s, p) => s + (p.d ?? 0), 0) / batched.length;
+      const tsNow = Date.now();
+      const tsLabel = new Date(tsNow).toISOString().slice(11, 19); // HH:MM:SS UTC
       const summary: StreamPacket = {
         ...sample,
-        ts: Date.now(),
-        a: `BATCH:${batched.length} Synthetic Nodes Revoked`,
+        ts: tsNow,
+        a: `[${tsLabel}] BATCH ACTION: ${batched.length} Synthetic Agents Interdicted`,
         d: avgDrift,
         // Preserve original packet shape; consumers tolerate unknown fields
       } as StreamPacket;
@@ -1371,20 +1373,29 @@ export default function SwarmMapPage() {
                   "radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, rgba(13,17,23,0.0) 65%)",
               }}
             >
-              {/* Sovereign radar pulse */}
-              <div className="relative mb-6" style={{ width: 84, height: 84 }}>
-                {[0, 1, 2].map((i) => (
+              {/* Sovereign radar pulse — pure-glow, no tree icon */}
+              <div className="relative mb-6" style={{ width: 96, height: 96 }}>
+                {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className="absolute inset-0 rounded-full"
                     style={{
-                      border: `1px solid rgba(139,92,246,${0.45 - i * 0.12})`,
-                      animation: `sovereign-scan 2.6s ease-out ${i * 0.75}s infinite`,
+                      border: `1px solid rgba(139,92,246,${0.5 - i * 0.1})`,
+                      animation: `sovereign-scan 2.8s ease-out ${i * 0.7}s infinite`,
                     }}
                   />
                 ))}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <TreePine className="w-9 h-9" style={{ color: "#8B5CF6", opacity: 0.85 }} />
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "#8B5CF6",
+                      boxShadow: "0 0 24px #8B5CF6, 0 0 48px #8B5CF666",
+                      animation: "sovereign-blink 1.8s step-end infinite",
+                    }}
+                  />
                 </div>
               </div>
 
@@ -1417,7 +1428,7 @@ export default function SwarmMapPage() {
                 >
                   SWARM STATUS: <span style={{ color: "#8B5CF6" }}>DORMANT</span>
                   <span style={{ color: P.dim, margin: "0 6px" }}>·</span>
-                  <span style={{ color: "#fff" }}>AWAITING NEURAL DEPLOYMENT</span>
+                  <span style={{ color: "#fff" }}>AWAITING NEURAL INITIALIZATION</span>
                 </div>
                 <div className="font-mono text-xs leading-relaxed" style={{ color: P.dim }}>
                   Initialize this swarm via{" "}
