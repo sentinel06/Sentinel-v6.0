@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { useForensic } from "../contexts/ForensicContext";
 
 const LS_ONBOARD = "sentinel_onboarded";
+const LS_PERSONA = "sentinel_persona";
+const LS_HEXID   = "sentinel_operator_hex";
 
 const VIOLET = "#8B5CF6";
 const VIOLET_BRIGHT = "#C084FC";
@@ -10,14 +12,16 @@ const SAGE = "#40B595";
 const CRIMSON = "#B91C1C";
 const AMBER = "#EBC06D";
 
+type Persona = "business" | "technical";
+
 interface Step {
   id: string;
   badge: string;
   title: string;
-  body: string;
-  tour?: string;          // data-tour-id of the spotlight target
-  route?: string;         // wouter location to push before this step
-  action?: () => void;    // side-effect on enter
+  body: (p: Persona) => string;
+  tour?: string;
+  route?: string;
+  action?: () => void;
   cta?: string;
 }
 
@@ -26,69 +30,191 @@ interface InductionProps {
   onClose?: () => void;
 }
 
+// ── HEX-ID generator: SOV-XXXX-XXXX-XXXX ─────────────────────────────────
+function generateOperatorHex(): string {
+  const buf = new Uint8Array(6);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(buf);
+  else for (let i = 0; i < 6; i++) buf[i] = Math.floor(Math.random() * 256);
+  const hex = Array.from(buf).map(b => b.toString(16).toUpperCase().padStart(2, "0")).join("");
+  return `SOV-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
+}
+
 export default function SovereignInduction({ forceOpen = false, onClose }: InductionProps) {
   const [, navigate] = useLocation();
-  const { induceRogueQuarantine, setAgent } = useForensic();
+  const { induceRogueQuarantine, setAgent, clusters, currentCluster, setCurrentCluster } = useForensic();
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const previewTimersRef = useRef<number[]>([]);
+  const previewOriginRef = useRef<string | null>(null);
+
+  // Generic timers for non-preview side effects (e.g. hive rogue dispatch)
+  const sideTimersRef = useRef<number[]>([]);
+  const trackTimer = (id: number) => { sideTimersRef.current.push(id); return id; };
+  const clearSideTimers = () => {
+    sideTimersRef.current.forEach(t => window.clearTimeout(t));
+    sideTimersRef.current = [];
+  };
+
+  const cancelClusterPreview = (restore: boolean) => {
+    previewTimersRef.current.forEach(t => window.clearTimeout(t));
+    previewTimersRef.current = [];
+    if (restore && previewOriginRef.current !== null) {
+      setCurrentCluster(previewOriginRef.current);
+    }
+    previewOriginRef.current = null;
+  };
+
+  // Combined teardown for any exit path (skip / restart / unmount / close)
+  const teardownAllInductionEffects = () => {
+    clearSideTimers();
+    cancelClusterPreview(true);
+  };
 
   const [open, setOpen] = useState<boolean>(() => {
     if (forceOpen) return true;
     try { return localStorage.getItem(LS_ONBOARD) !== "true"; } catch { return true; }
   });
-  const [stepIdx, setStepIdx] = useState(0);
+  const [stepIdx, setStepIdx] = useState(-1);          // -1 = persona-select gate
+  const [persona, setPersona] = useState<Persona>(() => {
+    try { return (localStorage.getItem(LS_PERSONA) as Persona) || "business"; } catch { return "business"; }
+  });
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [certified, setCertified] = useState(false);
+  const [operatorHex, setOperatorHex] = useState<string>("");
   const [spotRect, setSpotRect] = useState<DOMRect | null>(null);
   const inducedRef = useRef(false);
 
+  // Re-trigger via global event
+  useEffect(() => {
+    const onRestart = () => {
+      teardownAllInductionEffects();
+      inducedRef.current = false;
+      setStepIdx(-1);
+      setSkipConfirm(false);
+      setCertified(false);
+      setOpen(true);
+    };
+    window.addEventListener("sentinel:induction-restart", onRestart);
+    return () => window.removeEventListener("sentinel:induction-restart", onRestart);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On unmount: cancel side timers AND restore the user's original cluster
+  // (avoid leaving the app stuck on a preview cluster if induction is unmounted mid-cycle).
+  useEffect(() => () => teardownAllInductionEffects(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cancel cluster preview when leaving the cluster step
+  useEffect(() => {
+    if (!open || !step || step.id !== "clusters") {
+      // If we just left the clusters step but timers still pending, restore origin and cancel
+      if (previewTimersRef.current.length || previewOriginRef.current !== null) {
+        cancelClusterPreview(true);
+      }
+    }
+  }, [open, stepIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Esc key dismisses (uses double-confirm via skip flow)
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); handleSkip(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, skipConfirm]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-focus the card on open / step change for keyboard users
+  useEffect(() => {
+    if (open && cardRef.current) cardRef.current.focus();
+  }, [open, stepIdx]);
+
+  // Adaptive lexicon
+  const lex = useMemo(() => ({
+    domain: persona === "business" ? "Governance" : "Forensics",
+    domainLower: persona === "business" ? "governance" : "forensics",
+    actor: persona === "business" ? "Compliance Officer" : "Forensics Engineer",
+    drift: "Cognitive Drift (Policy Violation)",
+    intervention: persona === "business" ? "Policy Interdiction" : "Token Revocation",
+  }), [persona]);
+
   const steps: Step[] = useMemo(() => [
-    {
-      id: "welcome",
-      badge: "MISSION INDUCTION",
-      title: "AGENT-SENTINEL v6.0 — NEURAL SOVEREIGNTY",
-      body: "Welcome, Operator. You are about to assume command of an autonomous AI governance fleet. This 90-second induction certifies you to operate the Sovereign Watcher. Sovereign Token issuance pending.",
-      cta: "BEGIN INDUCTION",
-    },
     {
       id: "pulse",
       badge: "STEP 01 · THE PULSE",
       title: "System Synchronized",
-      body: "You are viewing live neural telemetry. Every metric in this dashboard refreshes every 2.5 seconds with zero page reload. The sage pulse confirms your link to the Sovereign Watcher is healthy.",
+      body: (p) => p === "business"
+        ? `Live ${lex.domainLower} telemetry refreshes every 2.5 seconds with zero page reload. The sage pulse is your real-time assurance that the Sovereign Watcher is on guard.`
+        : `Live neural telemetry refreshes every 2.5 seconds with zero page reload. The sage pulse confirms your link to the Sovereign Watcher is healthy.`,
       tour: "live-pulse",
     },
     {
+      id: "clusters",
+      badge: "STEP 02 · MULTI-CLUSTER ISOLATION",
+      title: "Enterprise-Grade Tenant Isolation",
+      body: (p) => p === "business"
+        ? `Every business unit — Legal, Finance, Ops — operates in a cryptographically isolated swarm. A breach in one cannot contaminate another. This proves Sentinel scales from a single agent to a global enterprise.`
+        : `Each cluster is a sealed neural domain. Cross-tenant signal propagation is mathematically impossible. Watch as we toggle between Legal and Finance — note the hard cluster filter on the canvas.`,
+      tour: "cluster-switcher",
+      action: () => {
+        previewOriginRef.current = currentCluster;
+        const legal   = clusters.find(c => c.label.toLowerCase().includes("legal"));
+        const finance = clusters.find(c => c.label.toLowerCase().includes("finance"));
+        const fallbacks = clusters.filter(c => c.id !== "ALL" && c.id !== currentCluster);
+        const a = legal ?? fallbacks[0];
+        const b = finance ?? fallbacks.find(c => c.id !== a?.id) ?? fallbacks[1];
+        if (a) {
+          setCurrentCluster(a.id);
+          if (b && b.id !== a.id) {
+            previewTimersRef.current.push(window.setTimeout(() => setCurrentCluster(b.id), 1600));
+            previewTimersRef.current.push(window.setTimeout(() => {
+              setCurrentCluster(previewOriginRef.current ?? "ALL");
+              previewOriginRef.current = null;
+            }, 3400));
+          } else {
+            previewTimersRef.current.push(window.setTimeout(() => {
+              setCurrentCluster(previewOriginRef.current ?? "ALL");
+              previewOriginRef.current = null;
+            }, 2200));
+          }
+        }
+      },
+    },
+    {
       id: "hive",
-      badge: "STEP 02 · NEURAL HIVE",
+      badge: "STEP 03 · NEURAL HIVE",
       title: "The Neural Hive",
-      body: "This is the Neural Hive. Every node is an autonomous agent under your governance. A rogue agent is being injected now to demonstrate your defense systems — watch its drift climb.",
+      body: (p) => p === "business"
+        ? `Each node is an autonomous agent under your ${lex.domainLower}. We are now injecting a synthetic rogue — watch its ${lex.drift} climb past the 25% red-line.`
+        : `Each node is an autonomous agent under your ${lex.domainLower}. A synthetic rogue is being injected — observe ${lex.drift} escalation past the 25% quarantine threshold.`,
       tour: "swarm-canvas",
       route: "/swarmmap",
       action: () => {
         if (inducedRef.current) return;
         inducedRef.current = true;
         const id = `induction-rogue-${Date.now()}`;
-        // Stage the rogue immediately, then escalate drift over ~2s before quarantine fires
         window.dispatchEvent(new CustomEvent("sentinel:induction-spawn", { detail: { id, label: "rogue-drill-α" } }));
-        setTimeout(() => {
+        trackTimer(window.setTimeout(() => {
           induceRogueQuarantine(id, "rogue-drill-α", 30);
           window.dispatchEvent(new CustomEvent("sentinel:induction-quarantine", { detail: { id, label: "rogue-drill-α" } }));
-        }, 2200);
+        }, 2200));
       },
     },
     {
       id: "interdiction",
-      badge: "STEP 03 · AUTONOMOUS INTERDICTION",
-      title: "Sovereign Token Revoked",
-      body: "Autonomous Interdiction Successful. The rogue's Sovereign Token has been revoked at sub-millisecond latency to prevent logic contamination. The agent is now sealed inside the Quarantine Grid.",
+      badge: "STEP 04 · AUTONOMOUS INTERDICTION",
+      title: persona === "business" ? "Policy Violation Auto-Contained" : "Sovereign Token Revoked",
+      body: (p) => p === "business"
+        ? `${lex.intervention} executed in under 1 millisecond. The rogue agent is sealed in the Quarantine Grid — no contamination, no escalation, no human delay. Your audit trail is automatic.`
+        : `${lex.intervention} completed at sub-millisecond latency to prevent logic contamination. The agent is sealed inside the Quarantine Grid; the EQA log block is hash-chained.`,
       tour: "quarantine-zone",
     },
     {
       id: "replay",
-      badge: "STEP 04 · FORENSIC TIME-TRAVEL",
+      badge: "STEP 05 · FORENSIC TIME-TRAVEL",
       title: "Neural Replay Scrubber",
-      body: "Drag the Neural Replay slider to rewind any agent's cognition and pinpoint the exact moment of failure. Every snapshot is timestamped, hashed, and SLSA L4 attested.",
+      body: (p) => p === "business"
+        ? `Drag the Neural Replay slider to rewind any agent's decisions to the precise moment of violation. Every snapshot is timestamped and tamper-sealed for legal evidence.`
+        : `Scrub the Neural Replay timeline to inspect any agent's prior cognitive state. Every snapshot is SLSA L4 attested and FIPS-204 hash-chained for chain-of-custody.`,
       tour: "neural-replay",
       action: () => {
-        // Auto-select the inducted rogue so the scrubber appears
         const id = Array.from(document.querySelectorAll("[data-rogue-id]"))
           .map(el => (el as HTMLElement).dataset.rogueId)
           .find(Boolean);
@@ -106,9 +232,11 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
     },
     {
       id: "eqa",
-      badge: "STEP 05 · BOARD-READY EVIDENCE",
+      badge: "STEP 06 · BOARD-READY EVIDENCE",
       title: "The EQA Export",
-      body: "Generate EQA exports a tamper-sealed, FIPS-204 signed audit packet. This document is your legal shield under EU AI Act, NIST AI RMF, and global AI regulatory frameworks. Hand it to your Board, your auditor, or your regulator.",
+      body: (p) => p === "business"
+        ? `Generate EQA exports a tamper-sealed, FIPS-204 signed audit packet. Hand it to your Board, your auditor, or your regulator — your legal shield under EU AI Act and NIST AI RMF.`
+        : `EQA produces a Merkle-rooted, FIPS-204 attested audit bundle. SHA-256 chain integrity is verifiable offline. Drop the JSON into your SIEM or hand to counsel.`,
       tour: "generate-eqa",
       route: "/eqa",
     },
@@ -116,12 +244,12 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
       id: "certify",
       badge: "OPERATOR CERTIFICATION",
       title: "OPERATOR STATUS · CERTIFIED [v6.0]",
-      body: "Sovereign Token issued. You are now certified to operate Agent-Sentinel v6.0. The Neural Hive is yours. Welcome to Neural Sovereignty.",
+      body: () => `Sovereign Token issued. You are now certified to operate Agent-Sentinel v6.0 ${lex.domain} fleet. The Neural Hive is yours. Welcome to Neural Sovereignty.`,
       cta: "ASSUME COMMAND",
     },
-  ], [induceRogueQuarantine, setAgent]);
+  ], [persona, lex, induceRogueQuarantine, setAgent, clusters, setCurrentCluster]);
 
-  const step = steps[stepIdx];
+  const step = stepIdx >= 0 ? steps[stepIdx] : null;
   const isLast = stepIdx === steps.length - 1;
 
   // ── Side-effect on entering each step ────────────────────────────────────
@@ -129,7 +257,6 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
     if (!open || !step) return undefined;
     if (step.route) navigate(step.route);
     if (step.action) {
-      // Defer slightly so navigation lands first
       const t = setTimeout(() => step.action!(), 250);
       return () => clearTimeout(t);
     }
@@ -149,34 +276,73 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
     return () => cancelAnimationFrame(raf);
   }, [open, step?.tour]);
 
-  // ── Reset skip-confirm timeout ──────────────────────────────────────────
+  // Skip-confirm timeout
   useEffect(() => {
     if (!skipConfirm) return;
     const t = setTimeout(() => setSkipConfirm(false), 4000);
     return () => clearTimeout(t);
   }, [skipConfirm]);
 
-  function persist() {
-    try { localStorage.setItem(LS_ONBOARD, "true"); } catch {}
+  function persistOnboard() {
+    try {
+      localStorage.setItem(LS_ONBOARD, "true");
+      localStorage.setItem(LS_PERSONA, persona);
+    } catch {}
+  }
+  function persistHex(hex: string) {
+    try { localStorage.setItem(LS_HEXID, hex); } catch {}
+  }
+
+  function handleStart() {
+    try { localStorage.setItem(LS_PERSONA, persona); } catch {}
+    setStepIdx(0);
   }
 
   function handleNext() {
     if (isLast) {
-      persist();
+      teardownAllInductionEffects();
+      const hex = (() => {
+        try { return localStorage.getItem(LS_HEXID) || generateOperatorHex(); }
+        catch { return generateOperatorHex(); }
+      })();
+      persistHex(hex);
+      persistOnboard();
+      setOperatorHex(hex);
       setCertified(true);
       setOpen(false);
+      // Notify the rest of the app (sidebar badge re-reads localStorage)
+      window.dispatchEvent(new CustomEvent("sentinel:operator-certified", { detail: { hex, persona } }));
       onClose?.();
-      setTimeout(() => setCertified(false), 5500);
+      trackTimer(window.setTimeout(() => setCertified(false), 8500));
       return;
     }
     setStepIdx(i => Math.min(i + 1, steps.length - 1));
   }
-  function handleBack() { setStepIdx(i => Math.max(0, i - 1)); }
+  function handleBack() {
+    if (stepIdx === 0) { setStepIdx(-1); return; }
+    setStepIdx(i => Math.max(0, i - 1));
+  }
   function handleSkip() {
     if (!skipConfirm) { setSkipConfirm(true); return; }
-    persist();
+    teardownAllInductionEffects();
+    persistOnboard();
     setOpen(false);
     onClose?.();
+  }
+  function handleCtaInit() {
+    teardownAllInductionEffects();
+    persistOnboard();
+    setOpen(false);
+    onClose?.();
+    navigate("/swarmmap");
+  }
+  function handleCtaChaos() {
+    teardownAllInductionEffects();
+    persistOnboard();
+    setOpen(false);
+    onClose?.();
+    navigate("/swarmmap");
+    setTimeout(() => window.dispatchEvent(new CustomEvent("sentinel:trigger-chaos")), 350);
   }
 
   if (!open && !certified) return null;
@@ -188,30 +354,32 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
   const sw = spotRect ? spotRect.width + padding * 2 : 0;
   const sh = spotRect ? spotRect.height + padding * 2 : 0;
 
-  // ── Card placement: prefer above target if room, else below ─────────────
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const CARD_W = 460;
-  const CARD_H = 240;
+  const CARD_W = 480;
+  const CARD_H = 260;
   let cardLeft = vw / 2 - CARD_W / 2;
   let cardTop = vh / 2 - CARD_H / 2;
-  if (spotRect) {
+  if (spotRect && step) {
     cardLeft = Math.min(vw - CARD_W - 24, Math.max(24, sx + sw / 2 - CARD_W / 2));
     if (sy + sh + 24 + CARD_H < vh) cardTop = sy + sh + 24;
     else if (sy - 24 - CARD_H > 0) cardTop = sy - 24 - CARD_H;
     else cardTop = vh / 2 - CARD_H / 2;
   }
 
+  // Effective step count for progress dots (excluding gate)
+  const totalSteps = steps.length;
+  const visibleIdx = Math.max(0, stepIdx);
+
   return (
     <>
       {open && (
         <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 99999,
-            pointerEvents: "auto",
-          }}
+          style={{ position: "fixed", inset: 0, zIndex: 99999, pointerEvents: "auto" }}
           aria-modal="true"
           role="dialog"
+          aria-labelledby="induction-title"
+          aria-describedby="induction-body"
         >
           {/* ── Spotlight Mask ── */}
           <svg
@@ -222,11 +390,7 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
               <mask id="induction-mask">
                 <rect width="100%" height="100%" fill="white" />
                 {spotRect && (
-                  <rect
-                    x={sx} y={sy} width={sw} height={sh}
-                    rx={14} ry={14}
-                    fill="black"
-                  />
+                  <rect x={sx} y={sy} width={sw} height={sh} rx={14} ry={14} fill="black" />
                 )}
               </mask>
               <radialGradient id="induction-violet" cx="50%" cy="50%" r="70%">
@@ -241,174 +405,291 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
               mask="url(#induction-mask)"
               style={{ transition: "fill 0.4s ease" }}
             />
-            {/* Spotlight ring around target */}
             {spotRect && (
               <>
                 <rect
-                  x={sx} y={sy} width={sw} height={sh}
-                  rx={14} ry={14}
-                  fill="none"
-                  stroke={VIOLET_BRIGHT}
-                  strokeWidth={2}
-                  strokeDasharray="6 4"
+                  x={sx} y={sy} width={sw} height={sh} rx={14} ry={14}
+                  fill="none" stroke={VIOLET_BRIGHT} strokeWidth={2} strokeDasharray="6 4"
                   style={{ filter: `drop-shadow(0 0 10px ${VIOLET})` }}
                 >
                   <animate attributeName="stroke-dashoffset" from="0" to="20" dur="1.2s" repeatCount="indefinite" />
                 </rect>
                 <rect
-                  x={sx - 4} y={sy - 4} width={sw + 8} height={sh + 8}
-                  rx={18} ry={18}
-                  fill="none"
-                  stroke={VIOLET}
-                  strokeWidth={1}
-                  opacity={0.4}
+                  x={sx - 4} y={sy - 4} width={sw + 8} height={sh + 8} rx={18} ry={18}
+                  fill="none" stroke={VIOLET} strokeWidth={1} opacity={0.4}
                 />
               </>
             )}
           </svg>
 
-          {/* ── Glassmorphic Step Card ── */}
+          {/* ── Glassmorphic Card ── */}
           <div
+            ref={cardRef}
+            tabIndex={-1}
             style={{
               position: "absolute",
-              left: cardLeft,
-              top: cardTop,
-              width: CARD_W,
-              padding: "20px 22px",
-              borderRadius: 16,
-              background: "linear-gradient(180deg, rgba(20,18,38,0.88) 0%, rgba(13,17,23,0.92) 100%)",
+              left: cardLeft, top: cardTop, width: CARD_W,
+              outline: "none",
+              padding: "20px 22px", borderRadius: 16,
+              background: "linear-gradient(180deg, rgba(20,18,38,0.92) 0%, rgba(13,17,23,0.94) 100%)",
               border: "1px solid rgba(139,92,246,0.45)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
+              backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
               boxShadow: `0 20px 60px rgba(0,0,0,0.6), 0 0 40px ${VIOLET}33, inset 0 1px 0 rgba(255,255,255,0.06)`,
               transition: "left 0.4s cubic-bezier(.4,0,.2,1), top 0.4s cubic-bezier(.4,0,.2,1)",
-              fontFamily: "JetBrains Mono, monospace",
-              color: "#E5E7EB",
+              fontFamily: "JetBrains Mono, monospace", color: "#E5E7EB",
               pointerEvents: "auto",
             }}
           >
-            {/* Progress dots */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
-              {steps.map((_, i) => (
-                <div key={i}
-                  style={{
-                    flex: 1, height: 3, borderRadius: 2,
-                    background: i <= stepIdx ? VIOLET_BRIGHT : "rgba(139,92,246,0.18)",
-                    boxShadow: i === stepIdx ? `0 0 8px ${VIOLET}` : undefined,
-                    transition: "all 0.3s ease",
-                  }}
-                />
-              ))}
-            </div>
-
-            <div style={{ fontSize: 9, letterSpacing: "0.22em", color: VIOLET_BRIGHT, fontWeight: 700, marginBottom: 6 }}>
-              {step.badge}
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#F9FAFB", marginBottom: 10, letterSpacing: "-0.01em" }}>
-              {step.title}
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.55, color: "#CBD5E1", marginBottom: 18, minHeight: 60 }}>
-              {step.body}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <button
-                onClick={handleSkip}
-                style={{
-                  fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "inherit",
-                  padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                  background: skipConfirm ? `${CRIMSON}22` : "transparent",
-                  color: skipConfirm ? "#FCA5A5" : "rgba(203,213,225,0.55)",
-                  border: `1px solid ${skipConfirm ? `${CRIMSON}66` : "rgba(203,213,225,0.18)"}`,
-                  transition: "all 0.2s ease",
-                }}
-                title={skipConfirm ? "Click again to confirm" : "Skip the briefing (requires double-confirmation)"}
-              >
-                {skipConfirm ? "⚠ CONFIRM SKIP" : "SKIP BRIEFING"}
-              </button>
-
-              <div style={{ display: "flex", gap: 6 }}>
-                {stepIdx > 0 && !isLast && (
+            {/* Persona-select gate */}
+            {stepIdx === -1 && (
+              <>
+                <div style={{ fontSize: 9, letterSpacing: "0.22em", color: VIOLET_BRIGHT, fontWeight: 700, marginBottom: 6 }}>
+                  MISSION INDUCTION · OPERATOR PROFILE
+                </div>
+                <div id="induction-title" style={{ fontSize: 17, fontWeight: 700, color: "#F9FAFB", marginBottom: 8, letterSpacing: "-0.01em" }}>
+                  AGENT-SENTINEL v6.0 — NEURAL SOVEREIGNTY
+                </div>
+                <div id="induction-body" style={{ fontSize: 11, lineHeight: 1.55, color: "#CBD5E1", marginBottom: 14 }}>
+                  Select your operator profile so this 90-second induction speaks in your domain.
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  {(["business", "technical"] as Persona[]).map(opt => {
+                    const sel = persona === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setPersona(opt)}
+                        style={{
+                          flex: 1, padding: "12px 10px", borderRadius: 10, cursor: "pointer",
+                          background: sel ? `linear-gradient(180deg, ${VIOLET}33 0%, ${VIOLET}11 100%)` : "rgba(255,255,255,0.02)",
+                          border: `1px solid ${sel ? VIOLET_BRIGHT : "rgba(255,255,255,0.10)"}`,
+                          color: sel ? "#F9FAFB" : "#94A3B8",
+                          textAlign: "left", fontFamily: "inherit",
+                          boxShadow: sel ? `0 0 20px ${VIOLET}44, inset 0 1px 0 rgba(255,255,255,0.08)` : "none",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <div style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, color: sel ? VIOLET_BRIGHT : "#64748B", marginBottom: 4 }}>
+                          {opt === "business" ? "BUSINESS" : "TECHNICAL"}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+                          {opt === "business" ? "Governance" : "Forensics"}
+                        </div>
+                        <div style={{ fontSize: 9, color: sel ? "#CBD5E1" : "#64748B", lineHeight: 1.4 }}>
+                          {opt === "business" ? "Compliance · Board · Audit" : "Engineering · IR · Threat Hunt"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button
-                    onClick={handleBack}
+                    onClick={handleSkip}
                     style={{
                       fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "inherit",
                       padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                      background: "transparent",
-                      color: "rgba(203,213,225,0.7)",
-                      border: "1px solid rgba(203,213,225,0.18)",
+                      background: skipConfirm ? `${CRIMSON}22` : "transparent",
+                      color: skipConfirm ? "#FCA5A5" : "rgba(203,213,225,0.55)",
+                      border: `1px solid ${skipConfirm ? `${CRIMSON}66` : "rgba(203,213,225,0.18)"}`,
                     }}
-                  >
-                    ← BACK
-                  </button>
-                )}
-                <button
-                  onClick={handleNext}
-                  style={{
-                    fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, fontFamily: "inherit",
-                    padding: "8px 16px", borderRadius: 6, cursor: "pointer",
-                    background: `linear-gradient(180deg, ${VIOLET} 0%, #6D28D9 100%)`,
-                    color: "#fff",
-                    border: `1px solid ${VIOLET_BRIGHT}`,
-                    boxShadow: `0 4px 14px ${VIOLET}66, inset 0 1px 0 rgba(255,255,255,0.18)`,
-                  }}
-                >
-                  {step.cta ?? (isLast ? "FINISH" : `NEXT · ${stepIdx + 1}/${steps.length - 1}`)}
-                </button>
-              </div>
-            </div>
+                  >{skipConfirm ? "⚠ CONFIRM SKIP" : "SKIP BRIEFING"}</button>
+                  <button
+                    onClick={handleStart}
+                    style={{
+                      fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, fontFamily: "inherit",
+                      padding: "9px 18px", borderRadius: 6, cursor: "pointer",
+                      background: `linear-gradient(180deg, ${VIOLET} 0%, #6D28D9 100%)`,
+                      color: "#fff", border: `1px solid ${VIOLET_BRIGHT}`,
+                      boxShadow: `0 4px 14px ${VIOLET}66, inset 0 1px 0 rgba(255,255,255,0.18)`,
+                    }}
+                  >BEGIN INDUCTION →</button>
+                </div>
+              </>
+            )}
+
+            {/* Active step */}
+            {step && (
+              <>
+                <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                  {steps.map((_, i) => (
+                    <div key={i}
+                      style={{
+                        flex: 1, height: 3, borderRadius: 2,
+                        background: i <= visibleIdx ? VIOLET_BRIGHT : "rgba(139,92,246,0.18)",
+                        boxShadow: i === visibleIdx ? `0 0 8px ${VIOLET}` : undefined,
+                        transition: "all 0.3s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.22em", color: VIOLET_BRIGHT, fontWeight: 700 }}>
+                    {step.badge}
+                  </div>
+                  <div style={{ fontSize: 8, letterSpacing: "0.18em", color: "rgba(203,213,225,0.45)", fontWeight: 700 }}>
+                    {lex.domain.toUpperCase()} MODE
+                  </div>
+                </div>
+                <div id="induction-title" style={{ fontSize: 17, fontWeight: 700, color: "#F9FAFB", marginBottom: 10, letterSpacing: "-0.01em" }}>
+                  {step.title}
+                </div>
+                <div id="induction-body" style={{ fontSize: 12, lineHeight: 1.55, color: "#CBD5E1", marginBottom: 18, minHeight: 60 }}>
+                  {step.body(persona)}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <button
+                    onClick={handleSkip}
+                    style={{
+                      fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "inherit",
+                      padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                      background: skipConfirm ? `${CRIMSON}22` : "transparent",
+                      color: skipConfirm ? "#FCA5A5" : "rgba(203,213,225,0.55)",
+                      border: `1px solid ${skipConfirm ? `${CRIMSON}66` : "rgba(203,213,225,0.18)"}`,
+                      transition: "all 0.2s ease",
+                    }}
+                  >{skipConfirm ? "⚠ CONFIRM SKIP" : "SKIP BRIEFING"}</button>
+
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      onClick={handleBack}
+                      style={{
+                        fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "inherit",
+                        padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                        background: "transparent", color: "rgba(203,213,225,0.7)",
+                        border: "1px solid rgba(203,213,225,0.18)",
+                      }}
+                    >← BACK</button>
+                    <button
+                      onClick={handleNext}
+                      style={{
+                        fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, fontFamily: "inherit",
+                        padding: "8px 16px", borderRadius: 6, cursor: "pointer",
+                        background: `linear-gradient(180deg, ${VIOLET} 0%, #6D28D9 100%)`,
+                        color: "#fff", border: `1px solid ${VIOLET_BRIGHT}`,
+                        boxShadow: `0 4px 14px ${VIOLET}66, inset 0 1px 0 rgba(255,255,255,0.18)`,
+                      }}
+                    >{step.cta ?? (isLast ? "FINISH" : `NEXT · ${visibleIdx + 1}/${totalSteps - 1}`)}</button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Certification Toast ── */}
-      {certified && (
-        <div
-          style={{
-            position: "fixed",
-            top: 80,
-            right: 24,
-            zIndex: 99998,
-            padding: "16px 22px",
-            borderRadius: 12,
-            background: `linear-gradient(135deg, ${SAGE}22 0%, ${VIOLET}22 100%)`,
-            border: `1px solid ${SAGE}88`,
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            boxShadow: `0 10px 40px ${SAGE}44, 0 0 30px ${VIOLET}33`,
-            fontFamily: "JetBrains Mono, monospace",
-            color: "#F9FAFB",
-            minWidth: 340,
-            animation: "induction-toast-in 0.5s cubic-bezier(.34,1.56,.64,1) both",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <span style={{
-              width: 10, height: 10, borderRadius: "50%",
-              background: SAGE, boxShadow: `0 0 10px ${SAGE}`,
-              animation: "induction-pulse 1.4s ease-in-out infinite",
-            }} />
-            <span style={{ fontSize: 9, letterSpacing: "0.22em", color: SAGE, fontWeight: 700 }}>
-              SOVEREIGN TOKEN ISSUED
-            </span>
+      {/* ── High-Fidelity Certification Animation ── */}
+      {certified && operatorHex && (
+        <>
+          {/* Ambient violet+sage flash */}
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 99997, pointerEvents: "none",
+            background: `radial-gradient(circle at 50% 50%, ${VIOLET}33 0%, ${SAGE}1A 35%, transparent 65%)`,
+            animation: "induction-flash 1.2s ease-out forwards",
+          }} />
+          {/* Sigil + HEX-ID card */}
+          <div
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 99998,
+              padding: "26px 32px",
+              borderRadius: 16,
+              background: "linear-gradient(180deg, rgba(20,18,38,0.96) 0%, rgba(13,17,23,0.98) 100%)",
+              border: `1px solid ${VIOLET_BRIGHT}`,
+              boxShadow: `0 30px 80px rgba(0,0,0,0.7), 0 0 80px ${VIOLET}66, 0 0 120px ${SAGE}33, inset 0 1px 0 rgba(255,255,255,0.08)`,
+              fontFamily: "JetBrains Mono, monospace",
+              color: "#F9FAFB", minWidth: 380, textAlign: "center",
+              animation: "induction-cert-rise 0.9s cubic-bezier(.34,1.56,.64,1) both",
+              pointerEvents: "none",
+            }}
+          >
+            {/* Concentric Sovereign Sigil */}
+            <svg width="84" height="84" viewBox="0 0 84 84" style={{ display: "block", margin: "0 auto 14px" }}>
+              <defs>
+                <radialGradient id="sigil-grad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor={VIOLET_BRIGHT} stopOpacity="0.9" />
+                  <stop offset="60%" stopColor={VIOLET} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={VIOLET} stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <circle cx="42" cy="42" r="36" fill="none" stroke={VIOLET} strokeWidth="1" opacity="0.4">
+                <animate attributeName="r" from="20" to="36" dur="0.8s" fill="freeze" />
+                <animate attributeName="opacity" from="0" to="0.4" dur="0.8s" fill="freeze" />
+              </circle>
+              <circle cx="42" cy="42" r="28" fill="url(#sigil-grad)">
+                <animate attributeName="opacity" from="0" to="1" dur="0.6s" begin="0.2s" fill="freeze" />
+              </circle>
+              <circle cx="42" cy="42" r="22" fill="none" stroke={VIOLET_BRIGHT} strokeWidth="1.5" strokeDasharray="3 3">
+                <animateTransform attributeName="transform" type="rotate" from="0 42 42" to="360 42 42" dur="8s" repeatCount="indefinite" />
+              </circle>
+              <path d="M42 22 L52 42 L42 62 L32 42 Z" fill={SAGE} opacity="0.9">
+                <animate attributeName="opacity" from="0" to="0.9" dur="0.4s" begin="0.5s" fill="freeze" />
+              </path>
+              <circle cx="42" cy="42" r="4" fill="#F9FAFB">
+                <animate attributeName="r" from="0" to="4" dur="0.3s" begin="0.7s" fill="freeze" />
+              </circle>
+            </svg>
+
+            <div style={{
+              fontSize: 9, letterSpacing: "0.28em", color: SAGE, fontWeight: 700, marginBottom: 4,
+            }}>SOVEREIGN TOKEN ISSUED</div>
+            <div style={{
+              fontSize: 16, fontWeight: 700, letterSpacing: "0.04em", color: "#F9FAFB", marginBottom: 12,
+            }}>OPERATOR · CERTIFIED [v6.0]</div>
+
+            <div style={{
+              fontSize: 8, letterSpacing: "0.2em", color: VIOLET_BRIGHT, fontWeight: 700, marginBottom: 4,
+            }}>SOVEREIGN HEX-ID</div>
+            <div style={{
+              fontSize: 15, fontWeight: 700, letterSpacing: "0.08em",
+              padding: "8px 14px", borderRadius: 8, display: "inline-block",
+              background: `linear-gradient(180deg, ${VIOLET}22 0%, ${VIOLET}0A 100%)`,
+              border: `1px solid ${VIOLET_BRIGHT}88`,
+              color: "#F9FAFB", marginBottom: 14,
+              fontFamily: "JetBrains Mono, monospace",
+            }}>{operatorHex}</div>
+
+            <div style={{ fontSize: 10, color: "#94A3B8", letterSpacing: "0.04em", lineHeight: 1.5 }}>
+              MISSION READY. Welcome to Neural Sovereignty.
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "center", pointerEvents: "auto" }}>
+              <button
+                onClick={handleCtaInit}
+                style={{
+                  fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
+                  padding: "9px 14px", borderRadius: 6, cursor: "pointer",
+                  background: `linear-gradient(180deg, ${VIOLET} 0%, #6D28D9 100%)`,
+                  color: "#fff", border: `1px solid ${VIOLET_BRIGHT}`,
+                  boxShadow: `0 4px 14px ${VIOLET}66`,
+                }}
+              >🛰  INITIALIZE FIRST CLUSTER</button>
+              <button
+                onClick={handleCtaChaos}
+                style={{
+                  fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
+                  padding: "9px 14px", borderRadius: 6, cursor: "pointer",
+                  background: "transparent",
+                  color: AMBER, border: `1px solid ${AMBER}66`,
+                }}
+              >⚡ CHAOS MODE STRESS-TEST</button>
+            </div>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.04em" }}>
-            OPERATOR STATUS · CERTIFIED [v6.0]
-          </div>
-          <div style={{ fontSize: 10, color: "#CBD5E1", marginTop: 4, letterSpacing: "0.02em" }}>
-            Welcome to Neural Sovereignty, Operator.
-          </div>
-        </div>
+        </>
       )}
 
       <style>{`
-        @keyframes induction-toast-in {
-          from { opacity: 0; transform: translateX(40px) scale(0.92); }
-          to   { opacity: 1; transform: translateX(0) scale(1); }
+        @keyframes induction-flash {
+          0%   { opacity: 0; }
+          25%  { opacity: 1; }
+          100% { opacity: 0; }
         }
-        @keyframes induction-pulse {
-          0%, 100% { opacity: 0.6; transform: scale(1); }
-          50%      { opacity: 1;   transform: scale(1.25); }
+        @keyframes induction-cert-rise {
+          0%   { opacity: 0; transform: translate(-50%, -45%) scale(0.85); }
+          60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+          100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
       `}</style>
     </>

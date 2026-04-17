@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
-  Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight,
+  Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight, HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -68,7 +68,7 @@ function ClusterSwitcher() {
   const current = clusters.find(c => c.id === currentCluster) ?? clusters[0];
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} data-tour-id="cluster-switcher" style={{ position: "relative" }}>
       <button
         onClick={() => setOpen(o => !o)}
         title="Switch swarm cluster"
@@ -119,6 +119,75 @@ function ClusterSwitcher() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Operator HEX-ID Badge ─────────────────────────────────────────────────────
+function OperatorBadge() {
+  const [hex, setHex] = useState<string | null>(() => {
+    try { return localStorage.getItem("sentinel_operator_hex"); } catch { return null; }
+  });
+  const [persona, setPersona] = useState<string | null>(() => {
+    try { return localStorage.getItem("sentinel_persona"); } catch { return null; }
+  });
+  const [pulseFlash, setPulseFlash] = useState(false);
+
+  useEffect(() => {
+    const onCert = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { hex?: string; persona?: string };
+      if (detail?.hex) setHex(detail.hex);
+      if (detail?.persona) setPersona(detail.persona);
+      setPulseFlash(true);
+      setTimeout(() => setPulseFlash(false), 1800);
+    };
+    window.addEventListener("sentinel:operator-certified", onCert);
+    return () => window.removeEventListener("sentinel:operator-certified", onCert);
+  }, []);
+
+  if (!hex) return null;
+
+  const domain = persona === "technical" ? "FORENSICS" : "GOVERNANCE";
+
+  return (
+    <div
+      title={`Sovereign Operator · ${hex}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 9,
+        padding: "10px 14px",
+        borderBottom: "1px solid var(--sv-panel-border)",
+        background: pulseFlash
+          ? `linear-gradient(180deg, ${P.violet}33 0%, ${P.violet}11 100%)`
+          : `linear-gradient(180deg, ${P.violet}1a 0%, transparent 100%)`,
+        transition: "background 0.6s ease",
+      }}
+    >
+      <div style={{
+        position: "relative", flexShrink: 0,
+        width: 26, height: 26, borderRadius: "50%",
+        background: `radial-gradient(circle, ${P.violet}cc 0%, ${P.violet}33 70%)`,
+        border: `1px solid ${P.violet}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: pulseFlash ? `0 0 16px ${P.violet}, 0 0 28px ${P.violet}88` : `0 0 8px ${P.violet}88`,
+        transition: "box-shadow 0.6s ease",
+      }}>
+        <Award style={{ width: 13, height: 13, color: "#F9FAFB" }} />
+      </div>
+      <div style={{ minWidth: 0, flex: 1, lineHeight: 1.2 }}>
+        <div style={{
+          fontSize: 7.5, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+          letterSpacing: "0.18em", color: P.violet, textTransform: "uppercase",
+        }}>
+          OPERATOR · {domain}
+        </div>
+        <div style={{
+          fontSize: 9.5, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+          color: "var(--sv-text-primary)", letterSpacing: "0.04em",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {hex}
+        </div>
+      </div>
     </div>
   );
 }
@@ -639,15 +708,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <div style={{
-          flexShrink: 0, padding: "10px 16px",
+          flexShrink: 0,
           borderTop: "1px solid var(--sv-panel-border)",
           background: "var(--sv-footer-bg)",
-          display: "flex", alignItems: "center", gap: 8,
         }}>
-          <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: killActive ? P.terra : P.sage }} />
-          <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: killActive ? P.terra : P.sage }}>
-            {killActive ? "KILL-SWITCH ACTIVE" : "SYSTEMS NOMINAL"}
-          </span>
+          {/* Operator HEX-ID badge */}
+          <OperatorBadge />
+          <div style={{
+            padding: "10px 16px",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: killActive ? P.terra : P.sage }} />
+            <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: killActive ? P.terra : P.sage }}>
+              {killActive ? "KILL-SWITCH ACTIVE" : "SYSTEMS NOMINAL"}
+            </span>
+          </div>
         </div>
       </aside>
 
@@ -693,6 +768,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
+
+            {/* Help / Re-trigger Induction */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("sentinel:induction-restart"))}
+              title="Re-launch Sovereign Induction"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 28, height: 28, borderRadius: 8, cursor: "pointer",
+                border: "1px solid rgba(139,92,246,0.32)",
+                background: "rgba(139,92,246,0.08)",
+                color: P.violet, padding: 0,
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(139,92,246,0.18)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 10px ${P.violet}66`;
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(139,92,246,0.08)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+              }}
+            >
+              <HelpCircle style={{ width: 14, height: 14 }} />
+            </button>
 
             {/* LIVE indicator */}
             <div
