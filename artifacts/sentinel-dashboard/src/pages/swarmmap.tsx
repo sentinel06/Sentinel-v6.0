@@ -777,11 +777,12 @@ export default function SwarmMapPage() {
               hist.set(p.a, [...(hist.get(p.a) ?? []).slice(-9), p.d]);
               la.set(p.a, now);
             }
-            // Telemetry throttler: under chaos load (>100 nodes) we buffer packets
-            // into a queue and let a 500ms RAF-driven flusher emit a single batch
-            // event so the feed stays legible instead of strobing illegibly.
+            // Telemetry throttler / Summary Mode: under chaos load (>500 nodes)
+            // we buffer packets into a queue and let a 500ms flusher emit a
+            // single BATCH-N summary event, switching the feed into "Summary
+            // Mode" so it stays legible instead of strobing illegibly.
             const liveNodeCount = simRef.current?.nodes()?.length ?? 0;
-            if (liveNodeCount > 100) {
+            if (liveNodeCount > 500) {
               telemetryBufferRef.current.push(...packets);
             } else {
               setStreamEvents(prev => [...packets.reverse(), ...prev].slice(0, 150));
@@ -1396,13 +1397,24 @@ export default function SwarmMapPage() {
                 }}
               >
                 <div
-                  className="font-mono text-[10px] font-bold tracking-[0.22em] uppercase mb-2"
+                  className="font-mono text-[10px] font-bold tracking-[0.22em] uppercase mb-2 flex items-center justify-center gap-2"
                   style={{ color: "#8B5CF6" }}
                 >
-                  ◆ Sovereign Alert
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background: "#8B5CF6",
+                      boxShadow: "0 0 8px #8B5CF6",
+                      animation: "sovereign-blink 1.6s step-end infinite",
+                    }}
+                  />
+                  Sovereign Alert
                 </div>
-                <div className="font-mono text-base font-bold text-white mb-2">
-                  CLUSTER VACANT
+                <div
+                  className="font-mono text-base font-bold mb-2"
+                  style={{ color: "#fff", letterSpacing: "0.06em" }}
+                >
+                  SWARM STATUS: <span style={{ color: "#8B5CF6" }}>STANDBY</span>
                 </div>
                 <div className="font-mono text-xs leading-relaxed" style={{ color: P.dim }}>
                   Awaiting Neural Deployment.
@@ -2103,6 +2115,19 @@ export default function SwarmMapPage() {
                 <span className="text-[9px] font-mono font-bold tracking-widest uppercase" style={{ color: P.sage }}>
                   GENOME TELEMETRY
                 </span>
+                {nodes.length > 500 && (
+                  <span
+                    className="text-[8px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{
+                      color: "#EBC06D",
+                      background: "#EBC06D14",
+                      border: "1px solid #EBC06D55",
+                    }}
+                    title={`Summary Mode active — packets batched every 500ms (${nodes.length} nodes)`}
+                  >
+                    ⚡ SUMMARY MODE
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-mono" style={{ color: P.dim }}>{streamEvents.length} events</span>

@@ -213,6 +213,7 @@ function ForensicInspector() {
     agent, setAgent,
     agentHistory, scrubIndex, setScrubIndex,
     weightVerified,
+    activeMutations, quarantinedIds, ledgerTampered,
   } = useForensic();
 
   const [revoking, setRevoking] = useState(false);
@@ -295,6 +296,96 @@ function ForensicInspector() {
   // Hide the inspector entirely on governance/admin routes (after all hooks).
   if (!INSPECTOR_ROUTES.has(location)) return null;
 
+  // Auto-collapse to a slim Global Alerts strip when no node is selected.
+  // Full 350px panel only appears when a node is selected for forensic review.
+  const collapsed = !agent;
+
+  // Global alert tallies (shown in collapsed/strip mode)
+  const quarantinedCount = quarantinedIds.size;
+  const mutationCount    = activeMutations;
+  const alertCount       = quarantinedCount + mutationCount + (ledgerTampered ? 1 : 0);
+  const alertColor       = ledgerTampered ? P.terra
+                         : alertCount > 0 ? P.amber
+                         : P.sage;
+
+  if (collapsed) {
+    return (
+      <aside style={{
+        width: 56, flexShrink: 0, display: "flex", flexDirection: "column",
+        alignItems: "center",
+        height: "100%", overflow: "hidden",
+        background: "var(--sv-inspector-bg)",
+        backdropFilter: "blur(20px)",
+        borderLeft: "1px solid var(--sv-inspector-border)",
+        zIndex: 20, transition: "width 0.25s ease, background 0.3s ease",
+        padding: "12px 0",
+        gap: 14,
+      }}>
+        {/* Vertical title rail */}
+        <div style={{
+          fontSize: 8, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+          letterSpacing: "0.18em", textTransform: "uppercase", color: P.sage,
+          writingMode: "vertical-rl", transform: "rotate(180deg)",
+          opacity: 0.85, marginBottom: 4,
+        }}>
+          Global Alerts
+        </div>
+
+        {/* Pulsing alert dot */}
+        <div style={{ position: "relative", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: "50%",
+            background: alertColor, opacity: 0.18,
+            animation: alertCount > 0 ? "sovereign-blink 1.6s step-end infinite" : undefined,
+          }} />
+          <div style={{
+            position: "relative",
+            width: 10, height: 10, borderRadius: "50%",
+            background: alertColor, boxShadow: `0 0 8px ${alertColor}cc`,
+          }} />
+        </div>
+
+        {/* Tally rail */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+          {/* Quarantined */}
+          <div title={`${quarantinedCount} quarantined agent${quarantinedCount === 1 ? "" : "s"}`}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <Skull style={{ width: 14, height: 14, color: quarantinedCount > 0 ? P.terra : "var(--sv-text-dim)", opacity: quarantinedCount > 0 ? 1 : 0.4 }} />
+            <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: quarantinedCount > 0 ? P.terra : "var(--sv-text-dim)" }}>
+              {quarantinedCount}
+            </span>
+          </div>
+          {/* Mutations */}
+          <div title={`${mutationCount} active mutation${mutationCount === 1 ? "" : "s"}`}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <Zap style={{ width: 14, height: 14, color: mutationCount > 0 ? "#C084FC" : "var(--sv-text-dim)", opacity: mutationCount > 0 ? 1 : 0.4 }} />
+            <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: mutationCount > 0 ? "#C084FC" : "var(--sv-text-dim)" }}>
+              {mutationCount}
+            </span>
+          </div>
+          {/* Ledger integrity */}
+          <div title={ledgerTampered ? "Hash chain tampered" : "Hash chain intact"}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <ShieldCheck style={{ width: 14, height: 14, color: ledgerTampered ? P.terra : P.sage, opacity: 0.85 }} />
+            <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: ledgerTampered ? P.terra : P.sage, letterSpacing: "0.05em" }}>
+              {ledgerTampered ? "TMP" : "OK"}
+            </span>
+          </div>
+        </div>
+
+        {/* Footer hint */}
+        <div style={{
+          marginTop: "auto", fontSize: 7, fontFamily: "JetBrains Mono, monospace",
+          color: "var(--sv-text-dim)", opacity: 0.5, textAlign: "center", padding: "0 4px",
+          writingMode: "vertical-rl", transform: "rotate(180deg)",
+          letterSpacing: "0.15em", textTransform: "uppercase",
+        }}>
+          Select node →
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside style={{
       width: 350, flexShrink: 0, display: "flex", flexDirection: "column",
@@ -302,7 +393,7 @@ function ForensicInspector() {
       background: "var(--sv-inspector-bg)",
       backdropFilter: "blur(20px)",
       borderLeft: "1px solid var(--sv-inspector-border)",
-      zIndex: 20, transition: "background 0.3s ease",
+      zIndex: 20, transition: "width 0.25s ease, background 0.3s ease",
     }}>
       {/* Header */}
       <div style={{
@@ -902,14 +993,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Page content */}
+        {/* Page content — pb-24 + safe-area inset prevents Replit/mobile overlay HUD obscuring */}
         <div
+          className="pb-24"
           style={{
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
             padding: 20,
-            paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px) + 80px)",
+            paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))",
             background: "transparent",
           }}
         >
