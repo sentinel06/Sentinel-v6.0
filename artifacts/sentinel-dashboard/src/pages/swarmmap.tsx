@@ -430,7 +430,7 @@ function DriftSparkline({ history, current, color }: { history: number[]; curren
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function SwarmMapPage() {
+function SwarmMapPageInner() {
   const svgRef  = useRef<SVGSVGElement>(null);
   const simRef  = useRef<d3.Simulation<SwarmNodeData, SwarmLink> | null>(null);
   const tickRef = useRef(0);
@@ -894,10 +894,12 @@ export default function SwarmMapPage() {
     // the long-range repulsion to -200, keep collide tight (radius 5) so the
     // cloud stays dense, and accelerate alpha decay so the layout settles fast.
     const chaosActive   = chaosCount > 0;
-    const chargeStrength = chaosActive ? -200 : -800;
-    const collideRadius  = chaosActive ? 5    : 100;
+    // Chaos-mode performance hardening: aggressive damping prevents jitter / fly-off.
+    // Charge -50, collide radius 3, alphaDecay 0.05 → simulation cools down fast.
+    const chargeStrength = chaosActive ? -50  : -800;
+    const collideRadius  = chaosActive ? 3    : 100;
     const collideStrength = chaosActive ? 0.95 : 0.8;
-    const alphaDecay     = chaosActive ? 0.035 : 0.010;
+    const alphaDecay     = chaosActive ? 0.05 : 0.010;
     const velocityDecay  = chaosActive ? 0.55  : 0.44;
 
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
@@ -1284,23 +1286,21 @@ export default function SwarmMapPage() {
                   }, 300);
                 });
               } else {
-                // ── ENTER CHAOS — append 1,024 synthetic agents ──
-                // Show loading overlay BEFORE the heavy state update, batch the
-                // append on the next animation frame so the overlay paints first.
+                // ── ENTER CHAOS — append 128 synthetic agents ──
+                // Reduced from 1,024 → 128 (8× lighter physics load) so toggling
+                // is instantaneous with 0% frame drop while keeping the swarm look.
                 setChaosLoading(true);
                 requestAnimationFrame(() => {
                   const fleet = generateChaosFleet(
-                    1024, cx, cy, Math.min(120, svgDims.W / 6),
+                    128, cx, cy, Math.min(120, svgDims.W / 6),
                   );
                   // Functional update — append to existing nodes, never overwrite.
                   setNodes(prev => [...prev.filter(n => !n.id.startsWith("chaos-")), ...fleet]);
-                  setChaosCount(1024);
-                  // ~500ms physics baseline calculation; D3 effect re-runs and
-                  // calls sim.alpha(1).restart() so the new fleet gets coords.
+                  setChaosCount(128);
                   setTimeout(() => {
                     simRef.current?.alpha(1).restart();
                     setChaosLoading(false);
-                  }, 500);
+                  }, 200);
                 });
               }
             }}
@@ -1310,8 +1310,8 @@ export default function SwarmMapPage() {
               borderColor: chaosCount > 0 ? "#B91C1C66" : "#8B5CF666",
               background: chaosCount > 0 ? "#B91C1C18" : "#8B5CF618",
             }}
-            title="Spawn 1,024 synthetic agents to stress-test the D3 physics engine">
-            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 1024×"}
+            title="Spawn 128 synthetic agents to stress-test the D3 physics engine">
+            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 128×"}
           </button>
           <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
             style={{ color: P.sage, borderColor: P.sage + "44", background: P.sage + "10" }}
@@ -1367,12 +1367,24 @@ export default function SwarmMapPage() {
 
           {nodes.length === 0 && !loading && (
             <div
-              className="absolute inset-0 flex flex-col items-center justify-center text-center px-8"
+              className="absolute inset-0"
               style={{
                 background:
                   "radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, rgba(13,17,23,0.0) 65%)",
               }}
             >
+              {/* Perfectly centered DORMANT card via absolute translate(-50%,-50%) */}
+              <div
+                className="flex flex-col items-center text-center px-8"
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: "max-content",
+                  maxWidth: "min(90%, 480px)",
+                }}
+              >
               {/* Sovereign radar pulse — pure-glow, no tree icon */}
               <div className="relative mb-6" style={{ width: 96, height: 96 }}>
                 {[0, 1, 2, 3].map((i) => (
@@ -1441,6 +1453,7 @@ export default function SwarmMapPage() {
                   </Link>{" "}
                   or seed via the Sovereign Induction briefing.
                 </div>
+              </div>
               </div>
             </div>
           )}
@@ -2155,7 +2168,7 @@ export default function SwarmMapPage() {
                   <div className="text-[10px] font-mono opacity-60">{wsConnected ? "Awaiting genome events…" : "Connecting…"}</div>
                 </div>
               )}
-              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).map((ev, idx) => {
+              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 20).map((ev, idx) => {
                 const isBreach = ev.r;
                 const isDrift  = ev.d > 15 && !isBreach;
                 const color    = isBreach ? P.terra : isDrift ? P.amber : P.sage;
@@ -2257,3 +2270,8 @@ export default function SwarmMapPage() {
     </div>
   );
 }
+
+// React.memo prevents parent-driven re-renders from cascading into the
+// expensive D3 simulation tree. Page has no props, so default shallow eq is safe.
+const SwarmMapPage = React.memo(SwarmMapPageInner);
+export default SwarmMapPage;
