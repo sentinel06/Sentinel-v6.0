@@ -1264,10 +1264,12 @@ function SwarmMapPageInner() {
   ];
 
   return (
-    // ── Hard Buffer wrapper: pb-[120px] guarantees Live Telemetry + Quarantine
-    // Chips remain visible no matter what overlay (Replit HUD, iOS bar, etc.) is added.
-    <div className="pb-[120px]">
-    <div className="flex flex-col animate-in fade-in duration-500 h-[calc(100vh-6rem)] gap-4">
+    // ── Master Viewport Lock: 100dvh + overflow:hidden creates a hard physical
+    // barrier so the swarm map never slides under iOS/Replit bottom bars. dvh
+    // (dynamic viewport height) tracks the *visible* viewport, unlike vh which
+    // uses the largest possible viewport on mobile.
+    <div style={{ height: "100dvh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="flex flex-col animate-in fade-in duration-500 gap-4" style={{ flex: 1, minHeight: 0 }}>
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between shrink-0 gap-3 flex-wrap">
@@ -1356,7 +1358,7 @@ function SwarmMapPageInner() {
 
       {/* ── KPI Bar ── HUD Depth: relative + z-50 + backdrop-blur so chaos
            swarm nodes always render UNDER the metric numbers, never over them. */}
-      <div className="grid grid-cols-6 gap-3 shrink-0 relative" style={{ zIndex: 50 }}>
+      <div className="grid grid-cols-6 gap-3 shrink-0 relative" style={{ zIndex: 60 }}>
           {kpiCards.map(({ label, value, sub, color, Icon }) => (
             <Card
               key={label}
@@ -1366,7 +1368,7 @@ function SwarmMapPageInner() {
                 backdropFilter: "blur(20px)",
                 WebkitBackdropFilter: "blur(20px)",
                 position: "relative",
-                zIndex: 50,
+                zIndex: 60,
               }}
             >
               <div className="flex items-center justify-between mb-1">
@@ -1380,11 +1382,14 @@ function SwarmMapPageInner() {
         </div>
 
       {/* ── Main layout ── */}
-      <div className="flex flex-1 min-h-0 gap-4">
+      {/* Hard ceiling: SwarmCanvas height locked to calc(100dvh - 180px) so the
+          map physically cannot slide under any browser/OS overlay. */}
+      <div className="flex flex-1 min-h-0 gap-4" style={{ maxHeight: "calc(100dvh - 180px)" }}>
 
         {/* ── SVG Canvas ── */}
+        {/* z-index:1 ensures swarm nodes always render BEHIND HUD (z:60) and DORMANT card (z:100) */}
         <div data-tour-id="swarm-canvas" className="flex-1 rounded-xl overflow-hidden relative"
-          style={{ border: `1px solid ${P.border}`, background: P.bg }}>
+          style={{ border: `1px solid ${P.border}`, background: P.bg, zIndex: 1 }}>
 
           {/* Legend */}
           <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-3 font-mono text-[9px] px-3 py-1.5 rounded-lg"
@@ -1414,6 +1419,7 @@ function SwarmMapPageInner() {
               style={{
                 background:
                   "radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, rgba(13,17,23,0.0) 65%)",
+                zIndex: 100,
               }}
             >
               {/* Perfectly centered DORMANT card via absolute translate(-50%,-50%) */}
@@ -1533,19 +1539,22 @@ function SwarmMapPageInner() {
             </div>
           )}
 
-          {/* ── Quarantine Zone ── */}
+          {/* ── Quarantine Zone (uniform grid · no overlap · zIndex 40) ── */}
           {(() => {
             const qNodes = nodes.filter(n => quarantinedIds.has(n.id) || (n.drift ?? 0) > 25);
             if (qNodes.length === 0) return null;
             return (
-              <div data-tour-id="quarantine-zone" className="absolute left-3 right-3 bottom-3 z-20 quarantine-zone"
+              <div data-tour-id="quarantine-zone" className="absolute left-3 right-3 bottom-3 quarantine-zone"
                 style={{
-                  background: "rgba(185,28,28,0.10)",
+                  background: "rgba(127,29,29,0.20)",
                   border: "1px solid rgba(185,28,28,0.45)",
                   borderRadius: 10,
                   padding: "8px 12px",
                   boxShadow: "0 0 22px rgba(185,28,28,0.20), inset 0 0 18px rgba(185,28,28,0.05)",
-                  backdropFilter: "blur(20px)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  position: "absolute",
+                  zIndex: 40,
                 }}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="live-dot inline-block w-2 h-2 rounded-full" style={{ background: "#B91C1C", boxShadow: "0 0 8px #B91C1C" }} />
@@ -1555,9 +1564,14 @@ function SwarmMapPageInner() {
                   <span className="font-mono text-[8px] ml-auto" style={{ color: "#F87171" }}>SOVEREIGN TOKEN REVOKED</span>
                 </div>
                 <div
-                  className="flex flex-wrap gap-1.5 overflow-y-auto overflow-x-hidden"
                   style={{
-                    maxHeight: 120,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(40px, 1fr))",
+                    maxHeight: 80,
+                    overflowY: "auto",
+                    padding: 8,
+                    gap: 4,
+                    position: "relative",
                     scrollbarWidth: "thin",
                     scrollbarColor: "rgba(185,28,28,0.55) transparent",
                   }}
@@ -1573,15 +1587,20 @@ function SwarmMapPageInner() {
                         swarmId: n.swarmId, parentUid: n.parentUid,
                         createdAt: n.createdAt, revokedAt: n.revokedAt, revokedReason: n.revokedReason,
                       } as any)}
-                      className="font-mono text-[9px] px-2 py-0.5 rounded cursor-pointer"
+                      className="font-mono text-[9px] rounded cursor-pointer text-center"
                       style={{
                         background: "rgba(185,28,28,0.18)",
                         border: "1px solid rgba(185,28,28,0.45)",
                         color: "#FCA5A5",
+                        padding: "2px 0",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
-                      title={`Drift ${(n.drift ?? 0).toFixed(1)}% · ${n.id}`}
+                      title={`${n.label} · Drift ${(n.drift ?? 0).toFixed(1)}% · ${n.id}`}
                     >
-                      {n.label.length > 16 ? n.label.substring(0, 16) + "…" : n.label} · {(n.drift ?? 0).toFixed(0)}%
+                      {(n.drift ?? 0).toFixed(0)}%
                     </button>
                   ))}
                 </div>
@@ -2213,6 +2232,9 @@ function SwarmMapPageInner() {
                   <div className="text-[10px] font-mono opacity-60">{wsConnected ? "Awaiting genome events…" : "Connecting…"}</div>
                 </div>
               )}
+              {/* Telemetry: streamEvents is newest-first by construction (every code path
+                  prepends new packets); slice(0,10) yields the freshest 10. Stable per-event
+                  key (ev.lid) ensures React always re-renders when content changes. */}
               {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 10).map((ev, idx) => {
                 const isBreach = ev.r;
                 const isDrift  = ev.d > 15 && !isBreach;
