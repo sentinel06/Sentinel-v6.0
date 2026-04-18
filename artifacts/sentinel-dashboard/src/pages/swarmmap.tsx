@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Network, Skull, Activity, X,
-  ChevronRight, Fingerprint, Dna, TreePine, Flame, Zap,
+  ChevronRight, Fingerprint, Dna, Flame, Zap,
 } from "lucide-react";
 import { useForensic } from "@/contexts/ForensicContext";
 
@@ -894,13 +894,12 @@ function SwarmMapPageInner() {
     // the long-range repulsion to -200, keep collide tight (radius 5) so the
     // cloud stays dense, and accelerate alpha decay so the layout settles fast.
     const chaosActive   = chaosCount > 0;
-    // Chaos-mode performance hardening: aggressive damping prevents jitter / fly-off.
-    // Charge -50, collide radius 3, alphaDecay 0.05 → simulation cools down fast.
-    const chargeStrength = chaosActive ? -50  : -800;
-    const collideRadius  = chaosActive ? 3    : 100;
-    const collideStrength = chaosActive ? 0.95 : 0.8;
-    const alphaDecay     = chaosActive ? 0.05 : 0.010;
-    const velocityDecay  = chaosActive ? 0.55  : 0.44;
+    // Chaos Stabilization: when chaos is active we DISABLE all forceManyBody
+    // (charge) and forceCollide computations entirely — they're O(N²) and the
+    // primary cause of frame drops. Instead nodes simply orbit on a stable
+    // forceCenter + light forceRadial layout (0% CPU overhead at steady state).
+    const alphaDecay     = chaosActive ? 0.08 : 0.010;
+    const velocityDecay  = chaosActive ? 0.62 : 0.44;
 
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
       .force("link", d3.forceLink<SwarmNodeData, SwarmLink>(links)
@@ -916,9 +915,11 @@ function SwarmMapPageInner() {
           return 0.12 + f * 0.48;
         })
       )
-      .force("charge", d3.forceManyBody<SwarmNodeData>().strength(chargeStrength))
-      .force("center", d3.forceCenter(cx, cy).strength(0.08))
-      .force("collide", d3.forceCollide<SwarmNodeData>().radius(collideRadius).strength(collideStrength))
+      // charge/collide are NULL'd in chaos mode — only forceCenter + radial
+      // remain, producing a beautiful static orbit with no per-tick N² work.
+      .force("charge",  chaosActive ? null : d3.forceManyBody<SwarmNodeData>().strength(-800))
+      .force("center",  d3.forceCenter(cx, cy).strength(0.08))
+      .force("collide", chaosActive ? null : d3.forceCollide<SwarmNodeData>().radius(100).strength(0.8))
       .alphaDecay(alphaDecay)
       .velocityDecay(velocityDecay)
       .on("tick", () => {
@@ -938,13 +939,28 @@ function SwarmMapPageInner() {
       });
 
     // ── Radial Phylogeny layout ───────────────────────────────────────────────
+    // In chaos mode, this becomes the *primary* layout force — chaos nodes orbit
+    // on stable concentric rings (no per-tick collision math).
     sim.force("phylo_radial", d3.forceRadial<SwarmNodeData>(
       d => {
         if (d.isRoot) return 0;
         const gen = d.generationDepth ?? 1;
+        // Chaos nodes: spread across 3 concentric rings via the trailing
+        // base36 index in the ID (format: `chaos-{swarmId}-{i.toString(36)}`).
+        if (chaosActive && d.id.startsWith("chaos-")) {
+          const tail = d.id.split("-").pop() ?? "0";
+          const idx  = parseInt(tail, 36);
+          const ringIdx = (Number.isFinite(idx) ? idx : 0) % 3;
+          return RING * (1.6 + ringIdx * 0.6);
+        }
         return gen * RING + (1 - (d.fitnessScore ?? 0.5)) * 22;
       }, cx, cy
-    ).strength(d => d.isRoot ? 0.6 : 0.3 + (d.fitnessScore ?? 0.5) * 0.25));
+    ).strength(d => {
+      if (d.isRoot) return 0.6;
+      // Light radial pull in chaos mode keeps orbits stable without snapping.
+      if (chaosActive && d.id.startsWith("chaos-")) return 0.12;
+      return 0.3 + (d.fitnessScore ?? 0.5) * 0.25;
+    }));
 
     simRef.current = sim;
 
@@ -1286,17 +1302,17 @@ function SwarmMapPageInner() {
                   }, 300);
                 });
               } else {
-                // ── ENTER CHAOS — append 128 synthetic agents ──
-                // Reduced from 1,024 → 128 (8× lighter physics load) so toggling
-                // is instantaneous with 0% frame drop while keeping the swarm look.
+                // ── ENTER CHAOS — append 100 synthetic agents ──
+                // Capped at 100 nodes orbiting on forceCenter + light forceRadial
+                // (no charge, no collide) → 0% CPU at steady state.
                 setChaosLoading(true);
                 requestAnimationFrame(() => {
                   const fleet = generateChaosFleet(
-                    128, cx, cy, Math.min(120, svgDims.W / 6),
+                    100, cx, cy, Math.min(120, svgDims.W / 6),
                   );
                   // Functional update — append to existing nodes, never overwrite.
                   setNodes(prev => [...prev.filter(n => !n.id.startsWith("chaos-")), ...fleet]);
-                  setChaosCount(128);
+                  setChaosCount(100);
                   setTimeout(() => {
                     simRef.current?.alpha(1).restart();
                     setChaosLoading(false);
@@ -1310,8 +1326,8 @@ function SwarmMapPageInner() {
               borderColor: chaosCount > 0 ? "#B91C1C66" : "#8B5CF666",
               background: chaosCount > 0 ? "#B91C1C18" : "#8B5CF618",
             }}
-            title="Spawn 128 synthetic agents to stress-test the D3 physics engine">
-            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 128×"}
+            title="Spawn 100 synthetic agents on a stable orbit (forceCenter + radial only)">
+            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 100×"}
           </button>
           <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
             style={{ color: P.sage, borderColor: P.sage + "44", background: P.sage + "10" }}
@@ -2168,7 +2184,7 @@ function SwarmMapPageInner() {
                   <div className="text-[10px] font-mono opacity-60">{wsConnected ? "Awaiting genome events…" : "Connecting…"}</div>
                 </div>
               )}
-              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 20).map((ev, idx) => {
+              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 10).map((ev, idx) => {
                 const isBreach = ev.r;
                 const isDrift  = ev.d > 15 && !isBreach;
                 const color    = isBreach ? P.terra : isDrift ? P.amber : P.sage;
@@ -2190,7 +2206,14 @@ function SwarmMapPageInner() {
                       <span className="text-[9px] font-mono shrink-0" style={{ color: P.dim }}>
                         {new Date(ev.t).toLocaleTimeString("en", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                       </span>
-                      <span className="text-[9px] font-mono font-bold truncate flex-1" style={{ color }}>{ev.e}</span>
+                      <span
+                        className="text-[9px] font-mono font-bold truncate flex-1"
+                        style={{
+                          color,
+                          // Violet glow for the 'Live' feel — pulses on each new event
+                          textShadow: "0 0 6px rgba(139,92,246,0.65), 0 0 12px rgba(139,92,246,0.35)",
+                        }}
+                      >{ev.e}</span>
                       {ev.q && <span className="text-[9px] shrink-0" title="ML-DSA-87" style={{ color: P.sage }}>⚡</span>}
                     </div>
                     <div className="flex items-center gap-1.5 mb-1">
