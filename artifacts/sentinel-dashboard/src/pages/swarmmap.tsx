@@ -957,8 +957,9 @@ function SwarmMapPageInner() {
       }, cx, cy
     ).strength(d => {
       if (d.isRoot) return 0.6;
-      // Light radial pull in chaos mode keeps orbits stable without snapping.
-      if (chaosActive && d.id.startsWith("chaos-")) return 0.12;
+      // Light radial pull in chaos mode keeps orbits stable without snapping;
+      // 0.08 is just loose enough to reveal the background Sovereign Pulse.
+      if (chaosActive && d.id.startsWith("chaos-")) return 0.08;
       return 0.3 + (d.fitnessScore ?? 0.5) * 0.25;
     }));
 
@@ -1251,6 +1252,9 @@ function SwarmMapPageInner() {
   ];
 
   return (
+    // ── Hard Buffer wrapper: pb-[120px] guarantees Live Telemetry + Quarantine
+    // Chips remain visible no matter what overlay (Replit HUD, iOS bar, etc.) is added.
+    <div className="pb-[120px]">
     <div className="flex flex-col animate-in fade-in duration-500 h-[calc(100vh-6rem)] gap-4">
 
       {/* ── Header ── */}
@@ -1338,10 +1342,21 @@ function SwarmMapPageInner() {
         </div>
       </div>
 
-      {/* ── KPI Bar ── */}
-      <div className="grid grid-cols-6 gap-3 shrink-0">
+      {/* ── KPI Bar ── HUD Depth: relative + z-50 + backdrop-blur so chaos
+           swarm nodes always render UNDER the metric numbers, never over them. */}
+      <div className="grid grid-cols-6 gap-3 shrink-0 relative" style={{ zIndex: 50 }}>
           {kpiCards.map(({ label, value, sub, color, Icon }) => (
-            <Card key={label} className="p-3 border-border/60 bg-card/50">
+            <Card
+              key={label}
+              className="p-3 border-border/60"
+              style={{
+                background: "rgba(13,17,23,0.62)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                position: "relative",
+                zIndex: 50,
+              }}
+            >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
                 <Icon className="w-3.5 h-3.5" style={{ color }} />
@@ -1527,8 +1542,15 @@ function SwarmMapPageInner() {
                   </span>
                   <span className="font-mono text-[8px] ml-auto" style={{ color: "#F87171" }}>SOVEREIGN TOKEN REVOKED</span>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {qNodes.slice(0, 12).map(n => (
+                <div
+                  className="flex flex-wrap gap-1.5 overflow-y-auto overflow-x-hidden"
+                  style={{
+                    maxHeight: 120,
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "rgba(185,28,28,0.55) transparent",
+                  }}
+                >
+                  {qNodes.map(n => (
                     <button
                       key={n.id}
                       data-rogue-id={n.id.startsWith("induction-rogue-") ? n.id : undefined}
@@ -1550,11 +1572,6 @@ function SwarmMapPageInner() {
                       {n.label.length > 16 ? n.label.substring(0, 16) + "…" : n.label} · {(n.drift ?? 0).toFixed(0)}%
                     </button>
                   ))}
-                  {qNodes.length > 12 && (
-                    <span className="font-mono text-[9px] px-2 py-0.5" style={{ color: "#F87171" }}>
-                      +{qNodes.length - 12} more
-                    </span>
-                  )}
                 </div>
               </div>
             );
@@ -2290,6 +2307,7 @@ function SwarmMapPageInner() {
           }}
         />
       )}
+    </div>
     </div>
   );
 }
