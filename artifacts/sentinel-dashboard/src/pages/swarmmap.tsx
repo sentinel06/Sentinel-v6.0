@@ -434,6 +434,10 @@ function SwarmMapPageInner() {
   const svgRef  = useRef<SVGSVGElement>(null);
   const simRef  = useRef<d3.Simulation<SwarmNodeData, SwarmLink> | null>(null);
   const tickRef = useRef(0);
+  // rAF-coalesce flag: prevents N tick events per animation frame from firing N
+  // React re-renders. Without this, chaos mode (+100 nodes) thrashes paint and
+  // freezes the UI when combined with backdrop-blur cards.
+  const renderRafRef = useRef<number | null>(null);
 
   const [nodes,      setNodes]      = useState<SwarmNodeData[]>([]);
   const [links,      setLinks]      = useState<SwarmLink[]>([]);
@@ -935,7 +939,15 @@ function SwarmMapPageInner() {
           .selectAll<SVGCircleElement, SwarmNodeData>(".darwin-drag")
           .attr("cx", d => d.x ?? cx)
           .attr("cy", d => d.y ?? cy);
-        setRenderTick(t => t + 1);
+        // rAF-coalesce the React re-render — at most one per animation frame.
+        // Critical for chaos mode (100 nodes + backdrop blur cards), where an
+        // un-throttled setState per tick saturates the compositor.
+        if (renderRafRef.current == null) {
+          renderRafRef.current = requestAnimationFrame(() => {
+            renderRafRef.current = null;
+            setRenderTick(t => t + 1);
+          });
+        }
       });
 
     // ── Radial Phylogeny layout ───────────────────────────────────────────────
