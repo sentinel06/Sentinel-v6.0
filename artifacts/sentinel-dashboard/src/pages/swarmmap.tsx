@@ -606,6 +606,32 @@ function SwarmMapPageInner() {
 
   useEffect(() => { fetchData(); const id = setInterval(fetchData, 2_500); return () => clearInterval(id); }, [fetchData]);
 
+  // ── Pending TRACE consumer ────────────────────────────────────────────────
+  // Agent Registry → "TRACE" hands off the agent id via sessionStorage so it
+  // survives the route-change clear inside ForensicInspector. As soon as nodes
+  // load (or refresh), look for a matching node and select it. Cleared either
+  // way after one attempt so it doesn't re-trigger on subsequent polls.
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    let pending: string | null = null;
+    try { pending = sessionStorage.getItem("sentinel:pending-trace"); } catch { /* noop */ }
+    if (!pending) return;
+    const match = nodes.find(n => n.id === pending);
+    if (match) {
+      setAgent({
+        id: match.id, label: match.label, status: match.status,
+        drift: match.drift ?? 0, fitnessScore: match.fitnessScore ?? 0,
+        generationDepth: match.generationDepth ?? 0, isRoot: match.isRoot,
+        swarmId: match.swarmId, parentUid: match.parentUid,
+        createdAt: match.createdAt, revokedAt: match.revokedAt, revokedReason: match.revokedReason,
+      } as any);
+      try { sessionStorage.removeItem("sentinel:pending-trace"); } catch { /* noop */ }
+    }
+    // If no match yet (registry agent not currently in live swarm), leave the
+    // pending entry so it can resolve when nodes update on the next poll. A
+    // stale entry self-clears on tab close (sessionStorage scope).
+  }, [nodes, setAgent]);
+
   // ── v6.0 Induction Drill ── synthetic rogue agent spawn + drift escalation
   useEffect(() => {
     const onSpawn = (e: Event) => {
