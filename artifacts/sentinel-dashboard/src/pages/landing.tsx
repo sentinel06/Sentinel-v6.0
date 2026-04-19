@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useLocation } from "wouter";
 import { ShieldCheck, Lock, FileCheck2, Activity, ArrowRight, FileText } from "lucide-react";
 
@@ -12,25 +12,12 @@ const TERRA   = "#D96161";
 export default function LandingPage() {
   const [, navigate] = useLocation();
 
-  // Lock the page to a single non-scrolling viewport on DESKTOP only
-  // (>= 768px). On mobile the gate gracefully scrolls so the content fits any
-  // form factor without clipping behind the URL bar. We re-evaluate on resize.
-  useEffect(() => {
-    const prevHtml = document.documentElement.style.overflow;
-    const prevBody = document.body.style.overflow;
-    const apply = () => {
-      const desktop = window.matchMedia("(min-width: 768px)").matches;
-      document.documentElement.style.overflow = desktop ? "hidden" : "";
-      document.body.style.overflow = desktop ? "hidden" : "";
-    };
-    apply();
-    window.addEventListener("resize", apply);
-    return () => {
-      window.removeEventListener("resize", apply);
-      document.documentElement.style.overflow = prevHtml;
-      document.body.style.overflow = prevBody;
-    };
-  }, []);
+  // ── Unified Responsive Architecture (Operator brief §1) ──
+  // The previous desktop overflow-lock useEffect has been removed: the gate
+  // now scrolls naturally on every viewport via `min-h-screen + overflow-y-auto`
+  // on the root container. This keeps content reachable on any screen size
+  // (e.g. shorter laptops, browser zoom, tablet split-view) instead of being
+  // clipped under the proof cards.
 
   const proofCards = [
     {
@@ -55,13 +42,15 @@ export default function LandingPage() {
 
   return (
     <div
-      // ── Global mobile lock ──
-      // p-4 md:p-10 prevents the headline & cards from kissing the screen edge.
-      // Mobile: min-h-screen so content can grow; Desktop: h-screen + overflow
-      // hidden enforces the original "single high-impact screen" brief.
-      // pb-20 md:pb-0 reserves a safe area on mobile so the vault never sits
-      // under the iOS/Android URL bar.
-      className="relative min-h-screen md:h-screen overflow-x-hidden md:overflow-hidden p-4 md:p-10 pb-20 md:pb-0 flex flex-col"
+      // ── Unified Responsive Architecture (per Operator brief §1) ──
+      // The landing now scrolls naturally on every viewport — `min-h-screen`
+      // lets the gate grow as tall as its content needs, `overflow-y-auto`
+      // gives the page native vertical scroll on phones AND laptops, and
+      // `overflow-x-hidden` suppresses the 120vmin Sovereign Pulse from ever
+      // creating a horizontal bar. `justify-start` (not center) so the
+      // headline anchors at the top instead of being pushed below the fold
+      // on short viewports.
+      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen p-4"
       style={{
         background: SLATE,
         color: "#E5E7EB",
@@ -175,7 +164,7 @@ export default function LandingPage() {
             // tablets, text-6xl on desktops. tracking-tighter on small screens
             // prevents word-break collisions; widens to 0.10em on md+ for the
             // sovereign typographic spec.
-            className="font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tighter md:tracking-[0.08em] lg:tracking-[0.10em] md:leading-[1.05]"
+            className="font-bold text-2xl md:text-4xl lg:text-6xl leading-tight tracking-tighter md:tracking-[0.06em] lg:tracking-[0.10em] md:leading-[1.05]"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
               margin: 0,
@@ -202,14 +191,16 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Proof cards — stacked on mobile, three-up on tablet+ */}
-        <div className="flex flex-col md:flex-row gap-3 md:gap-4 w-full max-w-[1080px]">
+        {/* Proof cards — stacked on mobile/tablet, three-up on desktop (≥lg).
+             Per Operator brief: flex-col lg:flex-row gives tablets a generous
+             vertical layout where each card can breathe, then snaps to the
+             three-column row only when there's true desktop real-estate. */}
+        <div className="flex flex-col lg:flex-row gap-3 md:gap-4 w-full max-w-[1080px]">
           {proofCards.map(({ icon: Icon, color, title, body }) => (
             <div
               key={title}
-              // Full width on mobile gives icons + headlines room to breathe;
-              // exact thirds on md+ so the three proof points align as a row.
-              className="w-full md:w-1/3 rounded-xl flex flex-col gap-2 px-4 py-4 md:px-[18px] md:py-4"
+              // Full width on mobile/tablet, exact thirds on lg+.
+              className="w-full lg:w-1/3 rounded-xl flex flex-col gap-2 px-4 py-4 md:px-[18px] md:py-4"
               style={{
                 background: "rgba(15, 23, 42, 0.55)",
                 border: `1px solid ${color}33`,

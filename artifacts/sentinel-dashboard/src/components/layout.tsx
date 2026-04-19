@@ -4,6 +4,7 @@ import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
   Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight, HelpCircle,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -716,6 +717,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [showNotif, setShowNotif] = useState(false);
   const { activeMutations, lastSync, ledgerTampered } = useForensic();
 
+  // ── Hamburger Protocol: drawer state for <1024px viewports ──
+  // Below `lg` (1024px) the 200px sidebar would steal half the screen and
+  // squash the Swarm Map. Instead we collapse it into a slide-in drawer
+  // toggled by a floating Menu button. Auto-closes on route change so the
+  // page transition feels instant and the operator never lands on a new
+  // route with the drawer still pinned open.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => { setDrawerOpen(false); }, [location]);
+
   useEffect(() => {
     const ws = new WebSocket(
       `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${BASE}/api/v1/ws`
@@ -753,7 +763,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       display: "flex", flexDirection: "row", height: "100vh",
-      minWidth: 1280, width: "100%", overflow: "hidden",
+      // minWidth removed: was 1280, which forced horizontal scroll on mobile.
+      // The sidebar is now off-canvas under 1024px so the layout reflows
+      // naturally on phones/tablets without violating the desktop spec.
+      width: "100%", overflow: "hidden",
       background: "var(--sv-root-bg)",
       position: "relative",
       transition: "background 0.3s ease",
@@ -761,15 +774,58 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Risk Horizon */}
       <RiskHorizon activeMutations={activeMutations} ledgerTampered={ledgerTampered} />
 
-      {/* ── Sidebar ── */}
-      <aside className="sentinel-scanline" style={{
-        width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
-        height: "100%", position: "relative", zIndex: 20,
-        background: "var(--sv-sidebar-bg)",
-        backdropFilter: "blur(20px)",
-        borderRight: "1px solid var(--sv-sidebar-border)",
-        transition: "background 0.3s ease, border-color 0.3s ease",
-      }}>
+      {/* ── Mobile Backdrop (only renders when drawer is open + <lg) ── */}
+      {drawerOpen && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          className="lg:hidden"
+          aria-hidden
+          style={{
+            position: "fixed", inset: 0, zIndex: 45,
+            background: "rgba(2,6,23,0.65)",
+            backdropFilter: "blur(4px)",
+            animation: "fadein 0.2s ease",
+          }}
+        />
+      )}
+
+      {/* ── Floating Hamburger (only <lg, hidden when drawer open) ── */}
+      {!drawerOpen && (
+        <button
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open navigation menu"
+          className="lg:hidden"
+          style={{
+            position: "fixed", top: 12, left: 12, zIndex: 60,
+            width: 44, height: 44, borderRadius: 10,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(13,17,23,0.92)",
+            border: `1px solid ${P.violet}55`,
+            boxShadow: `0 0 18px ${P.violet}44, 0 4px 12px rgba(0,0,0,0.45)`,
+            color: P.violet, cursor: "pointer", padding: 0,
+          }}
+        >
+          <Menu style={{ width: 20, height: 20 }} />
+        </button>
+      )}
+
+      {/* ── Sidebar — sticky on desktop (≥lg), slide-in drawer on mobile ──
+           The sentinel-sidebar class (CSS injected at the end of the file)
+           applies position:fixed + translate-X(-100%) below 1024px so the
+           panel lives off-canvas, then resets to position:relative + identity
+           transform at lg+ so the original docked desktop layout is unchanged. */}
+      <aside
+        className="sentinel-scanline sentinel-sidebar"
+        data-drawer-open={drawerOpen}
+        style={{
+          width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
+          height: "100%", top: 0, left: 0, zIndex: 50,
+          background: "var(--sv-sidebar-bg)",
+          backdropFilter: "blur(20px)",
+          borderRight: "1px solid var(--sv-sidebar-border)",
+          transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1), background 0.3s ease, border-color 0.3s ease",
+        }}
+      >
         {/* Logo */}
         <div style={{
           flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
@@ -880,7 +936,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           backdropFilter: "blur(12px)",
           transition: "background 0.3s ease",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
+          {/* pl-14 lg:pl-0 reserves space on mobile for the floating
+               hamburger button so the breadcrumb never sits underneath it. */}
+          <div className="pl-14 lg:pl-0" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}>
             <span style={{ color: "var(--sv-text-dim)" }}>{currentLabel}</span>
             <span style={{ color: "var(--sv-breadcrumb-divider)" }}>/</span>
             <span style={{ color: "var(--sv-text-primary)", fontWeight: 600 }}>OVERVIEW</span>
@@ -1035,6 +1093,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Sovereign Induction Onboarding ── */}
       <SovereignInduction />
+
+      {/* ── Responsive sidebar choreography ──
+           Below 1024px: sidebar is fixed-positioned & translated off-canvas
+           unless [data-drawer-open="true"] (the Hamburger Protocol).
+           At 1024px+: revert to position:relative + identity transform so
+           the original docked desktop column is unchanged.
+           Also defines `fadein` keyframes used by the mobile backdrop. */}
+      <style>{`
+        @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+        .sentinel-sidebar {
+          position: fixed;
+        }
+        .sentinel-sidebar[data-drawer-open="false"] {
+          transform: translateX(-100%);
+        }
+        .sentinel-sidebar[data-drawer-open="true"] {
+          transform: translateX(0);
+          box-shadow: 8px 0 32px rgba(0,0,0,0.55), 0 0 64px rgba(139,92,246,0.18);
+        }
+        @media (min-width: 1024px) {
+          .sentinel-sidebar,
+          .sentinel-sidebar[data-drawer-open="false"],
+          .sentinel-sidebar[data-drawer-open="true"] {
+            position: relative;
+            transform: none;
+            box-shadow: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }

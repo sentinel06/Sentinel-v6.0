@@ -34,6 +34,7 @@ const P = {
   gold:       "#FFD700",
   whiteGold:  "#FFF8C5",
   mutation:   "#C084FC",
+  violet:     "#8B5CF6",   // Sovereign violet — used by Pulse FAB & bottom-sheet
   collapse:   "#FF6B6B",
   calcite:    "#6B7280",   // calcification grey
   dim:        "#9AA4B1",
@@ -544,9 +545,28 @@ function SwarmMapPageInner() {
   // ── Touch interaction refs ─────────────────────────────────────────────────
   const longPressRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  // Pinch-to-zoom state
-  const [zoom,    setZoom]    = useState(1);
+  // ── Mobile detection (single source of truth, reactive to resize) ──
+  // Used by zoom seed, drag-disable, and the bottom-sheet telemetry hatch.
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth < 768
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Pinch-to-zoom state.
+  // Mobile boots at 0.5x so the entire 1,024-node sovereign mesh fits inside
+  // the viewport instead of overflowing the moment the page loads.
+  const [zoom,    setZoom]    = useState(() =>
+    typeof window !== "undefined" && window.innerWidth < 768 ? 0.5 : 1
+  );
   const [panXY,   setPanXY]   = useState({ x: 0, y: 0 });
+  // Mobile bottom-sheet (telemetry hatch) — closed by default so the map
+  // gets the full screen real-estate; tap the floating Pulse to open.
+  const [pulseSheetOpen, setPulseSheetOpen] = useState(false);
   const pinchRef  = useRef<{ dist: number; scale: number; midX: number; midY: number } | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -1024,7 +1044,13 @@ function SwarmMapPageInner() {
     // ── Transparent drag-handle circles overlaid on each node ────────────────
     // They have correct cx/cy/r so they intercept both drag AND click events.
     const svgSel = d3.select(svg);
-    svgSel.selectAll<SVGCircleElement, SwarmNodeData>(".darwin-drag")
+    // ── Mobile: drag is destructive on a tiny canvas ──
+    // On phones, dragging an individual node fights the page-level pan/scroll
+    // gesture and can fling nodes off-screen. We omit the d3.drag binding
+    // entirely below 768px while keeping the click handler so taps still
+    // select a node for the bottom-sheet inspector.
+    const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
+    const dragHandles = svgSel.selectAll<SVGCircleElement, SwarmNodeData>(".darwin-drag")
       .data(nodes, d => d.id)
       .join("circle")
         .attr("class", "darwin-drag")
@@ -1032,16 +1058,18 @@ function SwarmMapPageInner() {
         .attr("cy", d => d.y ?? cy)
         .attr("r",  d => (d.radius ?? 14) + 6)
         .style("fill", "transparent")
-        .style("cursor", "grab")
-      .call(d3.drag<SVGCircleElement, SwarmNodeData>()
+        .style("cursor", isMobileViewport ? "pointer" : "grab");
+    if (!isMobileViewport) {
+      dragHandles.call(d3.drag<SVGCircleElement, SwarmNodeData>()
         .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag",  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
         .on("end",   (ev, d) => { if (!ev.active) sim.alphaTarget(0); if (!d.isRoot) { d.fx = null; d.fy = null; } })
-      )
-      .on("click", (event: MouseEvent, d: SwarmNodeData) => {
-        event.stopPropagation();
-        handleNodeClickRef.current(event as unknown as React.MouseEvent, d);
-      });
+      );
+    }
+    dragHandles.on("click", (event: MouseEvent, d: SwarmNodeData) => {
+      event.stopPropagation();
+      handleNodeClickRef.current(event as unknown as React.MouseEvent, d);
+    });
 
     return () => { sim.stop(); svgSel.selectAll(".darwin-drag").remove(); };
   }, [nodes.length, links.length, svgDims]);
@@ -2188,8 +2216,11 @@ function SwarmMapPageInner() {
           </svg>
         </div>
 
-        {/* ── Right panel (desktop only) ── */}
-        <div className="shrink-0 w-80 flex flex-col gap-2 min-h-0">
+        {/* ── Right panel: 320px telemetry sidebar (desktop only, ≥md).
+             Below 768px the entire panel is hidden — its content is exposed
+             via the floating Pulse button & bottom sheet rendered further
+             down so the swarm map gets the full screen real-estate. ── */}
+        <div className="shrink-0 w-80 flex-col gap-2 min-h-0 hidden md:flex">
 
           {/* Node info */}
           {selectedNode && (() => {
@@ -2357,6 +2388,157 @@ function SwarmMapPageInner() {
         }
       `}</style>
 
+
+      {/* ── Mobile Pulse Hatch (<768px) ────────────────────────────────────
+           Replaces the desktop right-rail telemetry sidebar with a single
+           floating Pulse icon (anchored bottom-right) that opens a bottom-
+           sheet containing the freshest 12 telemetry events. Critical for
+           the "second screenshot squashed look" fix — keeps the swarm map
+           full-screen on phones while preserving one-tap access to the
+           live genome stream. Pulse pulses violet when new events arrive. */}
+      {isMobile && !pulseSheetOpen && (
+        <button
+          onClick={() => setPulseSheetOpen(true)}
+          aria-label="Open live telemetry"
+          style={{
+            position: "fixed", bottom: 18, right: 18, zIndex: 70,
+            width: 54, height: 54, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(13,17,23,0.92)",
+            border: `1px solid ${P.violet}88`,
+            boxShadow: `0 0 24px ${P.violet}66, 0 6px 18px rgba(0,0,0,0.55)`,
+            color: P.violet, cursor: "pointer", padding: 0,
+            animation: streamEvents.length > 0 ? "violetPulse 1.8s ease-in-out infinite" : undefined,
+          }}
+        >
+          <Activity style={{ width: 22, height: 22 }} />
+          {streamEvents.length > 0 && (
+            <span style={{
+              position: "absolute", top: 4, right: 4,
+              minWidth: 16, height: 16, padding: "0 4px",
+              borderRadius: 8, background: P.sage, color: "#020617",
+              fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {streamEvents.length > 99 ? "99+" : streamEvents.length}
+            </span>
+          )}
+        </button>
+      )}
+
+      {isMobile && pulseSheetOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setPulseSheetOpen(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 75,
+              background: "rgba(2,6,23,0.55)",
+              backdropFilter: "blur(3px)",
+              animation: "fadein 0.2s ease",
+            }}
+          />
+          {/* Bottom sheet */}
+          <div
+            role="dialog"
+            aria-label="Live telemetry"
+            style={{
+              position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 80,
+              maxHeight: "70vh",
+              display: "flex", flexDirection: "column",
+              background: "#080c12",
+              borderTop: `1px solid ${P.violet}55`,
+              borderTopLeftRadius: 18, borderTopRightRadius: 18,
+              boxShadow: `0 -8px 32px rgba(0,0,0,0.55), 0 0 64px ${P.violet}22`,
+              animation: "vitality-slide-up 0.28s cubic-bezier(0.4,0,0.2,1)",
+            }}
+          >
+            {/* Drag-handle + header */}
+            <div style={{
+              flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 16px 8px",
+              borderBottom: `1px solid ${P.border}88`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="relative flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${wsConnected ? "animate-ping" : ""}`}
+                    style={{ background: wsConnected ? P.sage : P.terra }} />
+                  <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: wsConnected ? P.sage : P.terra }} />
+                </span>
+                <span style={{
+                  fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                  letterSpacing: "0.18em", textTransform: "uppercase", color: P.sage,
+                }}>
+                  GENOME TELEMETRY · {streamEvents.length}
+                </span>
+              </div>
+              <button
+                onClick={() => setPulseSheetOpen(false)}
+                aria-label="Close telemetry"
+                style={{
+                  width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none", color: P.dim, cursor: "pointer", padding: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Event list (latest 12) */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 0 12px" }}>
+              {streamEvents.length === 0 && (
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  padding: "40px 24px", color: P.dim, gap: 8, textAlign: "center",
+                }}>
+                  <Activity style={{ width: 24, height: 24, opacity: 0.3 }} />
+                  <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}>
+                    {wsConnected ? "Awaiting genome events…" : "Connecting…"}
+                  </span>
+                </div>
+              )}
+              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 12).map((ev, idx) => {
+                const isBreach = ev.r;
+                const isDrift  = ev.d > 15 && !isBreach;
+                const color    = isBreach ? P.terra : isDrift ? P.amber : P.sage;
+                return (
+                  <div key={`mob-${ev.lid}-${idx}`}
+                    style={{
+                      padding: "8px 16px",
+                      borderBottom: `1px solid ${P.border}44`,
+                      background: isBreach ? P.terra + "0a" : "transparent",
+                    }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: P.dim, flexShrink: 0 }}>
+                        {new Date(ev.t).toLocaleTimeString("en", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </span>
+                      <span style={{ fontSize: 10, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {ev.e}
+                      </span>
+                      {(ev.x || isBreach) && (
+                        <span style={{ fontSize: 8, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color, flexShrink: 0 }}>
+                          {isBreach ? "EXTINCT" : "MUTANT"}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: P.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {ev.a.length > 22 ? ev.a.substring(0, 20) + "…" : ev.a}
+                      </span>
+                      {ev.d > 0 && (
+                        <span style={{ fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, color: ev.d > 15 ? P.amber : P.dim, marginLeft: "auto" }}>
+                          {ev.d.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Context menu ── */}
       {ctxMenu && (
