@@ -157,25 +157,30 @@ export default function LandingPage() {
       <div
         // Centered column · gap shrinks on mobile · max width prevents stretch
         // on ultra-wide screens. Vertical centering via flex on desktop.
-        // Mobile: tighter gap-3 to keep the CTA above the fold without a long
-        // scroll. Desktop: gap-8 for sovereign breathing room.
-        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-3 md:gap-8 w-full"
+        // Per Headline Precision Refactor: unified gap-8 across all viewports.
+        // Now that the headline scale is capped at md:text-4xl the hero stack
+        // (Headline + Cards + Vault) fits comfortably even on mobile, so the
+        // sovereign gap-8 spacing is preserved end-to-end and the Identity
+        // Verification vault settles into the optical center of the screen.
+        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-8 w-full"
       >
         {/* Headline + sub-headline */}
         <div className="text-center w-full max-w-[980px] mx-auto">
           <h1
-            // Fluid typography per brief: text-3xl on phones, text-5xl on
-            // tablets, text-6xl on desktops. tracking-tighter on small screens
-            // prevents word-break collisions; widens to 0.10em on md+ for the
-            // sovereign typographic spec.
-            className="font-bold text-2xl sm:text-4xl lg:text-6xl mt-12 md:mt-0 leading-tight tracking-tighter md:tracking-[0.06em] lg:tracking-[0.10em] md:leading-[1.05]"
+            // Headline Precision Refactor: capped scale at md:text-4xl so the
+            // headline stays "Large and commanding" without swallowing the
+            // viewport. Widened tracking to 0.15em — when the font shrinks,
+            // letterspacing carries the institutional/sovereign weight.
+            // mb-4 md:mb-6 gives the sub-header room to breathe.
+            className="font-bold text-2xl sm:text-3xl md:text-4xl mt-12 md:mt-0 mb-4 md:mb-6 leading-tight tracking-[0.15em] md:leading-[1.1]"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
-              // Removed `margin: 0` so the Tailwind `mt-12 md:mt-0`
-              // utility actually takes effect on mobile (it was being
-              // overridden by inline style precedence).
+              // No inline margin overrides — Tailwind's mt-12 md:mt-0 and
+              // mb-4 md:mb-6 utilities own all vertical spacing for the
+              // headline. (Inline style would override class-based margins
+              // due to CSS precedence, so we leave margin entirely to
+              // Tailwind here.)
               marginInline: 0,
-              marginBottom: 0,
               background: `linear-gradient(135deg, ${SAGE} 0%, ${VIOLET} 60%, #C4B5FD 100%)`,
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
