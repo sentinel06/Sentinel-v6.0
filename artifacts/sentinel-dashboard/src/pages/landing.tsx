@@ -12,15 +12,21 @@ const TERRA   = "#D96161";
 export default function LandingPage() {
   const [, navigate] = useLocation();
 
-  // Hard lock the page to a single non-scrolling viewport — the brief calls
-  // for "no scroll, single high-impact screen". We restore body scroll on
-  // unmount so the rest of the dashboard behaves normally.
+  // Lock the page to a single non-scrolling viewport on DESKTOP only
+  // (>= 768px). On mobile the gate gracefully scrolls so the content fits any
+  // form factor without clipping behind the URL bar. We re-evaluate on resize.
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
+    const apply = () => {
+      const desktop = window.matchMedia("(min-width: 768px)").matches;
+      document.documentElement.style.overflow = desktop ? "hidden" : "";
+      document.body.style.overflow = desktop ? "hidden" : "";
+    };
+    apply();
+    window.addEventListener("resize", apply);
     return () => {
+      window.removeEventListener("resize", apply);
       document.documentElement.style.overflow = prevHtml;
       document.body.style.overflow = prevBody;
     };
@@ -49,15 +55,17 @@ export default function LandingPage() {
 
   return (
     <div
+      // ── Global mobile lock ──
+      // p-4 md:p-10 prevents the headline & cards from kissing the screen edge.
+      // Mobile: min-h-screen so content can grow; Desktop: h-screen + overflow
+      // hidden enforces the original "single high-impact screen" brief.
+      // pb-20 md:pb-0 reserves a safe area on mobile so the vault never sits
+      // under the iOS/Android URL bar.
+      className="relative min-h-screen md:h-screen overflow-x-hidden md:overflow-hidden p-4 md:p-10 pb-20 md:pb-0 flex flex-col"
       style={{
-        position: "fixed",
-        inset: 0,
         background: SLATE,
         color: "#E5E7EB",
         fontFamily: "'Inter', 'JetBrains Mono', ui-monospace, monospace",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
       }}
     >
       {/* ── Layer 1: subtle structured grid pattern (suggests structured data) ── */}
@@ -156,29 +164,20 @@ export default function LandingPage() {
 
       {/* ── Layer 5: hero content ── */}
       <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "0 24px",
-          gap: 32,
-          maxHeight: "100dvh",
-          overflow: "hidden",
-        }}
+        // Centered column · gap shrinks on mobile · max width prevents stretch
+        // on ultra-wide screens. Vertical centering via flex on desktop.
+        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-6 md:gap-8 w-full"
       >
         {/* Headline + sub-headline */}
-        <div style={{ textAlign: "center", maxWidth: 980 }}>
+        <div className="text-center w-full max-w-[980px] mx-auto">
           <h1
-            className="font-bold"
+            // Fluid typography per brief: text-3xl on phones, text-5xl on
+            // tablets, text-6xl on desktops. tracking-tighter on small screens
+            // prevents word-break collisions; widens to 0.10em on md+ for the
+            // sovereign typographic spec.
+            className="font-bold text-3xl md:text-5xl lg:text-6xl leading-tight tracking-tighter md:tracking-[0.08em] lg:tracking-[0.10em] md:leading-[1.05]"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: "clamp(28px, 4.6vw, 64px)",
-              letterSpacing: "0.10em",
-              lineHeight: 1.05,
               margin: 0,
               background: `linear-gradient(135deg, ${SAGE} 0%, ${VIOLET} 60%, #C4B5FD 100%)`,
               WebkitBackgroundClip: "text",
@@ -190,49 +189,34 @@ export default function LandingPage() {
             NEURAL SOVEREIGNTY.<br />GOVERNANCE AT SCALE.
           </h1>
           <p
+            className="mt-4 md:mt-5 mx-auto max-w-[760px] text-[11px] md:text-sm lg:text-base leading-relaxed"
             style={{
-              marginTop: 22,
               color: "#9CA3AF",
-              fontSize: "clamp(12px, 1.15vw, 16px)",
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
               letterSpacing: "0.02em",
-              lineHeight: 1.55,
-              maxWidth: 760,
-              marginLeft: "auto",
-              marginRight: "auto",
             }}
           >
             Post-Quantum Interdiction &amp; SLSA L4 Provenance for Autonomous Agent Swarms.
-            <br />
-            Built for the EU AI Act compliance era.
+            <br className="hidden sm:inline" />
+            {" "}Built for the EU AI Act compliance era.
           </p>
         </div>
 
-        {/* Proof cards — three-up */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 16,
-            width: "100%",
-            maxWidth: 1080,
-          }}
-        >
+        {/* Proof cards — stacked on mobile, three-up on tablet+ */}
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 w-full max-w-[1080px]">
           {proofCards.map(({ icon: Icon, color, title, body }) => (
             <div
               key={title}
+              // Full width on mobile gives icons + headlines room to breathe;
+              // exact thirds on md+ so the three proof points align as a row.
+              className="w-full md:w-1/3 rounded-xl flex flex-col gap-2 px-4 py-4 md:px-[18px] md:py-4"
               style={{
                 background: "rgba(15, 23, 42, 0.55)",
                 border: `1px solid ${color}33`,
-                borderRadius: 12,
-                padding: "16px 18px",
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
                 boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.02), 0 0 24px ${color}10`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                minHeight: 110,
+                minHeight: 100,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -261,18 +245,17 @@ export default function LandingPage() {
         </div>
 
         {/* Entry Protocol — glassmorphic identity verification box */}
+        {/* max-h-[90vh] guarantees the vault never bleeds under the mobile
+             URL bar even on the smallest viewports. overflow-y-auto lets the
+             internal terminal lines scroll if the screen is truly tiny. */}
         <div
+          className="w-full max-w-[540px] text-center rounded-[14px] px-5 py-5 md:px-7 md:pt-[18px] md:pb-[22px] max-h-[90vh] overflow-y-auto"
           style={{
             background: "rgba(2, 6, 23, 0.65)",
             border: `1px solid ${VIOLET}44`,
-            borderRadius: 14,
-            padding: "18px 28px 22px",
             backdropFilter: "blur(14px)",
             WebkitBackdropFilter: "blur(14px)",
             boxShadow: `0 0 0 1px rgba(255,255,255,0.03), 0 0 60px ${VIOLET}28, inset 0 0 30px ${VIOLET}10`,
-            maxWidth: 540,
-            width: "100%",
-            textAlign: "center",
           }}
         >
           {/* Header strip */}
@@ -395,29 +378,23 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── Layer 6: bottom-edge regulatory legend ── */}
+      {/* ── Layer 6: bottom-edge regulatory legend ──
+           flex-wrap + gap ensures EU AI ACT / NIST etc. wrap onto multiple
+           lines on narrow viewports instead of overlapping or overflowing. */}
       <div
+        className="absolute bottom-4 left-0 right-0 z-[3] px-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-[10px] md:text-xs"
         style={{
-          position: "absolute",
-          bottom: 16,
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
-          gap: 24,
-          zIndex: 3,
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9,
           color: "#475569",
           letterSpacing: "0.18em",
         }}
       >
         <span>EU AI ACT</span>
-        <span style={{ color: VIOLET + "88" }}>·</span>
+        <span style={{ color: VIOLET + "88" }} className="hidden sm:inline">·</span>
         <span>SOC 2</span>
-        <span style={{ color: VIOLET + "88" }}>·</span>
+        <span style={{ color: VIOLET + "88" }} className="hidden sm:inline">·</span>
         <span>NIST AI RMF</span>
-        <span style={{ color: VIOLET + "88" }}>·</span>
+        <span style={{ color: VIOLET + "88" }} className="hidden sm:inline">·</span>
         <span>ISO/IEC 42001</span>
       </div>
 
