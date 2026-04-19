@@ -9,6 +9,7 @@ import { ForensicProvider } from "@/contexts/ForensicContext";
 
 // Pages
 import DashboardPage from "@/pages/dashboard";
+import LandingPage from "@/pages/landing";
 import TracesPage from "@/pages/traces";
 import AgentsPage from "@/pages/agents";
 import CompliancePage from "@/pages/compliance";
@@ -34,10 +35,17 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={DashboardPage} />
-        <Route path="/traces" component={TracesPage} />
+    <Switch>
+      {/* Landing gate — bypasses Layout chrome (no sidebar / no header), enforced
+          single-screen sovereign onboarding. Once acknowledged, user navigates
+          to /dashboard and the full Layout takes over. */}
+      <Route path="/" component={LandingPage} />
+      {/* All authenticated dashboard routes wrapped in shared Layout */}
+      <Route>
+        <Layout>
+          <Switch>
+            <Route path="/dashboard" component={DashboardPage} />
+            <Route path="/traces" component={TracesPage} />
         <Route path="/topology" component={TopologyPage} />
         <Route path="/warroom" component={WarRoomPage} />
         <Route path="/agents" component={AgentsPage} />
@@ -50,10 +58,12 @@ function Router() {
         <Route path="/partner-onboarding" component={PartnerOnboardingPage} />
         <Route path="/eqa" component={EQAPage} />
         <Route path="/pulse" component={PulsePage} />
-        <Route path="/status" component={StatusPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+            <Route path="/status" component={StatusPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </Layout>
+      </Route>
+    </Switch>
   );
 }
 

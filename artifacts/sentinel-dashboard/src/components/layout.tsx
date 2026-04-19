@@ -688,7 +688,7 @@ const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
-      { path: "/",         label: "Live Stream",   icon: Activity },
+      { path: "/dashboard", label: "Live Stream",   icon: Activity },
       { path: "/topology", label: "Topology",      icon: GitBranch },
       { path: "/swarmmap", label: "Swarm Map",     icon: Network },
       { path: "/pulse",    label: "Live Pulse",    icon: Radio },
