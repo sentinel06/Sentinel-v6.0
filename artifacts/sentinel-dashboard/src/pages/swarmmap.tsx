@@ -482,11 +482,15 @@ function SwarmMapPageInner() {
   const feedRef            = useRef<HTMLDivElement>(null);
 
   // ── Telemetry Throttler ─────────────────────────────────────────────────
-  // Every 1000ms, drain the chaos-mode packet buffer and emit ONE batch event
-  // representing all suppressed packets. Renders as a human-readable summary
-  // line ("42 Synthetic Nodes Revoked") so the Genome Telemetry feed stays
-  // legible at 1k+ nodes instead of strobing past unreadably.
+  // Drain the dense-mode packet buffer and emit ONE batched summary event.
+  // ── Throttling tier ──
+  //   • normal swarm  → flush every 1000ms (responsive)
+  //   • dense (>150)  → flush every 1500ms (1024-node performance hardening)
+  // The summary line stays human-readable ("42 Synthetic Nodes Interdicted")
+  // so the Genome Telemetry feed never strobes past unreadably.
+  const dense = nodes.length > 150;
   useEffect(() => {
+    const flushPeriodMs = dense ? 1500 : 1000;
     const id = window.setInterval(() => {
       const buf = telemetryBufferRef.current;
       if (buf.length === 0) return;
@@ -503,12 +507,12 @@ function SwarmMapPageInner() {
         // Preserve original packet shape; consumers tolerate unknown fields
       } as StreamPacket;
       setStreamEvents(prev => [summary, ...prev].slice(0, 150));
-    }, 1000);
+    }, flushPeriodMs);
     return () => {
       window.clearInterval(id);
       telemetryBufferRef.current = [];
     };
-  }, []);
+  }, [dense]);
 
   const [, navigate] = useLocation();
   const { setAgent, setActiveMutations, currentCluster, quarantinedIds } = useForensic();
@@ -919,17 +923,19 @@ function SwarmMapPageInner() {
 
     simRef.current?.stop();
 
-    // ── Chaos-aware physics ─────────────────────────────────────────────────
-    // With 1,024 synthetic nodes the default forces explode the swarm — drop
-    // the long-range repulsion to -200, keep collide tight (radius 5) so the
-    // cloud stays dense, and accelerate alpha decay so the layout settles fast.
+    // ── Density-aware physics ────────────────────────────────────────────────
+    // The N² forces (forceManyBody, forceCollide) are the primary cause of
+    // frame drops at scale. We use NODE COUNT — not the chaos flag — as the
+    // trigger so any swarm above 150 nodes (real or synthetic) gets the
+    // stabilized treatment automatically. At 1,024 nodes individual collisions
+    // are sub-pixel anyway, so dropping them is invisible to the eye but
+    // halves the per-tick CPU cost.
     const chaosActive   = chaosCount > 0;
-    // Chaos Stabilization: when chaos is active we DISABLE all forceManyBody
-    // (charge) and forceCollide computations entirely — they're O(N²) and the
-    // primary cause of frame drops. Instead nodes simply orbit on a stable
-    // forceCenter + light forceRadial layout (0% CPU overhead at steady state).
-    const alphaDecay     = chaosActive ? 0.08 : 0.010;
-    const velocityDecay  = chaosActive ? 0.62 : 0.44;
+    const densePhysics  = nodes.length > 150;
+    // velocityDecay 0.3 "thickens the air" — high decay damps node vibration
+    // which is what causes the browser to hang at extreme node counts.
+    const alphaDecay     = densePhysics ? 0.08 : 0.010;
+    const velocityDecay  = densePhysics ? 0.30 : 0.44;
 
     const sim = d3.forceSimulation<SwarmNodeData>(nodes)
       .force("link", d3.forceLink<SwarmNodeData, SwarmLink>(links)
@@ -945,11 +951,13 @@ function SwarmMapPageInner() {
           return 0.12 + f * 0.48;
         })
       )
-      // charge/collide are NULL'd in chaos mode — only forceCenter + radial
-      // remain, producing a beautiful static orbit with no per-tick N² work.
-      .force("charge",  chaosActive ? null : d3.forceManyBody<SwarmNodeData>().strength(-800))
+      // charge/collide are NULL'd whenever the swarm is dense (>150 nodes) —
+      // only forceCenter + radial remain, producing a stable orbit with no
+      // per-tick N² work. Threshold (not chaos flag) is what keeps real-world
+      // multi-cluster swarms responsive too.
+      .force("charge",  densePhysics ? null : d3.forceManyBody<SwarmNodeData>().strength(-800))
       .force("center",  d3.forceCenter(cx, cy).strength(0.08))
-      .force("collide", chaosActive ? null : d3.forceCollide<SwarmNodeData>().radius(100).strength(0.8))
+      .force("collide", densePhysics ? null : d3.forceCollide<SwarmNodeData>().radius(100).strength(0.8))
       .alphaDecay(alphaDecay)
       .velocityDecay(velocityDecay)
       .on("tick", () => {
@@ -966,7 +974,7 @@ function SwarmMapPageInner() {
           .attr("cx", d => d.x ?? cx)
           .attr("cy", d => d.y ?? cy);
         // rAF-coalesce the React re-render — at most one per animation frame.
-        // Critical for chaos mode (100 nodes + backdrop blur cards), where an
+        // Critical for chaos mode (1,024 nodes + backdrop blur cards), where an
         // un-throttled setState per tick saturates the compositor.
         if (renderRafRef.current == null) {
           renderRafRef.current = requestAnimationFrame(() => {
@@ -1346,17 +1354,18 @@ function SwarmMapPageInner() {
                   }, 300);
                 });
               } else {
-                // ── ENTER CHAOS — append 100 synthetic agents ──
-                // Capped at 100 nodes orbiting on forceCenter + light forceRadial
-                // (no charge, no collide) → 0% CPU at steady state.
+                // ── ENTER CHAOS — append 1,024 synthetic agents ──
+                // 1,024-node sovereign chaos fleet orbiting on forceCenter +
+                // light forceRadial only (charge/collide auto-disabled by the
+                // densePhysics threshold) → ~0% CPU at steady state.
                 setChaosLoading(true);
                 requestAnimationFrame(() => {
                   const fleet = generateChaosFleet(
-                    100, cx, cy, Math.min(120, svgDims.W / 6),
+                    1024, cx, cy, Math.min(120, svgDims.W / 6),
                   );
                   // Functional update — append to existing nodes, never overwrite.
                   setNodes(prev => [...prev.filter(n => !n.id.startsWith("chaos-")), ...fleet]);
-                  setChaosCount(100);
+                  setChaosCount(1024);
                   setTimeout(() => {
                     simRef.current?.alpha(1).restart();
                     setChaosLoading(false);
@@ -1370,8 +1379,8 @@ function SwarmMapPageInner() {
               borderColor: chaosCount > 0 ? "#B91C1C66" : "#8B5CF666",
               background: chaosCount > 0 ? "#B91C1C18" : "#8B5CF618",
             }}
-            title="Spawn 100 synthetic agents on a stable orbit (forceCenter + radial only)">
-            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount})` : "CHAOS MODE · 100×"}
+            title="Spawn 1,024 synthetic agents on a stable orbit (forceCenter + radial only, no N² collision math)">
+            🌀 {chaosCount > 0 ? `EXIT CHAOS (${chaosCount.toLocaleString()})` : "CHAOS MODE · 1,024×"}
           </button>
           <span className="font-mono text-[10px] flex items-center gap-1.5 px-2 py-1 rounded border"
             style={{ color: P.sage, borderColor: P.sage + "44", background: P.sage + "10" }}
@@ -2230,7 +2239,7 @@ function SwarmMapPageInner() {
                 <span className="text-[9px] font-mono font-bold tracking-widest uppercase" style={{ color: P.sage }}>
                   GENOME TELEMETRY
                 </span>
-                {nodes.length > 100 && (
+                {dense && (
                   <span
                     className="text-[8px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
                     style={{
@@ -2238,9 +2247,9 @@ function SwarmMapPageInner() {
                       background: "#EBC06D14",
                       border: "1px solid #EBC06D55",
                     }}
-                    title={`Summary Mode active — packets batched every 1000ms (${nodes.length} nodes)`}
+                    title={`Summary Mode active — packets batched every 1500ms · Latest 5 events only (${nodes.length.toLocaleString()} nodes)`}
                   >
-                    ⚡ SUMMARY MODE
+                    ⚡ SUMMARY MODE · LATEST 5 · 1.5s
                   </span>
                 )}
               </div>
@@ -2259,9 +2268,10 @@ function SwarmMapPageInner() {
                 </div>
               )}
               {/* Telemetry: streamEvents is newest-first by construction (every code path
-                  prepends new packets); slice(0,10) yields the freshest 10. Stable per-event
-                  key (ev.lid) ensures React always re-renders when content changes. */}
-              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, 10).map((ev, idx) => {
+                  prepends new packets). At >150 nodes we render only the freshest 5
+                  (1024-node performance hardening); otherwise the freshest 10. Stable
+                  per-event key (ev.lid) ensures React always re-renders when content changes. */}
+              {streamEvents.filter(ev => !quarantinedIds.has(ev.a)).slice(0, dense ? 5 : 10).map((ev, idx) => {
                 const isBreach = ev.r;
                 const isDrift  = ev.d > 15 && !isBreach;
                 const color    = isBreach ? P.terra : isDrift ? P.amber : P.sage;
