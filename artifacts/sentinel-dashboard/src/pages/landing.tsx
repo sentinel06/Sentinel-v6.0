@@ -50,7 +50,9 @@ export default function LandingPage() {
       // creating a horizontal bar. `justify-start` (not center) so the
       // headline anchors at the top instead of being pushed below the fold
       // on short viewports.
-      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen p-4"
+      // pb-24 reserves clear space at the bottom so the "Made with Replit"
+      // badge (and mobile browser URL bar) never overlap the primary CTA.
+      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen p-4 pb-24"
       style={{
         background: SLATE,
         color: "#E5E7EB",
@@ -155,7 +157,9 @@ export default function LandingPage() {
       <div
         // Centered column · gap shrinks on mobile · max width prevents stretch
         // on ultra-wide screens. Vertical centering via flex on desktop.
-        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-6 md:gap-8 w-full"
+        // Mobile: tighter gap-3 to keep the CTA above the fold without a long
+        // scroll. Desktop: gap-8 for sovereign breathing room.
+        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-3 md:gap-8 w-full"
       >
         {/* Headline + sub-headline */}
         <div className="text-center w-full max-w-[980px] mx-auto">
@@ -164,10 +168,14 @@ export default function LandingPage() {
             // tablets, text-6xl on desktops. tracking-tighter on small screens
             // prevents word-break collisions; widens to 0.10em on md+ for the
             // sovereign typographic spec.
-            className="font-bold text-2xl md:text-4xl lg:text-6xl leading-tight tracking-tighter md:tracking-[0.06em] lg:tracking-[0.10em] md:leading-[1.05]"
+            className="font-bold text-2xl sm:text-4xl lg:text-6xl mt-12 md:mt-0 leading-tight tracking-tighter md:tracking-[0.06em] lg:tracking-[0.10em] md:leading-[1.05]"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
-              margin: 0,
+              // Removed `margin: 0` so the Tailwind `mt-12 md:mt-0`
+              // utility actually takes effect on mobile (it was being
+              // overridden by inline style precedence).
+              marginInline: 0,
+              marginBottom: 0,
               background: `linear-gradient(135deg, ${SAGE} 0%, ${VIOLET} 60%, #C4B5FD 100%)`,
               WebkitBackgroundClip: "text",
               backgroundClip: "text",

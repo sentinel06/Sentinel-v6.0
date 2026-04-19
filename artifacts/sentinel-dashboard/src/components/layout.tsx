@@ -950,8 +950,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
 
-            {/* Search */}
-            <div style={{ position: "relative" }}>
+            {/* Search — hidden on mobile/tablet to free up space for the
+                cluster switcher + breadcrumb + induction button. Returns
+                at md+ where the header has room to breathe. */}
+            <div className="hidden md:block" style={{ position: "relative" }}>
               <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "var(--sv-search-icon)", pointerEvents: "none" }} />
               <input
                 type="text"

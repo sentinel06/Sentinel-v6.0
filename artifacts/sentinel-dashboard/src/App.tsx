@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -68,6 +69,20 @@ function Router() {
 }
 
 function App() {
+  // ── Global Scaling Reset (Operator brief §3) ──
+  // Some browsers (notably Chromium on Android & Safari on iOS) auto-zoom
+  // when they encounter monospace / terminal-style fonts at small sizes,
+  // which throws off our pixel-perfect glassmorphic layout. Force the
+  // computed zoom back to 1.0 on mount so the viewport stays sovereign.
+  useEffect(() => {
+    try {
+      (document.body.style as CSSStyleDeclaration & { zoom?: string }).zoom = "1.0";
+      (document.documentElement.style as CSSStyleDeclaration & { zoom?: string }).zoom = "1.0";
+    } catch {
+      // older browsers without `zoom` support — silently no-op.
+    }
+  }, []);
+
   return (
     <ThemeProvider attribute="class" forcedTheme="dark" enableSystem={false}>
       <QueryClientProvider client={queryClient}>

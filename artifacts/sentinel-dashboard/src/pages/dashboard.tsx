@@ -251,8 +251,12 @@ export default function DashboardPage() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Live Stream</h1>
-          <p className="text-sm text-muted-foreground font-mono mt-1">Real-time action monitoring and hash chain verification</p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Live Stream</h1>
+          {/* Mobile: truncate so the sub-header stays a clean single line under
+              the breadcrumb. ≥sm: wrap naturally for the full sovereign caption. */}
+          <p className="text-[11px] sm:text-sm text-muted-foreground font-mono mt-1 truncate sm:overflow-visible sm:whitespace-normal">
+            Real-time action monitoring and hash chain verification
+          </p>
         </div>
         
         <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-md border border-border">
@@ -537,12 +541,12 @@ function StatCard({
   isLoading?: boolean
 }) {
   return (
-    <Card className="p-5 border-border/60 bg-card/50 backdrop-blur-sm hover:border-border transition-colors">
-      <div className="flex items-center justify-between mb-4 text-muted-foreground">
-        <h3 className="font-mono text-xs font-medium uppercase tracking-wider">{title}</h3>
-        <Icon className="w-4 h-4" />
+    <Card className="p-3 sm:p-5 border-border/60 bg-card/50 backdrop-blur-sm hover:border-border transition-colors">
+      <div className="flex items-center justify-between mb-2 sm:mb-4 text-muted-foreground">
+        <h3 className="font-mono text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate pr-2">{title}</h3>
+        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
       </div>
-      <div className={`text-3xl font-bold font-mono ${valueClassName}`}>
+      <div className={`text-xl sm:text-3xl font-bold font-mono ${valueClassName}`}>
         {isLoading ? <div className="h-8 w-24 bg-muted animate-pulse rounded" /> : value}
       </div>
     </Card>
