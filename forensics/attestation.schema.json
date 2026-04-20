@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ML-DSA-87 Attestation",
+  "description": "Specifies the structure of cryptographic agent action signatures.",
+  "type": "object",
+  "required": ["eventHash", "signature", "publicKey", "timestamp"],
+  "properties": {
+    "eventHash": { "type": "string", "description": "SHA256 hash of the agent event." },
+    "signature": { "type": "string", "description": "ML-DSA-87 post-quantum signature, base64-encoded." },
+    "publicKey": { "type": "string", "description": "Base64-encoded public key used for verifying the signature." },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}
