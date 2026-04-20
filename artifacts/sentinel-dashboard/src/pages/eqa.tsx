@@ -719,7 +719,7 @@ const EQAPage = React.memo(function EQAPage() {
     if (!pid) {
       toast({
         variant: "destructive",
-        title: "ERROR: Enter Partner ID to initialize forensic audit.",
+        title: "REQUIRED: Enter Partner ID to initialize forensic audit",
         description: "Try a sample ID such as Apex-Fintech to begin.",
       });
       return;
@@ -779,9 +779,15 @@ const EQAPage = React.memo(function EQAPage() {
       if (cur >= 88) clearInterval(sealIntervalRef.current!);
     }, 80);
 
-    // Yield — let React paint the "Sealing N Events…" button state before
+    // Yield — let React paint the "ANALYZING SWARM…" button state before
     // the (synchronous) jsPDF work blocks the main thread
     await new Promise<void>(resolve => setTimeout(resolve, 60));
+
+    // Minimum 1200 ms "Forensic Wait" — the button MUST display
+    // "ANALYZING SWARM…" for at least 1.2s before the download fires,
+    // giving the compliance report procedural weight.
+    const downloadStarted = Date.now();
+    const MIN_ANALYSIS_MS = 1200;
 
     try {
       const doc = generatePDFDoc(report, quarantineLog);
@@ -790,8 +796,11 @@ const EQAPage = React.memo(function EQAPage() {
       if (sealIntervalRef.current) clearInterval(sealIntervalRef.current);
       if (isMounted.current) setSealProgress(100);
 
-      // Brief pause so user sees 100% before download starts
-      await new Promise<void>(resolve => setTimeout(resolve, 220));
+      // Hold the "ANALYZING SWARM…" state until we've reached the 1.2s floor,
+      // then a brief 220ms tail so the user sees 100% before download starts.
+      const elapsed = Date.now() - downloadStarted;
+      const remainder = Math.max(0, MIN_ANALYSIS_MS - elapsed);
+      await new Promise<void>(resolve => setTimeout(resolve, remainder + 220));
 
       // Filename: SENTINEL_EQA_[TIMESTAMP]_VERIFIED.pdf
       const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -920,7 +929,7 @@ const EQAPage = React.memo(function EQAPage() {
             ) : sealing ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                <span>SEALING LEDGER…</span>
+                <span>ANALYZING SWARM…</span>
               </>
             ) : (
               <>
