@@ -1,0 +1,3 @@
+# Post-Quantum Attestation Pipeline
+
+In the drive towards enhancing security measures, our Post-Quantum Attestation pipeline ensures that every action executed by agents is rigorously authenticated. Each action is signed with the **ML-DSA-87 seal**, which is documented within the **EQA schema**. This mechanism not only guarantees the integrity of agent actions but also fortifies our commitment to post-quantum security standards.
