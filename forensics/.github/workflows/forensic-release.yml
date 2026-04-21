@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'forensics/**'
+  workflow_dispatch: # This adds a manual "Run" button
 
 jobs:
   audit-and-seal:
