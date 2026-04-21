@@ -1,20 +1,27 @@
-/**
- * SENTINEL v6.0.1 - SOVEREIGN ATTESTATION CORE
- * Logic: Article 14 Human-in-the-Loop Enforcement
- */
+import { createHmac } from 'crypto';
 
 const GITHUB_ENV = process.env.GITHUB_ACTIONS === 'true';
-const ENFORCED_ENV = "production-vault";
+const SOVEREIGN_KEY = process.env.SOVEREIGN_KEY || 'replit-dev-key-unsecure';
+const TIMESTAMP = new Date().toISOString();
+
+function generateHandshake(data: string) {
+    return createHmac('sha256', SOVEREIGN_KEY)
+           .update(data)
+           .digest('hex');
+}
 
 function verifyEnvironment() {
-    // If we are NOT in the approved GitHub Production Vault, block execution.
     if (!GITHUB_ENV) {
-        console.error("\x1b[31m[CRITICAL FAILURE][Human Oversight (Environment Bound)]\x1b[0m");
-        console.error("Execution attempted outside of approved Human-in-the-Loop environment.");
+        console.error("\x1b[31m[CRITICAL FAILURE] - UNAUTHORIZED ACCESS\x1b[0m");
+        const breachAttempt = generateHandshake(`BREACH_DETECTED_${TIMESTAMP}`);
+        console.error(`[SIGNATURE][${breachAttempt}]`);
         process.exit(1);
     }
+    
     console.log("\x1b[32m[SUCCESS] Environment Verified: Production Vault Active.\x1b[0m");
+    const handshake = generateHandshake(`AUTHORIZED_SESSION_${TIMESTAMP}`);
+    console.log(`[HANDSHAKE_GENERATE][${handshake}]`);
 }
 
 verifyEnvironment();
-console.log("Proceeding with Sovereign Attestation...");
+console.log("Sentinel-v6.0: Sovereign Handshake Established.");

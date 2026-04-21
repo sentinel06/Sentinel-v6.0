@@ -1,13 +1,14 @@
 {
   "name": "sentinel-sovereign-core",
-  "version": "6.0.1",
-  "description": "Post-Quantum Sovereignty Layer",
-  "main": "src/attestation.ts",
+  "version": "6.1.0",
+  "type": "module",
   "scripts": {
-    "test": "ts-node src/attestation.ts"
+    "start": "node --loader ts-node/esm src/attestation.ts",
+    "dashboard": "node --loader ts-node/esm src/dashboard.ts"
   },
-  "dependencies": {
+  "devDependencies": {
     "typescript": "^5.0.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.0.0"
   }
 }
