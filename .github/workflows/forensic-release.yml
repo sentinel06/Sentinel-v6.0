@@ -10,4 +10,4 @@ jobs:
     environment: forensics-audit
     steps:
       - name: Cold Boot
-        run: echo "Protocol Active. Waiting for Operator Approval."
+        run: echo "Protocol Active. Waiting for Operator Approval."  
