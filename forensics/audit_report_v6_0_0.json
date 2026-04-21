@@ -1,0 +1,13 @@
+{
+  "audit_id": "sentinel-audit-20260421-01",
+  "version": "6.0.1-sovereign",
+  "timestamp": "2026-04-21T10:20:00Z",
+  "compliance_matrix": {
+    "Article 13": "Transparency via real-time HUD telemetry.",
+    "Article 14": "Human-in-the-loop enforcement verified via interceptor.ts.",
+    "Article 15": "Post-quantum resilience via ML-DSA-87 attestation."
+  },
+  "signature": "ML-DSA87:7f83b1a...[SHA256].M0NLRVlfU0VORUlORUxfUFJPVE9DT0xfNl8w",
+  "audit_status": "Initial Governance Test - Environment Protection Active"
+}
+  
