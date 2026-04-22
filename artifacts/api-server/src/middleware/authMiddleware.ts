@@ -18,8 +18,8 @@
  */
 
 import type { Request, Response, NextFunction, RequestHandler } from "express";
-import { timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger";
+import { safeCompare } from "../lib/safeCompare";
 
 const HEADER_NAME = "x-sentinel-key";
 
@@ -38,17 +38,6 @@ function reject(
     message,
     timestamp: new Date().toISOString(),
   });
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  if (bufA.length !== bufB.length) {
-    // still call timingSafeEqual on equal-length buffers to keep timing flat
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
 }
 
 export const authMiddleware: RequestHandler = (
@@ -84,7 +73,7 @@ export const authMiddleware: RequestHandler = (
     return;
   }
 
-  if (!safeEqual(provided, expected)) {
+  if (!safeCompare(provided, expected)) {
     logger.warn(
       { url: req.url, method: req.method },
       "authMiddleware: invalid X-Sentinel-Key on admin request",
