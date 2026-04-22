@@ -21,6 +21,7 @@ import {
   getSessionHealth,
   isAgentRevoked,
 } from "../lib/governance";
+import { getAttestation } from "../attestation";
 
 const router: IRouter = Router();
 
@@ -75,7 +76,10 @@ function buildBadgeSvg(label: string, value: string, color: string, icon: string
 
 // ── Three-segment Quantum Seal badge (static governance attestation) ────────
 // Segments: [ sentinel-governed | EU AI Act ✓ | ML-DSA-87 <fingerprint> ]
+// The runtime attestation (signature + timestamp from getAttestation()) is
+// embedded into the SVG <title> + aria-label for auditor verification.
 function buildQuantumSealBadge(): string {
+  const att = getAttestation();
   const labelText  = "sentinel-governed";
   const middleText = "EU AI Act \u2713";
   const sealText   = `ML-DSA-87 ${ML_DSA_87_FINGERPRINT}`;
@@ -94,8 +98,9 @@ function buildQuantumSealBadge(): string {
   const BLUE    = "#2980b9";
   const VIOLET  = "#8B5CF6";
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="20" role="img" aria-label="sentinel-governed: EU AI Act compliant; ML-DSA-87 sealed ${ML_DSA_87_FINGERPRINT}">
-  <title>sentinel-governed · EU AI Act \u2713 · ML-DSA-87 ${ML_DSA_87_FINGERPRINT} (SLSA L4)</title>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="20" role="img" aria-label="sentinel-governed: EU AI Act compliant; ML-DSA-87 sealed ${ML_DSA_87_FINGERPRINT}; attestation ${att.signature} (${att.status})">
+  <title>sentinel-governed · EU AI Act \u2713 · ML-DSA-87 ${ML_DSA_87_FINGERPRINT} (SLSA L4) · ${att.signature} · sealed ${att.timestamp} · status=${att.status}</title>
+  <metadata>${JSON.stringify(att)}</metadata>
   <defs>
     <linearGradient id="s" x2="0" y2="100%">
       <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
