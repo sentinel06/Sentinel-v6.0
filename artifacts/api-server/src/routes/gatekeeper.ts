@@ -45,6 +45,26 @@ const router: IRouter = Router();
 
 const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
 
+// ── High-stakes intents that MUST carry a nonce (no downgrade attacks) ─────
+// If an inbound intent string contains any of these substrings, the request
+// is rejected with 422 nonce_required when no nonce is supplied. This closes
+// the "strip the nonce to bypass replay protection" attack vector.
+const HIGH_STAKES_INTENTS = [
+  "kill_switch",
+  "override",
+  "reconstruct",
+  "admin",
+];
+
+// ── Environment provenance (SLSA L4 context for the seal) ──────────────────
+// Captured once at module load — process env is immutable for the lifetime
+// of the gatekeeper, so there's no need to rebuild this per-request.
+const ENVIRONMENT_METADATA = {
+  provider: process.env["REPLIT_SLUG"] ? "replit" : "unknown",
+  region:   process.env["REPLIT_REGION"] || "local",
+  platform: process.platform,
+} as const;
+
 // ── Schema Guard ────────────────────────────────────────────────────────────
 const GatekeeperSchema = z.object({
   intent:    z.string().min(3).max(100),
@@ -87,6 +107,22 @@ router.post("/v1/gatekeeper", (req, res): void => {
   // ── Trusted, type-safe payload from this point forward ──────────────────
   const data: GatekeeperRequest = validation.data;
 
+  // ── Anti-downgrade: high-stakes intents MUST supply a nonce ─────────────
+  if (
+    !data.nonce &&
+    HIGH_STAKES_INTENTS.some((kw) => data.intent.includes(kw))
+  ) {
+    res.status(422).json({
+      ok: false,
+      error: "nonce_required",
+      detail:
+        "High-stakes intents require a unique nonce for replay protection.",
+      intent: data.intent,
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
   // ── Replay protection: reject reused nonces inside the TTL window ───────
   if (data.nonce && !verifyAndStoreNonce(data.nonce)) {
     res.status(409).json({
@@ -114,7 +150,7 @@ router.post("/v1/gatekeeper", (req, res): void => {
     algorithm:   "ML-DSA-87",
     slsaLevel:   4,
     release:     "v6.0-neural-sovereignty",
-    environment: process.env["GITHUB_ENVIRONMENT"] ?? null,
+    environment: ENVIRONMENT_METADATA,
     request:     data,
     admissionId,
   });
