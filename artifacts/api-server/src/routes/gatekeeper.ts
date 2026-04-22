@@ -7,34 +7,53 @@
  * Every response is signed with getAttestation() — single source of truth
  * shared with the badge SVG <metadata> and the /v1/attestation JSON endpoint.
  *
- * Body (all fields optional):
- *   { agentId?: string, action?: string, partnerId?: string, reason?: string }
+ * ── Schema Guard (Zod) ──────────────────────────────────────────────────────
+ * Body MUST conform to GatekeeperSchema:
+ *   {
+ *     intent:    string  (3..100 chars)        // e.g. "deploy_swarm_v6"
+ *     riskScore: number  (0..1, inclusive)      // 0=safe, 1=critical
+ *     nonce?:    string                          // reserved for replay protection
+ *   }
  *
- * Response (always application/json):
+ * Validation failures return 400 with structured `issues` from Zod so callers
+ * can surface field-level errors. Only `validation.data` is used downstream;
+ * raw `req.body` is never trusted past the guard.
+ *
+ * Response (200, application/json):
  *   {
  *     admitted: true,
- *     status:   "verified",
- *     signature:"SENTINEL_SIG_0x7A_F3_9C",
- *     timestamp:"2026-04-22T18:55:00.000Z",
- *     fingerprint:"7A:F3:9C:21:E4:8B:5D:62",
+ *     status: "verified",
+ *     signature: "SENTINEL_SIG_0x7A_F3_9C",
+ *     timestamp: ISO-8601,
+ *     fingerprint: "7A:F3:9C:21:E4:8B:5D:62",
  *     standard: "FIPS-204",
- *     algorithm:"ML-DSA-87",
- *     slsaLevel:4,
- *     release:  "v6.0-neural-sovereignty",
- *     environment: "forensics-audit" | null,
- *     request:  { agentId, action, partnerId, reason },
+ *     algorithm: "ML-DSA-87",
+ *     slsaLevel: 4,
+ *     release: "v6.0-neural-sovereignty",
+ *     environment: string | null,
+ *     request: { intent, riskScore, nonce? },
  *     admissionId: "GK-<timestamp>-<rand>"
  *   }
  */
 
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
+import { z } from "zod";
 import { getAttestation } from "../attestation";
 
 const router: IRouter = Router();
 
 const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
 
-function setJsonHeaders(res: import("express").Response): void {
+// ── Schema Guard ────────────────────────────────────────────────────────────
+const GatekeeperSchema = z.object({
+  intent:    z.string().min(3).max(100),
+  riskScore: z.number().min(0).max(1),
+  nonce:     z.string().optional(), // Prepare for Replay protection
+});
+
+type GatekeeperRequest = z.infer<typeof GatekeeperSchema>;
+
+function setJsonHeaders(res: Response): void {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -49,22 +68,29 @@ router.options("/v1/gatekeeper", (_req, res): void => {
 });
 
 router.post("/v1/gatekeeper", (req, res): void => {
-  const seal = getAttestation();
+  setJsonHeaders(res);
 
-  // Body is optional — accept any/all fields, normalize to strings.
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  const request = {
-    agentId:   typeof body.agentId   === "string" ? body.agentId   : null,
-    action:    typeof body.action    === "string" ? body.action    : null,
-    partnerId: typeof body.partnerId === "string" ? body.partnerId : null,
-    reason:    typeof body.reason    === "string" ? body.reason    : null,
-  };
+  // ── Schema Guard: validate request body before any business logic ────────
+  const validation = GatekeeperSchema.safeParse(req.body);
+
+  if (!validation.success) {
+    res.status(400).json({
+      ok: false,
+      error: "Validation Failed",
+      issues: validation.error.issues,
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // ── Trusted, type-safe payload from this point forward ──────────────────
+  const data: GatekeeperRequest = validation.data;
+  const seal = getAttestation();
 
   const admissionId =
     `GK-${Date.now().toString(36).toUpperCase()}-` +
     Math.random().toString(36).slice(2, 8).toUpperCase();
 
-  setJsonHeaders(res);
   res.status(200).json({
     admitted:    true,
     ...seal,
@@ -73,8 +99,8 @@ router.post("/v1/gatekeeper", (req, res): void => {
     algorithm:   "ML-DSA-87",
     slsaLevel:   4,
     release:     "v6.0-neural-sovereignty",
-    environment: process.env.GITHUB_ENVIRONMENT ?? null,
-    request,
+    environment: process.env["GITHUB_ENVIRONMENT"] ?? null,
+    request:     data,
     admissionId,
   });
 });
