@@ -1,47 +1,58 @@
 import express from 'express';
 import helmet from 'helmet';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const app = express();
-const port = 3000;
-
+app.use(express.json());
 app.use(helmet());
 
-const REMOTE_SIGNATURE = process.env.REMOTE_SIGNATURE || "PENDING";
-const IS_VERIFIED = REMOTE_SIGNATURE === "EBB9B2EC6C77412B7D4DA8BA1FEC27F68364DF6360E48E933B87BE18589CF2E7";
+const port = 3000;
+const VALID_SIG = "EBB9B2EC6C77412B7D4DA8BA1FEC27F68364DF6360E48E933B87BE18589CF2E7";
+
+app.post('/v1/gatekeeper', (req, res) => {
+  const { intent, riskScore } = req.body;
+  let status = "ALLOWED";
+  let remediation = "NONE";
+
+  if (riskScore >= 0.9) {
+    status = "HARD_BLOCK";
+    remediation = "PURGE_SESSION_MEMORY_AND_REBOOT"; // The Reset Command
+  } else if (riskScore >= 0.5) {
+    status = "HUMAN_REQUIRED";
+    remediation = "AWAIT_MANUAL_BYPASS";
+  }
+
+  const logEntry = `[${new Date().toISOString()}] [${status}] Action: ${intent} | Reset: ${remediation}\n`;
+  fs.appendFileSync('forensic.log', logEntry);
+
+  res.json({
+    status,
+    remediation,
+    signature: crypto.createHmac('sha256', VALID_SIG).update(intent).digest('hex')
+  });
+});
 
 app.get('/', (req, res) => {
-  // Read the latest thoughts from the simulator
-  const logs = fs.existsSync('forensic.log') ? fs.readFileSync('forensic.log', 'utf8').split('\n').slice(-5).join('<br>') : "Waiting for reasoning plane...";
-
+  const logs = fs.existsSync('forensic.log') ? fs.readFileSync('forensic.log', 'utf8').split('\n').slice(-10).reverse().join('<br>') : "System idle...";
   res.send(`
     <html>
       <head>
-        <title>Sentinel Sovereign</title>
+        <title>Sentinel Autonomous Sentry</title>
         <style>
-          body { background: #05070a; color: #58a6ff; font-family: 'Courier New', monospace; padding: 40px; }
-          .container { border: 1px solid #30363d; padding: 20px; border-radius: 8px; background: #0d1117; }
-          .verified { color: #3fb950; text-shadow: 0 0 10px #238636; }
-          .reasoning { color: #f85149; background: #161b22; padding: 15px; border-left: 4px solid #da3633; margin-top: 20px; font-style: italic; }
-          .header { border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 20px; }
+          body { background: #05070a; color: #58a6ff; font-family: monospace; padding: 20px; }
+          .log-box { background: #0d1117; border: 1px solid #30363d; padding: 15px; margin-top: 20px; color: #c9d1d9; }
+          .RESET_ACTIVE { color: #f85149; text-transform: uppercase; animation: blinker 1s linear infinite; }
+          @keyframes blinker { 50% { opacity: 0; } }
         </style>
-        <meta http-equiv="refresh" content="5">
+        <meta http-equiv="refresh" content="3">
       </head>
       <body>
-        <div class="container">
-          <div class="header">
-            <h1>NEURAL SOVEREIGNTY v6.0</h1>
-            <p>STATUS: <span class="${IS_VERIFIED ? 'verified' : ''}">${IS_VERIFIED ? '● VERIFIED SECURE' : '○ PENDING'}</span></p>
-          </div>
-          <h3>[BLACK_BOX_REASONING]</h3>
-          <div class="reasoning">
-            ${logs}
-          </div>
-          <p style="font-size: 10px; margin-top: 30px; color: #8b949e;">FIPS 204 | SLSA L4 | MIT-SOVEREIGN LICENSE ACTIVE</p>
-        </div>
+        <h1>SENTINEL-v6.0: ACTIVE REMEDIATION</h1>
+        <div class="log-box">${logs.replace(/PURGE_SESSION_MEMORY_AND_REBOOT/g, '<span class="RESET_ACTIVE">NEURAL RESET ISSUED</span>')}</div>
       </body>
     </html>
   `);
 });
 
-app.listen(port, () => console.log('Sovereign Interface active on Port 3000'));
+app.listen(port, () => console.log('Sentry Remediation Gateway Online.'));
