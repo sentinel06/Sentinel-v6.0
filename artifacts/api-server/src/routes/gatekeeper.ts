@@ -48,10 +48,42 @@ const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
 const GatekeeperSchema = z.object({
   intent:    z.string().min(3).max(100),
   riskScore: z.number().min(0).max(1),
-  nonce:     z.string().optional(), // Prepare for Replay protection
+  nonce:     z.string().min(8).max(128).optional(), // Replay protection key
 });
 
 type GatekeeperRequest = z.infer<typeof GatekeeperSchema>;
+
+// ── Replay Protection (in-memory nonce ledger) ──────────────────────────────
+// Tracks every accepted nonce with an expiry timestamp. A repeated nonce
+// within the TTL window is rejected with 409 nonce_replayed.
+//
+// Single-process only. For horizontally-scaled deployments swap this Map
+// for a Redis SETNX with EX, keyed by `gk:nonce:<value>`.
+const NONCE_TTL_MS = 5 * 60 * 1000;          // 5-minute replay window
+const NONCE_CAP    = 10_000;                  // hard ceiling to bound memory
+const nonceLedger: Map<string, number> = new Map();
+
+function sweepExpiredNonces(now: number): void {
+  for (const [k, exp] of nonceLedger) {
+    if (exp <= now) nonceLedger.delete(k);
+  }
+}
+
+/**
+ * Returns true if `nonce` is fresh (not seen within TTL) and records it;
+ * returns false if it is a replay.
+ */
+function claimNonce(nonce: string, now: number): boolean {
+  // Opportunistic sweep when we hit the cap so we never grow unbounded.
+  if (nonceLedger.size >= NONCE_CAP) sweepExpiredNonces(now);
+
+  const existing = nonceLedger.get(nonce);
+  if (existing !== undefined && existing > now) {
+    return false; // replay within TTL
+  }
+  nonceLedger.set(nonce, now + NONCE_TTL_MS);
+  return true;
+}
 
 function setJsonHeaders(res: Response): void {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -85,6 +117,23 @@ router.post("/v1/gatekeeper", (req, res): void => {
 
   // ── Trusted, type-safe payload from this point forward ──────────────────
   const data: GatekeeperRequest = validation.data;
+
+  // ── Replay protection: reject reused nonces inside the TTL window ───────
+  if (data.nonce !== undefined) {
+    const now = Date.now();
+    if (!claimNonce(data.nonce, now)) {
+      res.status(409).json({
+        ok: false,
+        error: "nonce_replayed",
+        message: `Nonce has already been used within the ${NONCE_TTL_MS / 1000}s replay window.`,
+        nonce: data.nonce,
+        ttlSeconds: NONCE_TTL_MS / 1000,
+        timestamp: new Date(now).toISOString(),
+      });
+      return;
+    }
+  }
+
   const seal = getAttestation();
 
   const admissionId =
