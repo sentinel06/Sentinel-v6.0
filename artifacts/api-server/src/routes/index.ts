@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import badgeRouter from "./badge";
 import attestationRouter from "./attestation";
+import gatekeeperRouter from "./gatekeeper";
 import healthRouter from "./health";
 import logsRouter from "./logs";
 import governanceRouter from "./governance";
@@ -18,6 +19,7 @@ const router: IRouter = Router();
 
 router.use(badgeRouter);
 router.use(attestationRouter);
+router.use(gatekeeperRouter);
 router.use(healthRouter);
 router.use(logsRouter);
 router.use(governanceRouter);
