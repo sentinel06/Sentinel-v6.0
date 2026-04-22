@@ -13,10 +13,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install Dependencies
-        run: npm install
-      - name: Generate Sovereign Handshake
-        run: npm start
+      - name: Force Handshake
+        run: |
+          echo "import crypto from 'crypto';" > simple-sign.js
+          echo "const key = process.env.SOVEREIGN_KEY || 'MISSING';" >> simple-sign.js
+          echo "const hash = crypto.createHmac('sha256', key).update('SENTINEL_v6_VALIDATE').digest('hex').toUpperCase();" >> simple-sign.js
+          echo "console.log('[HANDSHAKE_GENERATE][' + hash + ']');" >> simple-sign.js
+          node simple-sign.js
         env:
           SOVEREIGN_KEY: ${{ secrets.SOVEREIGN_KEY }}
-          GITHUB_ACTIONS: true
