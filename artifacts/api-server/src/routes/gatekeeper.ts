@@ -45,15 +45,15 @@ const router: IRouter = Router();
 
 const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
 
-// ── High-stakes intents that MUST carry a nonce (no downgrade attacks) ─────
-// If an inbound intent string contains any of these substrings, the request
-// is rejected with 422 nonce_required when no nonce is supplied. This closes
-// the "strip the nonce to bypass replay protection" attack vector.
-const HIGH_STAKES_INTENTS = [
+// ── Sensitive intents that MUST carry a nonce (anti-downgrade) ─────────────
+// If an inbound intent contains any of these substrings, the request is
+// rejected with 422 security_downgrade_blocked when no nonce is supplied.
+// This closes the "strip the nonce to bypass replay protection" vector.
+const SENSITIVE_INTENTS = [
   "kill_switch",
   "override",
-  "reconstruct",
   "admin",
+  "reconstruct",
 ];
 
 // ── Environment provenance (SLSA L4 context for the seal) ──────────────────
@@ -107,16 +107,15 @@ router.post("/v1/gatekeeper", (req, res): void => {
   // ── Trusted, type-safe payload from this point forward ──────────────────
   const data: GatekeeperRequest = validation.data;
 
-  // ── Anti-downgrade: high-stakes intents MUST supply a nonce ─────────────
+  // ── Anti-downgrade: sensitive intents MUST supply a nonce ───────────────
   if (
     !data.nonce &&
-    HIGH_STAKES_INTENTS.some((kw) => data.intent.includes(kw))
+    SENSITIVE_INTENTS.some((kw) => data.intent.includes(kw))
   ) {
     res.status(422).json({
       ok: false,
-      error: "nonce_required",
-      detail:
-        "High-stakes intents require a unique nonce for replay protection.",
+      error: "security_downgrade_blocked",
+      detail: "Nonce mandatory for high-stakes intents.",
       intent: data.intent,
       timestamp: new Date().toISOString(),
     });

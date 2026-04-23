@@ -5,10 +5,15 @@
  * `SENTINEL_KEY` environment variable using a constant-time
  * comparison (defends against timing oracles).
  *
- * Behavior:
- *   • SENTINEL_KEY env var is unset/empty   → 503 (server misconfigured)
+ * Black-box failure policy (anti-recon):
+ *   Every failure path returns an identical 401 `unauthorized` response.
+ *   An outsider cannot distinguish "key not configured" from "key wrong"
+ *   from "header missing" — the server reveals no backend state. Internal
+ *   distinction is preserved only in the server-side audit log.
+ *
+ *   • SENTINEL_KEY env var unset/empty      → 401 unauthorized (logged: misconfig)
  *   • X-Sentinel-Key header missing/empty   → 401 unauthorized
- *   • header present but does not match     → 403 forbidden
+ *   • header present but does not match     → 401 unauthorized (logged: bad key)
  *   • header present and matches            → next()
  *
  * Apply via:
@@ -23,19 +28,17 @@ import { safeCompare } from "../lib/safeCompare";
 
 const HEADER_NAME = "x-sentinel-key";
 
-function reject(
-  res: Response,
-  status: number,
-  code: string,
-  message: string,
-): void {
+// Single, opaque rejection used for every failure path. Returning the same
+// status, error code, and message regardless of the underlying cause prevents
+// an outsider from probing the server's configuration state.
+function denyOpaque(res: Response): void {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.status(status).json({
+  res.status(401).json({
     ok: false,
-    error: code,
-    message,
+    error: "unauthorized",
+    message: "Unauthorized.",
     timestamp: new Date().toISOString(),
   });
 }
@@ -46,17 +49,15 @@ export const authMiddleware: RequestHandler = (
   next: NextFunction,
 ): void => {
   const expected = process.env["SENTINEL_KEY"];
+
+  // Misconfiguration: log loudly server-side, but present an identical 401
+  // to the caller so config status doesn't leak.
   if (!expected || expected.length === 0) {
     logger.error(
       { url: req.url, method: req.method },
-      "authMiddleware: SENTINEL_KEY env var is not configured — rejecting admin request",
+      "authMiddleware: SENTINEL_KEY env var is not configured — denying (opaque 401)",
     );
-    reject(
-      res,
-      503,
-      "auth_not_configured",
-      "Admin authentication is not configured on this server. SENTINEL_KEY env var is missing.",
-    );
+    denyOpaque(res);
     return;
   }
 
@@ -64,12 +65,7 @@ export const authMiddleware: RequestHandler = (
   const provided = typeof raw === "string" ? raw.trim() : "";
 
   if (provided.length === 0) {
-    reject(
-      res,
-      401,
-      "missing_sentinel_key",
-      "Admin route requires the X-Sentinel-Key header.",
-    );
+    denyOpaque(res);
     return;
   }
 
@@ -78,12 +74,7 @@ export const authMiddleware: RequestHandler = (
       { url: req.url, method: req.method },
       "authMiddleware: invalid X-Sentinel-Key on admin request",
     );
-    reject(
-      res,
-      403,
-      "invalid_sentinel_key",
-      "X-Sentinel-Key did not match the configured admin key.",
-    );
+    denyOpaque(res);
     return;
   }
 
