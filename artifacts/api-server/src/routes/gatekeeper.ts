@@ -3,53 +3,34 @@
  *
  * POST /v1/gatekeeper
  *
- * Issues a signed admission seal for an inbound agent / action request.
- * Every response is signed with getAttestation() — single source of truth
- * shared with the badge SVG <metadata> and the /v1/attestation JSON endpoint.
+ * Issues a real ML-DSA-87 signed admission seal for an inbound request.
+ * The signature is bound to the service name "gatekeeper" via
+ * signWithContext(), so an itasca-bound signature can never be replayed
+ * here and vice versa.
  *
- * ── Schema Guard (Zod) ──────────────────────────────────────────────────────
- * Body MUST conform to GatekeeperSchema:
- *   {
- *     intent:    string  (3..100 chars)        // e.g. "deploy_swarm_v6"
- *     riskScore: number  (0..1, inclusive)      // 0=safe, 1=critical
- *     nonce?:    string                          // reserved for replay protection
- *   }
- *
- * Validation failures return 400 with structured `issues` from Zod so callers
- * can surface field-level errors. Only `validation.data` is used downstream;
- * raw `req.body` is never trusted past the guard.
- *
- * Response (200, application/json):
- *   {
- *     admitted: true,
- *     status: "verified",
- *     signature: "SENTINEL_SIG_0x7A_F3_9C",
- *     timestamp: ISO-8601,
- *     fingerprint: "7A:F3:9C:21:E4:8B:5D:62",
- *     standard: "FIPS-204",
- *     algorithm: "ML-DSA-87",
- *     slsaLevel: 4,
- *     release: "v6.0-neural-sovereignty",
- *     environment: { provider, region, platform },
- *     request: { intent, riskScore, nonce? },
- *     admissionId: "GK-<timestamp>-<rand>"
- *   }
+ * ── Pipeline ───────────────────────────────────────────────────────────────
+ *   1. Zod schema guard       → 400 invalid_payload
+ *   2. Anti-downgrade check   → 422 security_downgrade_blocked
+ *   3. Nonce replay check     → 409 nonce_replayed
+ *   4. Sign payload (ML-DSA-87 with service binding)
+ *   5. Return signed envelope → 200
  */
 
-import { Router, type IRouter, type Response } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { getAttestation } from "../attestation";
 import { verifyAndStoreNonce, NONCE_TTL_MS } from "../lib/nonce";
 import { getEnvironment } from "../lib/environment";
+import {
+  signWithContext,
+  getPublicKeyFingerprint,
+  SENTINEL_ALGORITHM,
+  SENTINEL_STANDARD,
+} from "../lib/crypto";
 
 const router: IRouter = Router();
 
-const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
+const SERVICE_NAME = "gatekeeper" as const;
 
-// ── Sensitive intents that MUST carry a nonce (anti-downgrade) ─────────────
-// If an inbound intent contains any of these substrings, the request is
-// rejected with 422 security_downgrade_blocked when no nonce is supplied.
-// This closes the "strip the nonce to bypass replay protection" vector.
 const SENSITIVE_INTENTS = [
   "kill_switch",
   "override",
@@ -57,16 +38,15 @@ const SENSITIVE_INTENTS = [
   "reconstruct",
 ];
 
-// ── Environment provenance (SLSA L4 context for the seal) ──────────────────
-// Sourced from lib/environment so gatekeeper, itasca, and future signed
-// routes share one detection rule (replit | aws-ec2 | unknown).
+// Module-level caches — captured once, reused per request to avoid
+// redundant env parsing and SHA-256 recomputation on the hot path.
 const ENVIRONMENT_METADATA = getEnvironment();
+const FINGERPRINT = getPublicKeyFingerprint();
 
-// ── Schema Guard ────────────────────────────────────────────────────────────
 const GatekeeperSchema = z.object({
   intent:    z.string().min(3).max(100),
   riskScore: z.number().min(0).max(1),
-  nonce:     z.string().min(8).max(128).optional(), // Replay protection key
+  nonce:     z.string().min(8).max(128).optional(),
 });
 
 type GatekeeperRequest = z.infer<typeof GatekeeperSchema>;
@@ -85,12 +65,11 @@ router.options("/v1/gatekeeper", (_req, res): void => {
   res.sendStatus(204);
 });
 
-router.post("/v1/gatekeeper", (req, res): void => {
+router.post("/v1/gatekeeper", async (req: Request, res: Response): Promise<void> => {
   setJsonHeaders(res);
 
-  // ── Schema Guard: validate request body before any business logic ────────
+  // 1. Schema guard
   const validation = GatekeeperSchema.safeParse(req.body);
-
   if (!validation.success) {
     res.status(400).json({
       ok: false,
@@ -101,10 +80,9 @@ router.post("/v1/gatekeeper", (req, res): void => {
     return;
   }
 
-  // ── Trusted, type-safe payload from this point forward ──────────────────
   const data: GatekeeperRequest = validation.data;
 
-  // ── Anti-downgrade: sensitive intents MUST supply a nonce ───────────────
+  // 2. Anti-downgrade — sensitive intents must carry a nonce
   if (
     !data.nonce &&
     SENSITIVE_INTENTS.some((kw) => data.intent.includes(kw))
@@ -119,36 +97,50 @@ router.post("/v1/gatekeeper", (req, res): void => {
     return;
   }
 
-  // ── Replay protection: reject reused nonces inside the TTL window ───────
-  if (data.nonce && !verifyAndStoreNonce(data.nonce)) {
-    res.status(409).json({
-      ok: false,
-      error: "nonce_replayed",
-      detail: "Nonce already consumed.",
-      nonce: data.nonce,
-      ttlSeconds: NONCE_TTL_MS / 1000,
-      timestamp: new Date().toISOString(),
-    });
-    return;
+  // 3. Replay protection (await — backend may be Redis or memory)
+  if (data.nonce) {
+    const fresh = await verifyAndStoreNonce(data.nonce);
+    if (!fresh) {
+      res.status(409).json({
+        ok: false,
+        error: "nonce_replayed",
+        detail: "Nonce already consumed.",
+        nonce: data.nonce,
+        ttlSeconds: NONCE_TTL_MS / 1000,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
   }
 
-  const seal = getAttestation();
-
+  // 4. Build & sign the admission envelope
+  const timestamp = new Date().toISOString();
   const admissionId =
     `GK-${Date.now().toString(36).toUpperCase()}-` +
     Math.random().toString(36).slice(2, 8).toUpperCase();
 
-  res.status(200).json({
+  // The payload that gets signed — service-bound via signWithContext
+  const payload = {
     admitted:    true,
-    ...seal,
-    fingerprint: ML_DSA_87_FINGERPRINT,
-    standard:    "FIPS-204",
-    algorithm:   "ML-DSA-87",
+    status:      "verified",
+    timestamp,
+    admissionId,
+    request:     data,
+    environment: ENVIRONMENT_METADATA,
+  };
+
+  const signature = signWithContext(SERVICE_NAME, payload);
+
+  // 5. Respond with the signed envelope
+  res.status(200).json({
+    ...payload,
+    fingerprint: FINGERPRINT,
+    standard:    SENTINEL_STANDARD,
+    algorithm:   SENTINEL_ALGORITHM,
     slsaLevel:   4,
     release:     "v6.0-neural-sovereignty",
-    environment: ENVIRONMENT_METADATA,
-    request:     data,
-    admissionId,
+    service:     SERVICE_NAME,
+    signature,
   });
 });
 

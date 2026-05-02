@@ -1,33 +1,48 @@
 /**
  * Attestation Route — JSON surface for the Sentinel v6.0 sovereign seal.
  *
- * GET /v1/attestation       → { status, signature, timestamp, environment, fingerprint }
+ * GET /v1/attestation
  *
- * Calls getAttestation() from src/attestation.ts so the SAME signature surfaces
- * across the CLI, the badge SVG <title>, and this JSON endpoint — single source
- * of truth for the v6.0 release seal.
+ * Returns the static envelope (algorithm, standard, slsaLevel, release,
+ * environment, fingerprint) plus a real ML-DSA-87 signature bound to the
+ * service name "attestation".
  */
 
 import { Router, type IRouter } from "express";
-import { getAttestation } from "../attestation";
+import { getEnvironment } from "../lib/environment";
+import {
+  signWithContext,
+  getPublicKeyFingerprint,
+  SENTINEL_ALGORITHM,
+  SENTINEL_STANDARD,
+} from "../lib/crypto";
 
 const router: IRouter = Router();
 
-const ML_DSA_87_FINGERPRINT = "7A:F3:9C:21:E4:8B:5D:62";
+const SERVICE_NAME = "attestation" as const;
+const ENVIRONMENT_METADATA = getEnvironment();
+const FINGERPRINT = getPublicKeyFingerprint();
 
 router.get("/v1/attestation", (_req, res): void => {
-  const seal = getAttestation();
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
+
+  const payload = {
+    status:      "verified" as const,
+    timestamp:   new Date().toISOString(),
+    environment: ENVIRONMENT_METADATA,
+    fingerprint: FINGERPRINT,
+    standard:    SENTINEL_STANDARD,
+    algorithm:   SENTINEL_ALGORITHM,
+    slsaLevel:   4,
+    release:     "v6.0-neural-sovereignty",
+  };
+
   res.status(200).json({
-    ...seal,
-    environment:  process.env.GITHUB_ENVIRONMENT ?? null,
-    fingerprint:  ML_DSA_87_FINGERPRINT,
-    standard:     "FIPS-204",
-    algorithm:    "ML-DSA-87",
-    slsaLevel:    4,
-    release:      "v6.0-neural-sovereignty",
+    ...payload,
+    service:   SERVICE_NAME,
+    signature: signWithContext(SERVICE_NAME, payload),
   });
 });
 
