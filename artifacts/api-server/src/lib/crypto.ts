@@ -25,7 +25,23 @@ import { createHash, randomBytes } from "node:crypto";
 import stableStringify from "json-stable-stringify";
 import { logger } from "./logger";
 
-const POOL_SIZE = 4;
+/**
+ * Worker pool size. Default 4 (local dev). In production set to match the
+ * deployment's vCPU budget — the Fargate task definition pins this to 3
+ * (2-vCPU task: 1 vCPU for the event loop + 3 sign workers, ~2x oversub
+ * which is the empirical sweet spot for tail latency at 25c).
+ */
+const POOL_SIZE: number = (() => {
+  const raw = process.env["SENTINEL_CRYPTO_POOL_SIZE"];
+  if (!raw) return 4;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 32) {
+    throw new Error(
+      `SENTINEL_CRYPTO_POOL_SIZE must be an integer in [1, 32], got: ${raw}`,
+    );
+  }
+  return n;
+})();
 
 interface Keypair {
   readonly publicKey: Uint8Array;

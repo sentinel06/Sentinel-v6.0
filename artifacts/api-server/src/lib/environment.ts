@@ -6,13 +6,16 @@
  * detection logic in one place — gatekeeper, itasca, and any future signed
  * route reuse the same source of truth.
  *
- * Detection precedence:
- *   1. Replit  — REPL_ID, REPLIT_SLUG, or REPLIT_DEV_DOMAIN
- *   2. AWS EC2 — AWS_EXECUTION_ENV, AWS_REGION, or EC2_INSTANCE_ID
- *   3. unknown — anything else (bare metal, local dev outside Replit, etc.)
+ * Detection precedence (top wins — order matters because some hosts set
+ * overlapping signals; Fargate also exposes AWS_REGION, for example):
+ *   1. AWS Fargate — ECS_CONTAINER_METADATA_URI_V4 (ECS agent injects this
+ *      into every Fargate task) or AWS_EXECUTION_ENV === "AWS_ECS_FARGATE"
+ *   2. Replit      — REPL_ID, REPLIT_SLUG, or REPLIT_DEV_DOMAIN
+ *   3. AWS EC2     — AWS_EXECUTION_ENV, AWS_REGION, or EC2_INSTANCE_ID
+ *   4. unknown     — anything else (bare metal, local dev outside Replit, etc.)
  */
 
-export type Provider = "replit" | "aws-ec2" | "unknown";
+export type Provider = "aws-fargate" | "replit" | "aws-ec2" | "unknown";
 
 export interface EnvironmentMetadata {
   readonly provider: Provider;
@@ -21,6 +24,16 @@ export interface EnvironmentMetadata {
 }
 
 function detectProvider(): Provider {
+  // Fargate first — the ECS task agent injects ECS_CONTAINER_METADATA_URI_V4
+  // into every running container; AWS_EXECUTION_ENV=AWS_ECS_FARGATE is the
+  // documented secondary signal. Both also set AWS_REGION, so detecting
+  // Fargate before generic AWS prevents misclassification as aws-ec2.
+  if (
+    process.env["ECS_CONTAINER_METADATA_URI_V4"] ||
+    process.env["AWS_EXECUTION_ENV"] === "AWS_ECS_FARGATE"
+  ) {
+    return "aws-fargate";
+  }
   if (
     process.env["REPL_ID"] ||
     process.env["REPLIT_SLUG"] ||

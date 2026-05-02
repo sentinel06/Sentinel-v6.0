@@ -1,0 +1,39 @@
+# Sentinel container build — exclude host-side artifacts so pnpm install
+# inside the builder stage produces a deterministic node_modules tree.
+
+# Host installs (re-created in the builder stage)
+**/node_modules
+**/dist
+**/.turbo
+**/.next
+**/.cache
+
+# VCS + Replit workspace metadata
+.git
+.gitignore
+**/.replit
+**/.replit-artifact
+**/.local
+**/.upm
+
+# Logs / scratch
+**/server.log
+**/*.log
+**/.DS_Store
+**/coverage
+**/playwright-report
+**/test-results
+
+# Local secrets (never bake into images)
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Editor / OS noise
+.vscode
+.idea
+**/Thumbs.db
+
+# Don't ship the deploy folder INTO the image — Terraform runs from the host
+artifacts/api-server/deploy
