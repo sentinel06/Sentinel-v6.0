@@ -1,3 +1,4 @@
+import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -46,5 +47,45 @@ app.use((req, res, next) => {
 });
 
 app.use("/api", router);
+
+// ── Production: serve the bundled dashboard from the same process ──────────
+// Replit autoscale (Cloud Run) wants ONE container with ONE process exposing
+// ONE port. In dev the path-router proxies "/" → dashboard:25417 and "/api"
+// → api-server:8080, but production cannot disambiguate two artifacts. So
+// we unify: in production the api-server also serves the dashboard's vite
+// build output. /api/* hits the API; everything else falls through to the
+// SPA shell with client-side routing.
+if (process.env["NODE_ENV"] === "production") {
+  // The production run command launches from the workspace root
+  // (`node --enable-source-maps artifacts/api-server/dist/index.mjs`),
+  // so process.cwd() is reliably the repo root.
+  const dashboardDist = path.resolve(
+    process.cwd(),
+    "artifacts/sentinel-dashboard/dist/public",
+  );
+  logger.info({ dashboardDist }, "Serving bundled dashboard from api-server");
+
+  // Real assets (hashed JS/CSS, fonts, etc.) — long cache, no auto-index so
+  // the SPA fallback below owns the `/` route exclusively.
+  app.use(
+    express.static(dashboardDist, {
+      index: false,
+      maxAge: "1h",
+      fallthrough: true,
+    }),
+  );
+
+  // SPA fallback. Anything that isn't /api/* and isn't a real static asset
+  // gets index.html so React Router can resolve client-side. Use a middleware
+  // (not a RegExp route) because Express 5's path-to-regexp v8 changed
+  // RegExp route semantics — middleware ordering is the safe contract.
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(dashboardDist, "index.html"));
+  });
+}
 
 export default app;

@@ -17,14 +17,13 @@ localPort = 25417
 [services.development]
 run = "pnpm --filter @workspace/sentinel-dashboard run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/sentinel-dashboard", "run", "build" ]
-publicDir = "artifacts/sentinel-dashboard/dist/public"
-serve = "static"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+# NOTE: [services.production] is intentionally absent.
+# In production the dashboard is bundled by the api-server's build command
+# and served by api-server's Express (see artifacts/api-server/src/app.ts).
+# This gives Replit autoscale ONE unambiguous artifact to deploy and run.
+# Keeping a [services.production] block here would re-introduce the
+# "multiple workspace projects were built but the deployment doesn't know
+# which one to run" failure.
 
 [services.env]
 PORT = "25417"

@@ -15,7 +15,17 @@ run = "pnpm --filter @workspace/api-server run dev"
 [services.production]
 
 [services.production.build]
-args = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
+# Build BOTH the dashboard (its vite output is served by Express in
+# production — see app.ts) and the api-server. This makes the api-server
+# the single autoscale deployable: one container, one port, one run command.
+# Order matters: dashboard first so its dist/public exists when the
+# api-server image is assembled.
+args = [
+  "pnpm",
+  "--filter", "@workspace/sentinel-dashboard",
+  "--filter", "@workspace/api-server",
+  "run", "build",
+]
 
 [services.production.build.env]
 NODE_ENV = "production"
