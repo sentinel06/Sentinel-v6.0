@@ -7,12 +7,17 @@ id = "3B4_FFSkEVBkAeYMFRJ2e"
 [[services]]
 localPort = 8080
 name = "API Server"
+# In dev the dashboard runs on its own Vite workflow at "/", so the
+# api-server only claims its API routes. In production the dashboard
+# is bundled and served by this same Express process (see app.ts), so
+# we override paths below to claim "/" as well.
 paths = ["/api", "/api/v1/ws"]
 
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"
 
 [services.production]
+paths = ["/"]
 
 [services.production.build]
 # Build BOTH the dashboard (its vite output is served by Express in
