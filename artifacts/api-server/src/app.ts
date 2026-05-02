@@ -2,6 +2,7 @@ import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middleware/authMiddleware";
@@ -47,6 +48,23 @@ app.use((req, res, next) => {
 });
 
 app.use("/api", router);
+
+// ── Development: proxy non-API requests to the dashboard's Vite dev server ──
+// In dev the api-server claims "/" at the proxy layer (so prod has a single
+// upstream for the SPA). To preserve HMR locally, forward everything that is
+// NOT /api/* to the dashboard's standalone Vite workflow on port 25417.
+if (process.env["NODE_ENV"] !== "production") {
+  const dashboardDevTarget = "http://localhost:25417";
+  app.use(
+    createProxyMiddleware({
+      target: dashboardDevTarget,
+      changeOrigin: true,
+      ws: true,
+      pathFilter: (pathname) => !pathname.startsWith("/api"),
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+    }),
+  );
+}
 
 // ── Production: serve the bundled dashboard from the same process ──────────
 // Replit autoscale (Cloud Run) wants ONE container with ONE process exposing
