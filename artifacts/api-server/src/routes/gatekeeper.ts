@@ -30,7 +30,7 @@
  *     algorithm: "ML-DSA-87",
  *     slsaLevel: 4,
  *     release: "v6.0-neural-sovereignty",
- *     environment: string | null,
+ *     environment: { provider, region, platform },
  *     request: { intent, riskScore, nonce? },
  *     admissionId: "GK-<timestamp>-<rand>"
  *   }
@@ -40,6 +40,7 @@ import { Router, type IRouter, type Response } from "express";
 import { z } from "zod";
 import { getAttestation } from "../attestation";
 import { verifyAndStoreNonce, NONCE_TTL_MS } from "../lib/nonce";
+import { getEnvironment } from "../lib/environment";
 
 const router: IRouter = Router();
 
@@ -57,13 +58,9 @@ const SENSITIVE_INTENTS = [
 ];
 
 // ── Environment provenance (SLSA L4 context for the seal) ──────────────────
-// Captured once at module load — process env is immutable for the lifetime
-// of the gatekeeper, so there's no need to rebuild this per-request.
-const ENVIRONMENT_METADATA = {
-  provider: process.env["REPLIT_SLUG"] ? "replit" : "unknown",
-  region:   process.env["REPLIT_REGION"] || "local",
-  platform: process.platform,
-} as const;
+// Sourced from lib/environment so gatekeeper, itasca, and future signed
+// routes share one detection rule (replit | aws-ec2 | unknown).
+const ENVIRONMENT_METADATA = getEnvironment();
 
 // ── Schema Guard ────────────────────────────────────────────────────────────
 const GatekeeperSchema = z.object({
