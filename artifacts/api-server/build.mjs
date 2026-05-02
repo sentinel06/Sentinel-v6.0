@@ -15,11 +15,18 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      // Second entry — bundled separately so it can be spawned as a Worker
+      // from the main bundle via `new Worker(new URL("./lib/crypto-worker.mjs", import.meta.url))`.
+      path.resolve(artifactDir, "src/lib/crypto-worker.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",
     outdir: distDir,
+    // Preserve src-relative paths so the worker lands at dist/lib/crypto-worker.mjs
+    outbase: path.resolve(artifactDir, "src"),
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.

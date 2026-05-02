@@ -32,16 +32,28 @@ interface NonceBackend {
 }
 
 // ── Memory backend ──────────────────────────────────────────────────────────
+interface MemoryEntry {
+  expiry: number;             // epoch ms when this nonce becomes free again
+  timer: NodeJS.Timeout;      // pending eviction handle (so we can clear it)
+}
+
 function createMemoryBackend(): NonceBackend {
-  const seen = new Map<string, number>(); // nonce → expiry epoch ms
+  const seen = new Map<string, MemoryEntry>();
 
   return {
     kind: "memory",
     async verifyAndStore(nonce: string): Promise<boolean> {
       const now = Date.now();
-      const expiry = seen.get(nonce);
-      if (expiry !== undefined && expiry > now) {
+      const existing = seen.get(nonce);
+      if (existing && existing.expiry > now) {
         return false; // replay inside window
+      }
+
+      // If a stale entry is still here (expired but not yet evicted), clear
+      // the orphaned timer before we overwrite — prevents accumulation in
+      // the timer wheel under sustained re-use of the same nonce string.
+      if (existing) {
+        clearTimeout(existing.timer);
       }
 
       // Cap canary — log once per CAP_WARN_INTERVAL_MS while saturated.
@@ -55,14 +67,17 @@ function createMemoryBackend(): NonceBackend {
         }
         // Best-effort sweep so we don't grow unboundedly even if some
         // setTimeout handles missed (e.g. timer-wheel pressure).
-        for (const [k, exp] of seen) {
-          if (exp <= now) seen.delete(k);
+        for (const [k, entry] of seen) {
+          if (entry.expiry <= now) {
+            clearTimeout(entry.timer);
+            seen.delete(k);
+          }
         }
       }
 
-      seen.set(nonce, now + NONCE_TTL_MS_VALUE);
-      // Active eviction so the Map shrinks back to baseline under steady load.
-      setTimeout(() => seen.delete(nonce), NONCE_TTL_MS_VALUE).unref();
+      const timer = setTimeout(() => seen.delete(nonce), NONCE_TTL_MS_VALUE);
+      timer.unref();
+      seen.set(nonce, { expiry: now + NONCE_TTL_MS_VALUE, timer });
       return true;
     },
   };

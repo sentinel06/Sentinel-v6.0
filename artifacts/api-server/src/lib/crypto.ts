@@ -1,28 +1,31 @@
 /**
- * Sentinel Sovereign Crypto — FIPS-204 / ML-DSA-87 signing.
+ * Sentinel Sovereign Crypto — FIPS-204 / ML-DSA-87 signing with worker pool.
  *
- * Real post-quantum signing layer. Replaces the previous SENTINEL_SIG_*
- * placeholder constant.
+ * Architecture (Parallel Sovereignty build):
+ *   ┌──────────────┐    postMessage    ┌──────────────┐
+ *   │  Main thread │ ────────────────> │ 4 workers    │
+ *   │  (event-loop)│ <──────────────── │ (sign here)  │
+ *   └──────────────┘    base64 sig     └──────────────┘
  *
- * Provides:
- *   • One sovereign keypair per process (lazy, from SENTINEL_SIGNING_SEED
- *     env hex if present — deterministic — else 32 random bytes).
- *   • signWithContext(service, payload) — prepends the service name to
- *     the canonicalized payload before signing. This domain-separation
- *     defends against cross-service signature replay (an itasca heartbeat
- *     can never validate as a gatekeeper admission and vice versa).
- *   • getPublicKeyFingerprint() — SHA-256(publicKey), first 8 bytes,
- *     formatted XX:XX:XX:XX:XX:XX:XX:XX, for human-readable seal display.
+ * Why workers?
+ *   ML-DSA-87 sign is ~3-5ms of single-thread CPU. Doing it inline on the
+ *   Express event loop means every signing request blocks every other
+ *   request behind it. With a 4-worker pool we get ~4x sign throughput
+ *   AND the event loop is never blocked, so RPS-level latency stays flat.
  *
- * Why ML-DSA-87 (Dilithium5)?
- *   FIPS-204 standard, NIST-selected, ~256-bit post-quantum security level,
- *   ~4627-byte signatures. Used because the Sentinel seal must remain
- *   verifiable against future quantum-capable adversaries.
+ * Canonicalization:
+ *   bindContext() uses json-stable-stringify so signatures are reproducible
+ *   across runtimes / platforms (key ordering deterministic). This is
+ *   required for any third-party verifier to ever validate our seal.
  */
 
 import { ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
+import { Worker } from "node:worker_threads";
 import { createHash, randomBytes } from "node:crypto";
+import stableStringify from "json-stable-stringify";
 import { logger } from "./logger";
+
+const POOL_SIZE = 4;
 
 interface Keypair {
   readonly publicKey: Uint8Array;
@@ -32,16 +35,7 @@ interface Keypair {
 let cachedKeypair: Keypair | null = null;
 let cachedFingerprint: string | null = null;
 
-/**
- * Resolve a 32-byte signing seed.
- *
- * Priority:
- *   1. SENTINEL_SIGNING_SEED env (64-char hex) — deterministic, key persists
- *      across restarts so attestations remain verifiable by callers who
- *      cached the public key.
- *   2. Random 32 bytes — keypair regenerates per process. Fingerprint
- *      changes on restart; fine for ephemeral dev, BAD for production.
- */
+// ── Seed resolution ─────────────────────────────────────────────────────────
 function resolveSeed(): Uint8Array {
   const hex = process.env["SENTINEL_SIGNING_SEED"];
   if (hex && /^[0-9a-fA-F]{64}$/.test(hex)) {
@@ -68,6 +62,65 @@ function getKeypair(): Keypair {
   return cachedKeypair;
 }
 
+// ── Worker pool ─────────────────────────────────────────────────────────────
+interface PendingSign {
+  resolve: (signature: string) => void;
+  reject: (err: Error) => void;
+}
+
+let workers: Worker[] = [];
+let nextWorkerIdx = 0;
+let nextRequestId = 0;
+const pendingSigns = new Map<number, PendingSign>();
+let poolInitialized = false;
+
+function initWorkerPool(): void {
+  if (poolInitialized) return;
+  poolInitialized = true;
+
+  const { secretKey } = getKeypair();
+  // Resolve worker URL relative to the running bundle. After build, this
+  // file is bundled into dist/index.mjs and the worker into
+  // dist/lib/crypto-worker.mjs, so the relative path is "./lib/crypto-worker.mjs".
+  const workerUrl = new URL("./lib/crypto-worker.mjs", import.meta.url);
+
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const w = new Worker(workerUrl, {
+      // Pass secret key bytes; structuredClone copies them into the worker.
+      workerData: { secretKey: Buffer.from(secretKey) },
+    });
+
+    w.on("message", (msg: { id: number; signature?: string; error?: string }) => {
+      const pending = pendingSigns.get(msg.id);
+      if (!pending) return;
+      pendingSigns.delete(msg.id);
+      if (msg.error) {
+        pending.reject(new Error(msg.error));
+      } else if (msg.signature) {
+        pending.resolve(msg.signature);
+      } else {
+        pending.reject(new Error("worker returned malformed response"));
+      }
+    });
+
+    w.on("error", (err) => {
+      logger.error({ err, workerIdx: i }, "crypto worker emitted error event");
+    });
+
+    w.on("exit", (code) => {
+      if (code !== 0) {
+        logger.error({ workerIdx: i, code }, "crypto worker exited unexpectedly");
+      }
+    });
+
+    workers.push(w);
+  }
+
+  logger.info({ poolSize: POOL_SIZE }, "ML-DSA-87 signing worker pool ready");
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
 /**
  * SHA-256(publicKey) truncated to 8 bytes, colon-separated, uppercased.
  *   e.g. "7A:F3:9C:21:E4:8B:5D:62"
@@ -86,33 +139,39 @@ export function getPublicKeyFingerprint(): string {
 /**
  * Build the canonical message bound to a specific service.
  *
- *   "<service>|<JSON.stringify(payload)>"
+ *   "<service>|<canonical-JSON(payload)>"
  *
- * The service name is OUTSIDE the JSON envelope so it can never be confused
- * with a payload field. The pipe separator is reserved (not a valid JSON
- * character at top level) so an attacker cannot construct a payload that
- * collides with another service's message.
+ * Uses json-stable-stringify so key ordering is deterministic — required
+ * for third-party verifiers to reproduce the exact byte sequence we signed.
  */
 function bindContext(service: string, payload: unknown): Uint8Array {
-  const message = `${service}|${JSON.stringify(payload)}`;
+  const canonical = stableStringify(payload) ?? "";
+  const message = `${service}|${canonical}`;
   return new TextEncoder().encode(message);
 }
 
 /**
- * Sign a payload with sovereign sovereign-bound context.
+ * Sign a payload via the worker pool. Async — never blocks the event loop.
  * Returns a base64 signature string suitable for transport.
  */
-export function signWithContext(service: string, payload: unknown): string {
-  const { secretKey } = getKeypair();
+export function signWithContext(service: string, payload: unknown): Promise<string> {
+  initWorkerPool();
   const message = bindContext(service, payload);
-  // @noble/post-quantum 0.6.x signature: sign(message, secretKey)
-  const sig = ml_dsa87.sign(message, secretKey);
-  return Buffer.from(sig).toString("base64");
+
+  const id = nextRequestId++;
+  const worker = workers[nextWorkerIdx]!;
+  nextWorkerIdx = (nextWorkerIdx + 1) % POOL_SIZE;
+
+  return new Promise<string>((resolve, reject) => {
+    pendingSigns.set(id, { resolve, reject });
+    worker.postMessage({ id, message });
+  });
 }
 
 /**
- * Verify a signature against a payload + service binding. Used by
- * downstream consumers / tests to validate the seal.
+ * Verify a signature against a payload + service binding.
+ * Synchronous — runs in the main thread because verify is called rarely
+ * (forensics, tests) and avoiding worker round-trip latency is preferable.
  */
 export function verifyWithContext(
   service: string,
@@ -123,7 +182,6 @@ export function verifyWithContext(
     const { publicKey } = getKeypair();
     const message = bindContext(service, payload);
     const sig = Uint8Array.from(Buffer.from(signatureBase64, "base64"));
-    // @noble/post-quantum 0.6.x signature: verify(signature, message, publicKey)
     return ml_dsa87.verify(sig, message, publicKey);
   } catch {
     return false;
@@ -133,6 +191,13 @@ export function verifyWithContext(
 /** Returns the public key as a base64 string for distribution. */
 export function getPublicKeyBase64(): string {
   return Buffer.from(getKeypair().publicKey).toString("base64");
+}
+
+/** Graceful shutdown — terminate workers so the process can exit cleanly. */
+export async function shutdownCryptoWorkers(): Promise<void> {
+  await Promise.all(workers.map((w) => w.terminate()));
+  workers = [];
+  poolInitialized = false;
 }
 
 export const SENTINEL_ALGORITHM = "ML-DSA-87" as const;

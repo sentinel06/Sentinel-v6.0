@@ -129,7 +129,7 @@ router.post("/v1/gatekeeper", async (req: Request, res: Response): Promise<void>
     environment: ENVIRONMENT_METADATA,
   };
 
-  const signature = signWithContext(SERVICE_NAME, payload);
+  const signature = await signWithContext(SERVICE_NAME, payload);
 
   // 5. Respond with the signed envelope
   res.status(200).json({

@@ -23,7 +23,7 @@ const SERVICE_NAME = "attestation" as const;
 const ENVIRONMENT_METADATA = getEnvironment();
 const FINGERPRINT = getPublicKeyFingerprint();
 
-router.get("/v1/attestation", (_req, res): void => {
+router.get("/v1/attestation", async (_req, res): Promise<void> => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -42,7 +42,7 @@ router.get("/v1/attestation", (_req, res): void => {
   res.status(200).json({
     ...payload,
     service:   SERVICE_NAME,
-    signature: signWithContext(SERVICE_NAME, payload),
+    signature: await signWithContext(SERVICE_NAME, payload),
   });
 });
 
