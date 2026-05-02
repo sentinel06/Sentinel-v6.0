@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
@@ -9,7 +9,14 @@ import {
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
 import SovereignInduction from "./SovereignInduction";
-import { DataRoomExport } from "./DataRoomExport";
+
+// DataRoomExport pulls in jspdf + jszip + qrcode (~500 KB combined). It only
+// renders for Certified Operators in the sidebar footer, so we defer the
+// chunk until the layout is mounted. Suspense fallback below renders an
+// empty box so the layout doesn't shift.
+const DataRoomExport = lazy(() =>
+  import("./DataRoomExport").then((m) => ({ default: m.DataRoomExport })),
+);
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -911,8 +918,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         }}>
           {/* Operator HEX-ID badge */}
           <OperatorBadge />
-          {/* Sovereign Data Room export (Certified Operator only) */}
-          <DataRoomExport />
+          {/* Sovereign Data Room export (Certified Operator only).
+              Lazy-loaded — fallback is an empty 1px line so the footer
+              layout doesn't reflow when the chunk lands. */}
+          <Suspense fallback={<div style={{ height: 1 }} />}>
+            <DataRoomExport />
+          </Suspense>
           <div style={{
             padding: "10px 16px",
             display: "flex", alignItems: "center", gap: 8,
