@@ -188,7 +188,13 @@ export class PulseEngine {
     );
 
     // ── Broadcast Pulse Fault to War Room if below threshold ───────────────
-    if (status === "ALERT" || status === "UNDER_INVESTIGATION") {
+    // NOTE: `status` is typed as the full union (NOMINAL|ALERT|UNDER_INVESTIGATION)
+    // but the classification block above only ever assigns ALERT. The
+    // UNDER_INVESTIGATION state is reserved for future tiered-fault logic
+    // (e.g. multi-pulse degradation). Until that lands, only ALERT triggers
+    // a War Room broadcast — TS rightly flags any UNDER_INVESTIGATION
+    // comparison here as dead code.
+    if (status === "ALERT") {
       broadcastGovernanceEvent("pulse_fault", {
         pulseId:              inserted!.id,
         globalIntegrityIndex: globalIntegrityIndex.toFixed(4),

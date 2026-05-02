@@ -206,7 +206,7 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
   const prevHash = await getLastHash();
   const qs       = makeFakeQuantumSig();
   const payload  = { event: "GATEWAY_REGISTRATION", agentId, name, capabilities, swarmId, parentId, tokenId: token.tokenId };
-  const hash     = hashChainEntry(prevHash, JSON.stringify(payload));
+  const hash     = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(payload));
   await db.insert(auditLogsTable).values({
     agentId,
     traceId:          `gw-reg-${token.tokenId}`,
@@ -336,14 +336,19 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
   const effectiveDriftThreshold = tok?.driftThreshold ?? 0.15;
   const interdictionMode        = tok?.interdictionMode ?? "shadow";
 
-  // Compute consistency score + drift
-  const priorPayloads: object[] = Array.isArray((payload as any).priorPayloads) ? (payload as any).priorPayloads : [];
-  const consistency  = await computeConsistencyScore(agentId, eventType as string, payload as object, rationale as string | undefined, priorPayloads);
+  // Compute consistency score + drift.
+  // NOTE: computeConsistencyScore() takes (rationale, eventType, payload) and
+  // is purely intent-vs-action; it does not yet incorporate prior-payload
+  // history. The agentId / priorPayloads we used to forward here were
+  // silently ignored — we keep them out of the call so the signature
+  // matches and TS is happy. When prior-payload context is added to the
+  // scorer, plumb it back through.
+  const consistency  = computeConsistencyScore(rationale as string | undefined, eventType as string, payload as object);
   const computedDrift = Math.round((1 - consistency.score) * 100);
   const effectiveDrift = typeof driftScore === "number" ? driftScore : computedDrift;
 
-  const isAnomalous   = consistency.isAnomalous || effectiveDrift > (effectiveDriftThreshold * 100);
-  const anomalyReason = consistency.isAnomalous
+  const isAnomalous   = consistency.isHighRisk || effectiveDrift > (effectiveDriftThreshold * 100);
+  const anomalyReason = consistency.isHighRisk
     ? consistency.reasons.join("; ")
     : effectiveDrift > (effectiveDriftThreshold * 100)
       ? `Logic drift ${effectiveDrift.toFixed(1)}% exceeds Sovereign threshold (${(effectiveDriftThreshold * 100).toFixed(0)}%)`
@@ -368,7 +373,10 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
     sdk:          "sentinel-bridge",
     interdictionMode,
   };
-  const hash = hashChainEntry(prevHash, JSON.stringify(fullPayload));
+  // prevHash is null when the ledger is empty (genesis). Fall back to the
+  // sentinel string used by computeHash() in lib/hash.ts so the chain
+  // anchor stays consistent across both helpers.
+  const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(fullPayload));
 
   const [inserted] = await db.insert(auditLogsTable).values({
     agentId,
@@ -482,7 +490,8 @@ router.post("/v1/gateway/crispr_recode", async (req, res): Promise<void> => {
   const prevHash = await getLastHash();
   const qs       = makeFakeQuantumSig();
   const ledgerPayload = { event: "CRISPR_RECODE", rootId, targets, source, recodeId, timestamp };
-  const hash = hashChainEntry(prevHash, JSON.stringify(ledgerPayload));
+  // See note at the gateway POST hash chain entry above re: GENESIS sentinel.
+  const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(ledgerPayload));
 
   await db.insert(auditLogsTable).values({
     agentId:          rootId ?? "sentinel-system",

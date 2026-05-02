@@ -23,9 +23,10 @@ import {
   Zap,
   CheckCircle2,
 } from "lucide-react";
-import { 
-  useGetStats, 
-  AuditLog
+import {
+  useGetStats,
+  getGetStatsQueryKey,
+  AuditLog,
 } from "@workspace/api-client-react";
 import { isAnomalous, formatTime, truncateHash } from "@/lib/audit-utils";
 
@@ -176,7 +177,12 @@ function QuantumBadge({ quantumSig }: { quantumSig?: string | null }) {
 }
 
 export default function DashboardPage() {
-  const { data: stats, isLoading } = useGetStats({ query: { refetchInterval: 10000 } });
+  // react-query v5 made `queryKey` mandatory on UseQueryOptions even though
+  // orval auto-derives one. Pass the generated key explicitly so the type
+  // is satisfied without losing the auto-cache-keying behaviour.
+  const { data: stats, isLoading } = useGetStats({
+    query: { queryKey: getGetStatsQueryKey(), refetchInterval: 10000 },
+  });
   const [liveLogs, setLiveLogs] = useState<AuditLogWithConsistency[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const wsRef = useRef<WebSocket | null>(null);

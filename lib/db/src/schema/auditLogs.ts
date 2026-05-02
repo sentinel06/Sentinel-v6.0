@@ -20,18 +20,18 @@ export const auditLogsTable = pgTable(
     consistencyReasons: jsonb("consistency_reasons").notNull().default([]),
     // Multi-agent orchestration chain fields (EU AI Act Art. 12 — traceability)
     // Both MUST have defaults — the immutability trigger blocks any UPDATE on this table
-    parentTraceId: text("parent_trace_id").default(null),
+    parentTraceId: text("parent_trace_id"),
     dependencyChain: jsonb("dependency_chain").notNull().default([]),
     // Swarm Governance: sovereign ancestry tracking (Phase 2 — Swarm & Mesh Governance)
-    parentAgentId: text("parent_agent_id").default(null),
-    swarmId: text("swarm_id").default(null),
+    parentAgentId: text("parent_agent_id"),
+    swarmId: text("swarm_id"),
     // Sovereign Logs: compute origin region for geopatriation compliance (2026 AI Act update)
     computeOriginRegion: text("compute_origin_region").notNull().default("unspecified"),
     // Quantum-Secure-By-Construction: PQC signature fingerprint of currentHash (ML-DSA-87 abstraction)
-    quantumSig: text("quantum_sig").default(null),
+    quantumSig: text("quantum_sig"),
     // QL-2.0 Hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
     // Stores a HybridSignatureEnvelope as JSONB. Null for pre-QL-2.0 entries.
-    pqSignature: jsonb("pq_signature").default(null),
+    pqSignature: jsonb("pq_signature"),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
@@ -112,15 +112,15 @@ export const agentSessionsTable = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: text("agent_id").notNull(),
     /** agentId of the agent that spawned this one (null = root) */
-    parentUid: text("parent_uid").default(null),
+    parentUid: text("parent_uid"),
     /** The root swarm's identifier, propagated down the ancestry chain */
-    rootSwarmId: text("root_swarm_id").default(null),
+    rootSwarmId: text("root_swarm_id"),
     /** Peer-level swarm membership (may differ from rootSwarmId) */
-    swarmId: text("swarm_id").default(null),
+    swarmId: text("swarm_id"),
     /** active | revoked | drift-locked */
     status: text("status").notNull().default("active"),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }).default(null),
-    revokedReason: text("revoked_reason").default(null),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedReason: text("revoked_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -150,10 +150,10 @@ export const partnerKeysTable = pgTable(
     /** Core | Pro | Enterprise */
     tier: text("tier").notNull().default("Core"),
     /** Optional swarm scope — if set, key only accepts logs for this swarmId */
-    swarmScope: text("swarm_scope").default(null),
+    swarmScope: text("swarm_scope"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).default(null),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   },
   (table) => [
     index("partner_keys_partner_id_idx").on(table.partnerId),
@@ -246,11 +246,11 @@ export const pulseLogsTable = pgTable(
     /** The full formatted pulse text (tweet body) */
     message:        text("message").notNull(),
     /** Twitter/X post URL if successfully published — null if keys not configured */
-    tweetUrl:       text("tweet_url").default(null),
+    tweetUrl:       text("tweet_url"),
     /** Raw Twitter API response ID */
-    tweetId:        text("tweet_id").default(null),
+    tweetId:        text("tweet_id"),
     /** Error message if the Twitter post failed */
-    tweetError:     text("tweet_error").default(null),
+    tweetError:     text("tweet_error"),
     /** Window in hours that was aggregated (default 6) */
     windowHours:    integer("window_hours").notNull().default(6),
   },
@@ -285,7 +285,7 @@ export const systemPulsesTable = pgTable(
     /** NOMINAL | ALERT | UNDER_INVESTIGATION */
     status:               text("status").notNull().default("NOMINAL"),
     /** Human-readable reason if status != NOMINAL */
-    faultReason:          text("fault_reason").default(null),
+    faultReason:          text("fault_reason"),
     /** Canonical payload string that was signed (deterministic from the metrics) */
     pulsePayload:         text("pulse_payload").notNull(),
     /** QL-2.0 HybridSignatureEnvelope as JSONB — self-signs this pulse record */

@@ -126,7 +126,7 @@ async function runStage1(): Promise<{ traceId: string; insertedCount: number; fi
 
 // ── Stage 2: Honey-Token Hit (terra red) ──────────────────────────────────
 
-async function runStage2(stage1TraceId: string): Promise<{ revokedAt: string; honeyTokenId: string }> {
+async function runStage2(stage1TraceId: string): Promise<{ revokedAt: Date; honeyTokenId: string }> {
   console.error("[Stage 2] Injecting honey-token vault access breach…");
 
   const FORBIDDEN_VAULT = "VAULT://sovereign-treasury-prod";

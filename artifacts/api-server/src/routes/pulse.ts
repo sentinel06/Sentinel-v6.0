@@ -7,7 +7,7 @@
 
 import { Router, type IRouter } from "express";
 import { db, pulseLogsTable } from "@workspace/db";
-import { desc, limit as limitOp } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { firePulse } from "../services/pulse.js";
 
 const router: IRouter = Router();

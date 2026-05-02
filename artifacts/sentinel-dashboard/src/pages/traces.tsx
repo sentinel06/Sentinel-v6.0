@@ -82,7 +82,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return rgbToHex(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t);
 }
 
-interface NodeStyle { stroke: string; fill: string; bleedRatio: number; }
+interface NodeStyle { stroke: string; fill: string; bleedRatio: number; glow?: string; }
 function computeNodeStyles(events: AnyEvent[], chainMap: Map<string, boolean>): Map<string, NodeStyle> {
   const out = new Map<string, NodeStyle>();
   let parentColor = P.sage;
