@@ -120,13 +120,26 @@ async function createRedisBackend(url: string): Promise<NonceBackend> {
 // ── Backend selection at module load ────────────────────────────────────────
 let backendPromise: Promise<NonceBackend>;
 
-const redisUrl = process.env["REDIS_URL"];
+// Accept the canonical name plus a couple of common case variants — Replit's
+// Secrets pane preserves whatever casing the user typed.
+const redisUrl =
+  process.env["REDIS_URL"] ??
+  process.env["Redis_URL"] ??
+  process.env["redis_url"];
 if (redisUrl && redisUrl.length > 0) {
-  logger.info("Nonce backend: Redis (REDIS_URL detected)");
-  backendPromise = createRedisBackend(redisUrl).catch((err) => {
-    logger.error({ err }, "Failed to init Redis nonce backend — falling back to memory");
-    return createMemoryBackend();
-  });
+  if (!/^rediss?:\/\//i.test(redisUrl)) {
+    logger.error(
+      { prefix: redisUrl.slice(0, 8) + "…" },
+      "REDIS_URL does not start with redis:// or rediss:// — looks like an API token, not a connection URL. Falling back to in-memory nonce backend.",
+    );
+    backendPromise = Promise.resolve(createMemoryBackend());
+  } else {
+    logger.info("Nonce backend: Redis (REDIS_URL detected)");
+    backendPromise = createRedisBackend(redisUrl).catch((err) => {
+      logger.error({ err }, "Failed to init Redis nonce backend — falling back to memory");
+      return createMemoryBackend();
+    });
+  }
 } else {
   logger.info({ cap: NONCE_CAP }, "Nonce backend: in-memory Map (no REDIS_URL)");
   backendPromise = Promise.resolve(createMemoryBackend());
