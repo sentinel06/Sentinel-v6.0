@@ -53,15 +53,29 @@ let cachedFingerprint: string | null = null;
 
 // ── Seed resolution ─────────────────────────────────────────────────────────
 function resolveSeed(): Uint8Array {
-  const hex = process.env["SENTINEL_SIGNING_SEED"];
-  if (hex && /^[0-9a-fA-F]{64}$/.test(hex)) {
-    return Uint8Array.from(Buffer.from(hex, "hex"));
-  }
-  if (hex) {
+  const raw = process.env["SENTINEL_SIGNING_SEED"]?.trim();
+
+  if (raw) {
+    if (/^[0-9a-fA-F]{64}$/.test(raw)) {
+      return Uint8Array.from(Buffer.from(raw, "hex"));
+    }
+    if (/^[A-Za-z0-9+/=_-]+$/.test(raw)) {
+      try {
+        const normalized = raw.replace(/-/g, "+").replace(/_/g, "/");
+        const buf = Buffer.from(normalized, "base64");
+        if (buf.length >= 32) {
+          return Uint8Array.from(buf.subarray(0, 32));
+        }
+      } catch {
+        // fall through to hash-based fallback
+      }
+    }
     logger.warn(
-      "SENTINEL_SIGNING_SEED is set but not a 64-char hex string — ignoring and generating random seed.",
+      "SENTINEL_SIGNING_SEED present but not 64-char hex or >=32-byte base64 — deriving seed via SHA-256(input).",
     );
+    return Uint8Array.from(createHash("sha256").update(raw, "utf8").digest());
   }
+
   logger.warn(
     "SENTINEL_SIGNING_SEED not set — generating ephemeral keypair. " +
       "Public-key fingerprint will change on every restart. " +
