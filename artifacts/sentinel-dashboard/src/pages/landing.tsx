@@ -23,20 +23,20 @@ export default function LandingPage() {
     {
       icon: Activity,
       color: SAGE,
-      title: "FORENSIC FIDELITY",
-      body: "Sub-1ms interdiction latency. Real-time neural drift detection.",
+      title: "See drift the moment it happens",
+      body: "Real-time anomaly detection with sub-1ms interdiction latency.",
     },
     {
       icon: Lock,
       color: VIOLET,
-      title: "CRYPTOGRAPHIC SEAL",
-      body: "FIPS 204 (ML-DSA-87) signatures on every agent lifecycle event.",
+      title: "Every action, cryptographically signed",
+      body: "Post-quantum FIPS 204 (ML-DSA-87) signatures on every agent event.",
     },
     {
       icon: FileCheck2,
       color: AMBER,
-      title: "AUDIT-READY",
-      body: "Instant Sovereign Data Room generation for M&A and regulatory review.",
+      title: "Audit-ready in one click",
+      body: "Instant Sovereign Data Room export for regulators, M&A, and review boards.",
     },
   ];
 
@@ -167,19 +167,13 @@ export default function LandingPage() {
         {/* Headline + sub-headline */}
         <div className="text-center w-full max-w-[980px] mx-auto">
           <h1
-            // Headline Precision Refactor: capped scale at md:text-4xl so the
-            // headline stays "Large and commanding" without swallowing the
-            // viewport. Widened tracking to 0.15em — when the font shrinks,
-            // letterspacing carries the institutional/sovereign weight.
-            // mb-4 md:mb-6 gives the sub-header room to breathe.
-            className="font-bold text-2xl sm:text-3xl md:text-4xl mt-12 md:mt-0 mb-4 md:mb-6 leading-tight tracking-[0.15em] md:leading-[1.1]"
+            // Warmer mixed-case headline — sovereign weight from the gradient
+            // and shadow, not from punishing all-caps tracking. Slightly
+            // larger scale (md:text-5xl) since we no longer need wide
+            // letter-spacing to carry the brand.
+            className="font-semibold text-3xl sm:text-4xl md:text-5xl mt-12 md:mt-0 mb-4 md:mb-6 leading-tight tracking-tight md:leading-[1.05]"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
-              // No inline margin overrides — Tailwind's mt-12 md:mt-0 and
-              // mb-4 md:mb-6 utilities own all vertical spacing for the
-              // headline. (Inline style would override class-based margins
-              // due to CSS precedence, so we leave margin entirely to
-              // Tailwind here.)
               marginInline: 0,
               background: `linear-gradient(135deg, ${SAGE} 0%, ${VIOLET} 60%, #C4B5FD 100%)`,
               WebkitBackgroundClip: "text",
@@ -188,19 +182,18 @@ export default function LandingPage() {
               textShadow: `0 0 60px ${VIOLET}40`,
             }}
           >
-            NEURAL SOVEREIGNTY.<br />GOVERNANCE AT SCALE.
+            Govern your AI agents<br />with confidence.
           </h1>
           <p
-            className="mt-4 md:mt-5 mx-auto max-w-[760px] text-[11px] md:text-sm lg:text-base leading-relaxed"
+            className="mt-4 md:mt-5 mx-auto max-w-[720px] text-sm md:text-base lg:text-lg leading-relaxed"
             style={{
-              color: "#9CA3AF",
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              letterSpacing: "0.02em",
+              color: "#CBD5E1",
+              fontFamily: "'Inter', system-ui, sans-serif",
+              letterSpacing: "0",
             }}
           >
-            Post-Quantum Interdiction &amp; SLSA L4 Provenance for Autonomous Agent Swarms.
-            <br className="hidden sm:inline" />
-            {" "}Built for the EU AI Act compliance era.
+            Real-time interdiction, post-quantum provenance, and audit-ready proof
+            for autonomous agent swarms — built for the EU AI Act era.
           </p>
         </div>
 
@@ -226,20 +219,25 @@ export default function LandingPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Icon className="w-4 h-4" style={{ color }} />
                 <span
-                  className="font-mono font-bold"
-                  style={{ color, fontSize: 11, letterSpacing: "0.18em" }}
+                  className="font-semibold"
+                  style={{
+                    color,
+                    fontSize: 13,
+                    letterSpacing: "0",
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                  }}
                 >
                   {title}
                 </span>
               </div>
               <p
                 style={{
-                  color: "#CBD5E1",
-                  fontSize: 12,
-                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                  lineHeight: 1.55,
+                  color: "#94A3B8",
+                  fontSize: 12.5,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  lineHeight: 1.6,
                   margin: 0,
-                  letterSpacing: "0.01em",
+                  letterSpacing: "0",
                 }}
               >
                 {body}
@@ -262,7 +260,7 @@ export default function LandingPage() {
             boxShadow: `0 0 0 1px rgba(255,255,255,0.03), 0 0 60px ${VIOLET}28, inset 0 0 30px ${VIOLET}10`,
           }}
         >
-          {/* Header strip */}
+          {/* Header strip — friendly welcome instead of clearance gate */}
           <div
             style={{
               display: "flex",
@@ -274,18 +272,23 @@ export default function LandingPage() {
               borderBottom: `1px solid ${VIOLET}22`,
             }}
           >
-            <Lock className="w-3.5 h-3.5" style={{ color: VIOLET }} />
+            <ShieldCheck className="w-4 h-4" style={{ color: SAGE }} />
             <span
-              className="font-mono font-bold"
-              style={{ color: VIOLET, fontSize: 11, letterSpacing: "0.28em" }}
+              className="font-semibold"
+              style={{
+                color: "#E5E7EB",
+                fontSize: 13,
+                letterSpacing: "0",
+                fontFamily: "'Inter', system-ui, sans-serif",
+              }}
             >
-              IDENTITY VERIFICATION
+              Take a guided tour
             </span>
             <span
               style={{
                 display: "inline-block",
-                width: 4,
-                height: 4,
+                width: 5,
+                height: 5,
                 borderRadius: "50%",
                 background: SAGE,
                 boxShadow: `0 0 6px ${SAGE}`,
@@ -294,43 +297,43 @@ export default function LandingPage() {
             />
           </div>
 
-          {/* Field-style line for terminal feel */}
-          <div
-            className="font-mono"
+          {/* Friendly invitation copy */}
+          <p
             style={{
-              fontSize: 10,
-              color: "#64748B",
-              letterSpacing: "0.08em",
-              marginBottom: 16,
-              textAlign: "left",
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 13,
+              color: "#94A3B8",
+              lineHeight: 1.55,
+              marginBottom: 18,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              letterSpacing: "0",
             }}
           >
-            <div>&gt; clearance_required: <span style={{ color: AMBER }}>READ-ONLY-AUDIT</span></div>
-            <div>&gt; provenance_chain : <span style={{ color: SAGE }}>SLSA L4 ✓</span></div>
-            <div>&gt; quantum_seal     : <span style={{ color: SAGE }}>FIPS 204 ✓</span></div>
-          </div>
+            Explore a live, read-only audit environment with{" "}
+            <span style={{ color: SAGE, fontWeight: 600 }}>1,535 sealed events</span>{" "}
+            across 41 agents — no signup required.
+          </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Primary — INITIALIZE GUEST AUDIT */}
+            {/* Primary — Explore the live dashboard */}
             <button
               onClick={() => navigate("/dashboard")}
-              className="font-mono font-bold transition-all"
+              className="font-semibold transition-all"
               style={{
                 width: "100%",
-                padding: "12px 20px",
+                padding: "13px 20px",
                 background: `linear-gradient(135deg, ${VIOLET}, #7C3AED)`,
                 color: "#FFFFFF",
                 border: `1px solid ${VIOLET}88`,
-                borderRadius: 8,
-                fontSize: 12,
-                letterSpacing: "0.22em",
+                borderRadius: 10,
+                fontSize: 14,
+                letterSpacing: "0",
                 cursor: "pointer",
                 boxShadow: `0 0 24px ${VIOLET}66, inset 0 0 12px rgba(255,255,255,0.08)`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 10,
+                fontFamily: "'Inter', system-ui, sans-serif",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 40px ${VIOLET}aa, inset 0 0 20px rgba(255,255,255,0.14)`;
@@ -341,28 +344,29 @@ export default function LandingPage() {
                 (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
               }}
             >
-              INITIALIZE GUEST AUDIT
-              <ArrowRight className="w-3.5 h-3.5" />
+              Explore the Live Dashboard
+              <ArrowRight className="w-4 h-4" />
             </button>
 
-            {/* Secondary — DOCUMENTATION / WHITE PAPER */}
+            {/* Secondary — White paper */}
             <button
               onClick={() => navigate("/badge")}
-              className="font-mono font-bold transition-all"
+              className="font-medium transition-all"
               style={{
                 width: "100%",
-                padding: "10px 20px",
+                padding: "11px 20px",
                 background: "transparent",
                 color: "#CBD5E1",
                 border: `1px solid ${VIOLET}55`,
-                borderRadius: 8,
-                fontSize: 11,
-                letterSpacing: "0.22em",
+                borderRadius: 10,
+                fontSize: 13,
+                letterSpacing: "0",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 10,
+                fontFamily: "'Inter', system-ui, sans-serif",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background = VIOLET + "12";
@@ -376,7 +380,7 @@ export default function LandingPage() {
               }}
             >
               <FileText className="w-3.5 h-3.5" />
-              DOCUMENTATION / WHITE PAPER
+              Read the White Paper
             </button>
           </div>
         </div>
