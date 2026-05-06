@@ -23,10 +23,10 @@ import {
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // Sovereign palette — must match swarmmap.tsx + Forensic Inspector
-const SAGE   = "#40B595";
-const TERRA  = "#D96161";
+const SAGE   = "#00F5FF";
+const TERRA  = "#FF003C";
 const VIOLET = "#8B5CF6";
-const AMBER  = "#EBC06D";
+const AMBER  = "#FFB800";
 
 interface RegistryAgent {
   id: string;
@@ -259,7 +259,7 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 page-transition">
       {showRegister && (
         <RegisterAgentModal onClose={() => setShowRegister(false)} onSuccess={refresh} />
       )}

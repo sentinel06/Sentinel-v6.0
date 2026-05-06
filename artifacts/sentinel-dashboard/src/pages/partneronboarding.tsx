@@ -11,9 +11,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Palette ────────────────────────────────────────────────────────────────
 const P = {
-  sage:   "#40B595",
-  amber:  "#EBC06D",
-  terra:  "#D96161",
+  sage:   "#00F5FF",
+  amber:  "#FFB800",
+  terra:  "#FF003C",
   panel:  "#161B22",
   border: "#2C3136",
   dim:    "#9AA4B1",

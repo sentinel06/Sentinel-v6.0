@@ -28,9 +28,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Sentinel Zen palette ─────────────────────────────────────────────────────
 const P = {
-  sage:   "#40B595",
-  amber:  "#EBC06D",
-  terra:  "#D96161",
+  sage:   "#00F5FF",
+  amber:  "#FFB800",
+  terra:  "#FF003C",
   blue:   "#5B8DEF",
   dim:    "#9AA4B1",
   border: "#2C3136",
@@ -1218,7 +1218,7 @@ export default function TracesPage() {
   }, [logData]);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-6 animate-in fade-in duration-500">
+    <div className="flex h-[calc(100vh-8rem)] gap-6 page-transition">
       {/* ── Left panel: Trace List ── */}
       <Card className="w-1/3 flex flex-col border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden shrink-0">
         <div className="p-4 border-b border-border/60 flex items-center justify-between">

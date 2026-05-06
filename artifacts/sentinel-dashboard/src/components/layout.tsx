@@ -22,9 +22,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // Accent colours — unchanged across both themes
 const P = {
-  sage:   "#40B595",
-  amber:  "#EBC06D",
-  terra:  "#D96161",
+  sage:   "#00F5FF",
+  amber:  "#FFB800",
+  terra:  "#FF003C",
   gold:   "#FFD700",
   violet: "#8B5CF6",
 };
@@ -294,7 +294,7 @@ function ForensicInspector() {
     !agent              ? "var(--sv-text-dim)" :
     showDrift > 25      ? P.terra :
     showDrift > 15      ? P.amber :
-    showDrift > 5       ? "#EBC06D88" : P.sage;
+    showDrift > 5       ? "#FFB80088" : P.sage;
 
   const fitnessColor =
     !agent                ? "var(--sv-text-dim)" :

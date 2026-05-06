@@ -16,9 +16,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Sentinel Zen palette ────────────────────────────────────────────────────
 const P = {
-  sage:       "#40B595",
-  amber:      "#EBC06D",
-  terra:      "#D96161",
+  sage:       "#00F5FF",
+  amber:      "#FFB800",
+  terra:      "#FF003C",
   panel:      "#161B22",
   border:     "#2C3136",
   dim:        "#9AA4B1",
@@ -1167,7 +1167,7 @@ export default function WarRoomPage() {
         <LatticePulseOverlay throughputBits={throughputBits} />
       </div>
 
-      <div className="relative space-y-4 animate-in fade-in duration-500" style={{ zIndex: 1 }}>
+      <div className="relative space-y-4 page-transition" style={{ zIndex: 1 }}>
         {/* ── Page header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

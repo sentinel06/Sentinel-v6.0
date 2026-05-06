@@ -29,9 +29,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Palette ────────────────────────────────────────────────────────────────
 const C = {
-  sage:   "#40B595",
-  honey:  "#EBC06D",
-  terra:  "#D96161",
+  sage:   "#00F5FF",
+  honey:  "#FFB800",
+  terra:  "#FF003C",
   dark:   "#0D1117",
   panel:  "#161B22",
   border: "#2C3136",
@@ -80,10 +80,10 @@ function buildPrintHTML(s: ExecSummary): string {
   const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
   const timeStr = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 
-  const trustColor  = s.metrics.trustVelocity.verifiedPct >= 90 ? "#40B595" : s.metrics.trustVelocity.verifiedPct >= 70 ? "#EBC06D" : "#D96161";
-  const qiColor     = s.metrics.quantumIntegrityScore.score >= 90 ? "#40B595" : s.metrics.quantumIntegrityScore.score >= 50 ? "#EBC06D" : "#D96161";
-  const intColor    = s.metrics.interventionSuccess.count > 0 ? "#40B595" : "#9AA4B1";
-  const riskColors  = { LOW: "#40B595", MEDIUM: "#EBC06D", HIGH: "#D96161", CRITICAL: "#D96161" };
+  const trustColor  = s.metrics.trustVelocity.verifiedPct >= 90 ? "#00F5FF" : s.metrics.trustVelocity.verifiedPct >= 70 ? "#FFB800" : "#FF003C";
+  const qiColor     = s.metrics.quantumIntegrityScore.score >= 90 ? "#00F5FF" : s.metrics.quantumIntegrityScore.score >= 50 ? "#FFB800" : "#FF003C";
+  const intColor    = s.metrics.interventionSuccess.count > 0 ? "#00F5FF" : "#9AA4B1";
+  const riskColors  = { LOW: "#00F5FF", MEDIUM: "#FFB800", HIGH: "#FF003C", CRITICAL: "#FF003C" };
   const riskColor   = riskColors[s.riskRating];
 
   const tvBar = Math.min(100, s.metrics.trustVelocity.verifiedPct);
@@ -94,8 +94,8 @@ function buildPrintHTML(s: ExecSummary): string {
 
   const trendIcon = s.metrics.trustVelocity.trend === "ACCELERATING" ? "▲"
     : s.metrics.trustVelocity.trend === "DECELERATING" ? "▼" : "—";
-  const trendColor = s.metrics.trustVelocity.trend === "ACCELERATING" ? "#40B595"
-    : s.metrics.trustVelocity.trend === "DECELERATING" ? "#D96161" : "#9AA4B1";
+  const trendColor = s.metrics.trustVelocity.trend === "ACCELERATING" ? "#00F5FF"
+    : s.metrics.trustVelocity.trend === "DECELERATING" ? "#FF003C" : "#9AA4B1";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -122,28 +122,28 @@ function buildPrintHTML(s: ExecSummary): string {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    border-bottom: 2.5px solid #40B595;
+    border-bottom: 2.5px solid #00F5FF;
     padding-bottom: 14px;
     margin-bottom: 22px;
   }
   .logo-row { display: flex; align-items: center; gap: 10px; }
   .logo-shield {
     width: 32px; height: 32px;
-    background: #40B59518;
-    border: 1.5px solid #40B59540;
+    background: #00F5FF18;
+    border: 1.5px solid #00F5FF40;
     border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    color: #40B595;
+    color: #00F5FF;
     font-size: 16px;
     font-weight: bold;
   }
   .logo-text { font-size: 18px; font-weight: bold; letter-spacing: -0.3px; color: #0a0f13; }
-  .logo-text em { color: #40B595; font-style: normal; }
+  .logo-text em { color: #00F5FF; font-style: normal; }
   .logo-sub { font-size: 8px; letter-spacing: 2.5px; color: #9AA4B1; margin-top: 1px; }
   .classification {
-    font-size: 8px; letter-spacing: 2.5px; color: #D96161;
+    font-size: 8px; letter-spacing: 2.5px; color: #FF003C;
     font-weight: bold;
-    border: 1.5px solid #D96161;
+    border: 1.5px solid #FF003C;
     padding: 4px 10px;
     text-transform: uppercase;
   }
@@ -304,7 +304,7 @@ function buildPrintHTML(s: ExecSummary): string {
     color: #1a1a2e;
     background: #f8fafc;
     padding: 14px 16px;
-    border-left: 3px solid #40B595;
+    border-left: 3px solid #00F5FF;
   }
 
   /* ── Compliance row ── */
@@ -318,8 +318,8 @@ function buildPrintHTML(s: ExecSummary): string {
     font-size: 7.5px;
     letter-spacing: 1px;
     padding: 3px 8px;
-    border: 1px solid #40B59540;
-    color: #40B595;
+    border: 1px solid #00F5FF40;
+    color: #00F5FF;
     font-weight: bold;
   }
 
@@ -336,8 +336,8 @@ function buildPrintHTML(s: ExecSummary): string {
   .footer-text { font-size: 7.5px; color: #9AA4B1; letter-spacing: 1px; line-height: 1.6; }
   .footer-cert {
     font-size: 8px;
-    border: 1px solid #40B595;
-    color: #40B595;
+    border: 1px solid #00F5FF;
+    color: #00F5FF;
     padding: 4px 10px;
     letter-spacing: 1px;
     font-weight: bold;
@@ -509,7 +509,7 @@ function buildPrintHTML(s: ExecSummary): string {
         </div>
         <div>
           <div class="sub-item-label">Circuit Breaks</div>
-          <div class="sub-item-value" style="color:#EBC06D">${s.metrics.interventionSuccess.circuitTriggered}</div>
+          <div class="sub-item-value" style="color:#FFB800">${s.metrics.interventionSuccess.circuitTriggered}</div>
         </div>
       </div>
     </div>

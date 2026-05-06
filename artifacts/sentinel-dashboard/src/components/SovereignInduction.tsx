@@ -8,9 +8,9 @@ const LS_HEXID   = "sentinel_operator_hex";
 
 const VIOLET = "#8B5CF6";
 const VIOLET_BRIGHT = "#C084FC";
-const SAGE = "#40B595";
+const SAGE = "#00F5FF";
 const CRIMSON = "#B91C1C";
-const AMBER = "#EBC06D";
+const AMBER = "#FFB800";
 
 type Persona = "business" | "technical";
 

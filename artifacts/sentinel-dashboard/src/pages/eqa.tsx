@@ -35,10 +35,10 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Palette ────────────────────────────────────────────────────────────────
 const C = {
-  sage:    "#40B595",
+  sage:    "#00F5FF",
   light:   "#E0E6ED",
-  honey:   "#EBC06D",
-  terra:   "#D96161",
+  honey:   "#FFB800",
+  terra:   "#FF003C",
   dark:    "#0D1117",
   panel:   "#161B22",
   card:    "#1C2128",

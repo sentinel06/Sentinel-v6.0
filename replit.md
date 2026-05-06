@@ -47,6 +47,7 @@ Agent-Sentinel provides an immutable audit ledger system for AI agents, ensuring
 - **API Key for Secure Ingestion**: Audit log submission requires an API key (`X-Sentinel-Key`) for authenticated access, with a dev mode fallback.
 - **Dynamic White Paper Generation**: A technical white paper is generated dynamically from the live system state, ensuring up-to-date documentation.
 - **Sovereign Gateway for Agent Governance**: A dedicated API (`/api/v1/gateway`) and Python SDK provide an infrastructure-level governance layer for external AI agents, including registration, pre-flight checks, telemetry ingestion, and liveness pings.
+- **Hardened Security UI (Command Center)**: Dashboard-wide aesthetic driven by tokens in `index.css`. Obsidian `#050505` bg + 20px grid; semantic accents are **cyan `#00F5FF`** (health/active), **amber `#FFB800`** (warnings), **crimson `#FF003C`** (blocks). All cards use the `.glass-panel` utility (`@layer components` so Tailwind utilities can override). New page mounts use `.page-transition`. Three live health widgets in `src/components/widgets/` (Lattice gauge, Redis sparkline, Worker Threads). System Frequency wave lives in the top bar.
 
 ## Product
 

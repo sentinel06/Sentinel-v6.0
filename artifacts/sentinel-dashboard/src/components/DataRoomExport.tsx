@@ -28,8 +28,8 @@ import { Archive, Loader2, ShieldCheck, Lock, CheckCircle2 } from "lucide-react"
 import { useForensic } from "@/contexts/ForensicContext";
 
 const VIOLET = "#8B5CF6";
-const SAGE = "#40B595";
-const AMBER = "#EBC06D";
+const SAGE = "#00F5FF";
+const AMBER = "#FFB800";
 const PANEL_BG = "#0D1117";
 const PANEL_BORDER = "#2C3136";
 

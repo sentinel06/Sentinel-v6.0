@@ -28,9 +28,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Palette ────────────────────────────────────────────────────────────────
 const C = {
-  sage: "#40B595",
-  honey: "#EBC06D",
-  terra: "#D96161",
+  sage: "#00F5FF",
+  honey: "#FFB800",
+  terra: "#FF003C",
   divider: "#2C3136",
   dim: "#4A5568",
   dimText: "#9AA4B1",
@@ -613,9 +613,9 @@ function PartnerHealthFeed() {
             Updated {lastRefresh.toLocaleTimeString()}
           </span>
           <span className="inline-flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded border"
-            style={{ color: "#40B595", borderColor: "#40B59544", background: "#40B59510" }}
+            style={{ color: "#00F5FF", borderColor: "#00F5FF44", background: "#00F5FF10" }}
             title="Auto-sync every 2.5s">
-            <span className="live-dot w-1 h-1 rounded-full" style={{ background: "#40B595", boxShadow: "0 0 4px #40B595cc" }} />
+            <span className="live-dot w-1 h-1 rounded-full" style={{ background: "#00F5FF", boxShadow: "0 0 4px #00F5FFcc" }} />
             LIVE
           </span>
         </div>

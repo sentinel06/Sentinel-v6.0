@@ -369,7 +369,7 @@ export default function TopologyPage() {
   }, [graphNodes]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 page-transition">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
           <GitBranch className="w-6 h-6 text-primary" />

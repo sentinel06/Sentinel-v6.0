@@ -26,9 +26,9 @@ const IS_DEV = import.meta.env.DEV;
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const P = {
-  sage:    "#40B595",
-  amber:   "#EBC06D",
-  terra:   "#D96161",
+  sage:    "#00F5FF",
+  amber:   "#FFB800",
+  terra:   "#FF003C",
   blue:    "#5B8DEF",
   violet:  "#9B7DE8",
   dim:     "#9AA4B1",
@@ -350,7 +350,7 @@ export default function SovereignMultiSigModal({
     QRCode.toDataURL(challengePayload, {
       width: 200,
       margin: 2,
-      color: { dark: "#40B595", light: "#0D1117" },
+      color: { dark: "#00F5FF", light: "#0D1117" },
     }).then(url => setQrDataUrl(url)).catch(() => setQrDataUrl(null));
   }, [challengeId, event.id, event.agentId, event.traceId, operatorId, operatorFp, newRationale]);
 

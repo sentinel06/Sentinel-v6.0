@@ -5,9 +5,9 @@ import { ShieldCheck, Lock, FileCheck2, Activity, ArrowRight, FileText } from "l
 // ── Sovereign palette (must stay in sync with dashboard) ───────────────────
 const SLATE   = "#020617";
 const VIOLET  = "#8B5CF6";
-const SAGE    = "#40B595";
-const AMBER   = "#EBC06D";
-const TERRA   = "#D96161";
+const SAGE    = "#00F5FF";
+const AMBER   = "#FFB800";
+const TERRA   = "#FF003C";
 
 export default function LandingPage() {
   const [, navigate] = useLocation();

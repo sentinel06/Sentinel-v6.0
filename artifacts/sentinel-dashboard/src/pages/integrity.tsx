@@ -9,9 +9,9 @@ import {
 import { formatTime, formatDate } from "@/lib/audit-utils";
 
 const BASE  = import.meta.env.BASE_URL.replace(/\/$/, "");
-const SAGE  = "#40B595";
-const TERRA = "#D96161";
-const AMBER = "#EBC06D";
+const SAGE  = "#00F5FF";
+const TERRA = "#FF003C";
+const AMBER = "#FFB800";
 const SKY   = "#38BDF8";
 
 export default function IntegrityPage() {
@@ -77,7 +77,7 @@ export default function IntegrityPage() {
 
   return (
     <div
-      className="animate-in fade-in duration-500 max-w-5xl mx-auto"
+      className="page-transition max-w-5xl mx-auto"
       style={{ display: "flex", flexDirection: "column", gap: 24 }}
     >
 
@@ -105,7 +105,7 @@ export default function IntegrityPage() {
               onClick={handleReconstruct}
               disabled={isReconstructing || isVerifying}
               variant="outline"
-              className="font-mono border-[#D96161]/40 text-[#D96161] hover:bg-[#D96161]/10"
+              className="font-mono border-[#FF003C]/40 text-[#FF003C] hover:bg-[#FF003C]/10"
             >
               <Wrench className={`w-4 h-4 mr-2 ${isReconstructing ? "animate-spin" : ""}`} />
               {isReconstructing ? "Reconstructing…" : "Reconstruct Chain"}

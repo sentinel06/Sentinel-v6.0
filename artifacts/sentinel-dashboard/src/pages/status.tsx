@@ -22,9 +22,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const C = {
-  sage:    "#40B595",
-  honey:   "#EBC06D",
-  terra:   "#D96161",
+  sage:    "#00F5FF",
+  honey:   "#FFB800",
+  terra:   "#FF003C",
   panel:   "#161B22",
   border:  "#2C3136",
   dimText: "#9AA4B1",
@@ -426,12 +426,12 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   .screen-toolbar {
     position: sticky; top: 0; z-index: 100;
     display: flex; align-items: center; justify-content: space-between;
-    background: #0d1117; border-bottom: 2px solid #40B595;
+    background: #0d1117; border-bottom: 2px solid #00F5FF;
     padding: 10px 20px; margin-bottom: 24px;
   }
   .screen-toolbar span { font-size: 11px; color: #9AA4B1; letter-spacing: 1px; }
   .print-btn {
-    background: #40B595; color: #0d1117; border: none;
+    background: #00F5FF; color: #0d1117; border: none;
     padding: 7px 20px; font-family: 'Courier New', monospace;
     font-size: 10px; font-weight: bold; letter-spacing: 1.5px;
     cursor: pointer; border-radius: 2px;
@@ -441,21 +441,21 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   .document { max-width: 1040px; margin: 0 auto; padding: 0 10px; }
   .cover-header {
     display: flex; justify-content: space-between; align-items: flex-start;
-    border-bottom: 3px solid #40B595; padding-bottom: 14px; margin-bottom: 18px;
+    border-bottom: 3px solid #00F5FF; padding-bottom: 14px; margin-bottom: 18px;
   }
   .logo { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
-  .logo em { color: #40B595; font-style: normal; }
+  .logo em { color: #00F5FF; font-style: normal; }
   .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
   .badge-conf {
-    font-size: 7.5px; letter-spacing: 2px; color: #D96161; font-weight: bold;
-    border: 1.5px solid #D96161; padding: 3px 10px; background: #D9616108;
+    font-size: 7.5px; letter-spacing: 2px; color: #FF003C; font-weight: bold;
+    border: 1.5px solid #FF003C; padding: 3px 10px; background: #FF003C08;
   }
   .badge-ver {
-    font-size: 7.5px; letter-spacing: 1.5px; color: #40B595; font-weight: bold;
-    border: 1.5px solid #40B595; padding: 3px 10px; background: #40B59510;
+    font-size: 7.5px; letter-spacing: 1.5px; color: #00F5FF; font-weight: bold;
+    border: 1.5px solid #00F5FF; padding: 3px 10px; background: #00F5FF10;
   }
   .cover-title { font-size: 22px; font-weight: bold; margin-bottom: 4px; color: #0a0f13; }
-  .cover-subtitle { font-size: 11px; color: #40B595; font-weight: bold; margin-bottom: 10px; letter-spacing: 0.5px; }
+  .cover-subtitle { font-size: 11px; color: #00F5FF; font-weight: bold; margin-bottom: 10px; letter-spacing: 0.5px; }
   .cover-meta {
     display: flex; gap: 20px; flex-wrap: wrap;
     font-size: 8px; color: #4A5568; margin-bottom: 20px;
@@ -463,7 +463,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   .cover-meta span strong { color: #0a0f13; }
   .seal-strip {
     display: flex; gap: 12px; flex-wrap: wrap;
-    background: #f8f9fa; border: 1px solid #e2e8f0; border-left: 4px solid #40B595;
+    background: #f8f9fa; border: 1px solid #e2e8f0; border-left: 4px solid #00F5FF;
     padding: 8px 12px; margin-bottom: 22px; font-size: 7.5px; color: #4A5568;
   }
   .seal-strip code { color: #0a0f13; font-size: 7px; background: #edf2f7; padding: 1px 4px; }
@@ -472,31 +472,31 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
     margin-bottom: 22px;
   }
   .pulse-kpi {
-    background: #f0faf6; border: 1px solid #40B59540; padding: 8px 10px; border-radius: 3px;
+    background: #f0faf6; border: 1px solid #00F5FF40; padding: 8px 10px; border-radius: 3px;
   }
   .pulse-kpi .kpi-label { font-size: 7px; color: #9AA4B1; text-transform: uppercase; letter-spacing: 1px; }
-  .pulse-kpi .kpi-value { font-size: 14px; font-weight: bold; color: #40B595; margin-top: 2px; }
+  .pulse-kpi .kpi-value { font-size: 14px; font-weight: bold; color: #00F5FF; margin-top: 2px; }
   .pulse-kpi .kpi-sub   { font-size: 7px; color: #4A5568; }
-  h1 { font-size: 18px; font-weight: bold; margin: 20px 0 6px; color: #0a0f13; border-bottom: 2px solid #40B595; padding-bottom: 4px; page-break-after: avoid; }
-  h2 { font-size: 13px; font-weight: bold; margin: 16px 0 5px; color: #0a0f13; border-left: 3px solid #40B595; padding-left: 8px; page-break-after: avoid; }
+  h1 { font-size: 18px; font-weight: bold; margin: 20px 0 6px; color: #0a0f13; border-bottom: 2px solid #00F5FF; padding-bottom: 4px; page-break-after: avoid; }
+  h2 { font-size: 13px; font-weight: bold; margin: 16px 0 5px; color: #0a0f13; border-left: 3px solid #00F5FF; padding-left: 8px; page-break-after: avoid; }
   h3 { font-size: 11px; font-weight: bold; margin: 12px 0 4px; color: #2d3748; page-break-after: avoid; }
   p { margin: 5px 0; font-size: 9px; color: #2d3748; }
   code { font-family: 'Courier New', monospace; font-size: 8px; background: #edf2f7; padding: 1px 4px; border-radius: 2px; }
   strong { font-weight: bold; color: #0a0f13; }
   em { font-style: italic; color: #4A5568; }
   pre.code {
-    background: #0d1117; color: #40B595; font-size: 8px;
-    padding: 10px 14px; margin: 8px 0; border-left: 3px solid #40B595;
+    background: #0d1117; color: #00F5FF; font-size: 8px;
+    padding: 10px 14px; margin: 8px 0; border-left: 3px solid #00F5FF;
     overflow-x: auto; white-space: pre-wrap; word-break: break-all;
     page-break-inside: avoid;
   }
   table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8.5px; page-break-inside: avoid; }
-  th { background: #40B595; color: #fff; font-weight: bold; padding: 5px 8px; text-align: left; }
+  th { background: #00F5FF; color: #fff; font-weight: bold; padding: 5px 8px; text-align: left; }
   td { padding: 4px 8px; border-bottom: 1px solid #e2e8f0; color: #2d3748; vertical-align: top; }
   tr:nth-child(even) td { background: #f7fafc; }
   hr { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
   blockquote {
-    border-left: 3px solid #EBC06D; padding: 6px 12px; margin: 8px 0;
+    border-left: 3px solid #FFB800; padding: 6px 12px; margin: 8px 0;
     background: #FFFBEB; font-style: italic; font-size: 8.5px; color: #4A5568;
   }
   li { margin: 3px 0 3px 16px; font-size: 9px; color: #2d3748; list-style-type: disc; }
@@ -560,7 +560,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
     </div>
     <div class="pulse-kpi">
       <div class="kpi-label">Pulse Status</div>
-      <div class="kpi-value" style="font-size:10px;color:${wp.pulseSeal.status === "NOMINAL" ? "#40B595" : "#D96161"};">${wp.pulseSeal.status}</div>
+      <div class="kpi-value" style="font-size:10px;color:${wp.pulseSeal.status === "NOMINAL" ? "#00F5FF" : "#FF003C"};">${wp.pulseSeal.status}</div>
       <div class="kpi-sub">Sovereign Pulse Engine</div>
     </div>
   </div>

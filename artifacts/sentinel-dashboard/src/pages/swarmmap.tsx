@@ -27,9 +27,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const P = {
-  sage:       "#40B595",
-  amber:      "#EBC06D",
-  terra:      "#D96161",
+  sage:       "#00F5FF",
+  amber:      "#FFB800",
+  terra:      "#FF003C",
   blue:       "#5B8DEF",
   gold:       "#FFD700",
   whiteGold:  "#FFF8C5",
@@ -1331,7 +1331,7 @@ function SwarmMapPageInner() {
     // (dynamic viewport height) tracks the *visible* viewport, unlike vh which
     // uses the largest possible viewport on mobile.
     <div style={{ height: "100dvh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-    <div className="flex flex-col animate-in fade-in duration-500 gap-4" style={{ flex: 1, minHeight: 0 }}>
+    <div className="flex flex-col page-transition gap-4" style={{ flex: 1, minHeight: 0 }}>
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between shrink-0 gap-3 flex-wrap">
@@ -1559,7 +1559,7 @@ function SwarmMapPageInner() {
                   <Link
                     to="/partner-onboarding"
                     className="underline decoration-dotted hover:opacity-100"
-                    style={{ color: "#EBC06D", opacity: 0.9 }}
+                    style={{ color: "#FFB800", opacity: 0.9 }}
                   >
                     Alpha Onboarding
                   </Link>{" "}
@@ -2274,9 +2274,9 @@ function SwarmMapPageInner() {
                   <span
                     className="text-[8px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
                     style={{
-                      color: "#EBC06D",
-                      background: "#EBC06D14",
-                      border: "1px solid #EBC06D55",
+                      color: "#FFB800",
+                      background: "#FFB80014",
+                      border: "1px solid #FFB80055",
                     }}
                     title={`Summary Mode active — packets batched every 1500ms · Latest 5 events only (${nodes.length.toLocaleString()} nodes)`}
                   >
