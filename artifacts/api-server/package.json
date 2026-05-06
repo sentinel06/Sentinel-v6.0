@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.13",
+    "@clerk/shared": "^4.10.0",
     "@noble/post-quantum": "^0.6.1",
     "@types/pdfkit": "^0.17.5",
     "@workspace/api-zod": "workspace:*",

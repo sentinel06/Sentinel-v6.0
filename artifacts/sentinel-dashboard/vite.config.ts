@@ -37,7 +37,10 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    tailwindcss(),
+    // optimize:false — Tailwind v4 lightningcss reorders nested @layer imports
+    // from @clerk/themes/*.css in prod, breaking the Clerk UI styling. Disable
+    // the optimizer so the layer order we declare in index.css is preserved.
+    tailwindcss({ optimize: false }),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined

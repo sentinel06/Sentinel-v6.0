@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap');
+/* Layer order MUST be declared before @import 'tailwindcss' so the Clerk
+   theme's CSS lands in our `clerk` layer and Tailwind utilities can override
+   it. See the clerk-auth skill (Tailwind v4 setup notes). */
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";

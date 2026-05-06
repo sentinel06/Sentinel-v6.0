@@ -1,10 +1,11 @@
 import React, { lazy, Suspense, useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
+import { useUser, useClerk } from "@clerk/react";
 import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
   Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight, HelpCircle,
-  Menu,
+  Menu, LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -717,6 +718,80 @@ const NAV_GROUPS = [
 ];
 
 // ── Layout ────────────────────────────────────────────────────────────────────
+// Identity chip in the top-right of the header. Shows the signed-in user's
+// email/handle and a one-click sign-out. Replaces Clerk's <UserButton> so
+// the visual matches the Command Center palette.
+function ClerkUserChip() {
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
+  if (!isLoaded || !user) return null;
+
+  const label =
+    user.primaryEmailAddress?.emailAddress ??
+    user.username ??
+    user.firstName ??
+    "operator";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 4px 0 10px",
+        height: 32,
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.04)",
+        maxWidth: 240,
+      }}
+    >
+      <span
+        title={label}
+        style={{
+          fontSize: 11,
+          fontFamily: "JetBrains Mono, monospace",
+          color: "#CBD5E1",
+          letterSpacing: "0.04em",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          maxWidth: 180,
+        }}
+      >
+        {label}
+      </span>
+      <button
+        type="button"
+        title="Sign out"
+        onClick={() => signOut()}
+        style={{
+          width: 26,
+          height: 26,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "transparent",
+          border: "none",
+          color: "#9AA4B1",
+          cursor: "pointer",
+          borderRadius: 6,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,0,60,0.10)";
+          (e.currentTarget as HTMLButtonElement).style.color = "#FF003C";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+          (e.currentTarget as HTMLButtonElement).style.color = "#9AA4B1";
+        }}
+      >
+        <LogOut style={{ width: 14, height: 14 }} />
+      </button>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [pendingNotifications, setPendingNotifications] = useState<PendingNotification[]>([]);
@@ -1068,6 +1143,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 LIVE
               </span>
             </div>
+
+            {/* User identity + sign-out */}
+            <ClerkUserChip />
 
             <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
 

@@ -310,13 +310,13 @@ export default function LandingPage() {
           >
             Explore a live, read-only audit environment with{" "}
             <span style={{ color: SAGE, fontWeight: 600 }}>1,535 sealed events</span>{" "}
-            across 41 agents — no signup required.
+            across 41 agents — sign up free with email or social login.
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Primary — Explore the live dashboard */}
+            {/* Primary — Sign up to access the dashboard */}
             <button
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/sign-up")}
               className="font-semibold transition-all"
               style={{
                 width: "100%",
@@ -344,8 +344,41 @@ export default function LandingPage() {
                 (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
               }}
             >
-              Explore the Live Dashboard
+              Create your account
               <ArrowRight className="w-4 h-4" />
+            </button>
+
+            {/* Returning users — Sign in */}
+            <button
+              onClick={() => navigate("/sign-in")}
+              className="font-medium transition-all"
+              style={{
+                width: "100%",
+                padding: "11px 20px",
+                background: "transparent",
+                color: "#CBD5E1",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 10,
+                fontSize: 13,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                fontFamily: "'Inter', system-ui, sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,245,255,0.06)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(0,245,255,0.4)";
+                (e.currentTarget as HTMLButtonElement).style.color = SAGE;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.15)";
+                (e.currentTarget as HTMLButtonElement).style.color = "#CBD5E1";
+              }}
+            >
+              Already have an account? Sign in
             </button>
 
             {/* Secondary — White paper */}

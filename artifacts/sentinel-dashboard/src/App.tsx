@@ -1,6 +1,14 @@
-import { lazy, Suspense, useEffect } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import {
+  ClerkProvider,
+  SignIn,
+  SignUp,
+  Show,
+  useClerk,
+} from "@clerk/react";
+import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
@@ -20,18 +28,13 @@ import BadgePage from "@/pages/badge";
 import PulsePage from "@/pages/pulse";
 import StatusPage from "@/pages/status";
 
-// Lazy-loaded pages — these pull in heavy deps (jspdf, jszip, qrcode, d3,
-// html2canvas) that we don't want in the main entry chunk. Each lazy()
-// import becomes its own chunk, so first-paint stays light and these
-// pages load on demand when the user navigates to them.
+// Lazy-loaded pages — see notes in original App.tsx.
 const WarRoomPage = lazy(() => import("@/pages/warroom"));
 const SwarmMapPage = lazy(() => import("@/pages/swarmmap"));
 const PartnerPortalPage = lazy(() => import("@/pages/partnerportal"));
 const PartnerOnboardingPage = lazy(() => import("@/pages/partneronboarding"));
 const EQAPage = lazy(() => import("@/pages/eqa"));
 
-// Minimal fallback while a route chunk is in-flight. Matches the dark
-// glassmorphic theme; no spinner — sub-200ms loads feel instantaneous.
 function RouteFallback() {
   return (
     <div
@@ -60,50 +63,247 @@ const queryClient = new QueryClient({
   },
 });
 
+// ── Clerk configuration ────────────────────────────────────────────────────
+// We deploy as a single app (not multiple Clerk custom domains), so the
+// publishable key is read straight from the env. publishableKeyFromHost is
+// for multi-tenant custom-domain setups and synthesizes a junk key when
+// hostname is "localhost", breaking dev.
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+// Empty in dev, set automatically in prod by the Replit deployment.
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in environment");
+}
+
+// Sentinel Command Center palette (mirrors index.css --cmd-* tokens).
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: "clerk",
+  options: {
+    logoPlacement: "inside" as const,
+    logoLinkUrl: basePath || "/",
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    socialButtonsPlacement: "top" as const,
+    socialButtonsVariant: "blockButton" as const,
+  },
+  variables: {
+    colorPrimary: "#00F5FF",
+    colorForeground: "#E5E7EB",
+    colorMutedForeground: "#9AA4B1",
+    colorDanger: "#FF003C",
+    colorBackground: "#0A0A0A",
+    colorInput: "#050505",
+    colorInputForeground: "#E5E7EB",
+    colorNeutral: "#2C3136",
+    fontFamily: "Inter, system-ui, sans-serif",
+    borderRadius: "0.625rem",
+  },
+  elements: {
+    rootBox: "w-full flex justify-center",
+    cardBox:
+      "bg-[#0A0A0A] border border-white/10 rounded-2xl w-[440px] max-w-full overflow-hidden backdrop-blur-xl",
+    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    headerTitle: "text-white",
+    headerSubtitle: "text-[#9AA4B1]",
+    socialButtonsBlockButton:
+      "border-white/15 bg-white/5 hover:bg-white/10 transition-colors",
+    socialButtonsBlockButtonText: "text-white font-medium",
+    formFieldLabel: "text-[#CBD5E1] text-xs uppercase tracking-wider",
+    formFieldInput:
+      "bg-[#050505] border-white/10 text-white placeholder:text-[#6b7280]",
+    formButtonPrimary:
+      "bg-[#00F5FF] hover:bg-[#00d4dc] text-[#050505] font-semibold uppercase tracking-wider",
+    footerActionText: "text-[#9AA4B1]",
+    footerActionLink: "text-[#00F5FF] hover:text-[#00d4dc] font-medium",
+    footerAction: "",
+    dividerLine: "bg-white/10",
+    dividerText: "text-[#6b7280]",
+    identityPreviewEditButton: "text-[#00F5FF]",
+    formFieldSuccessText: "text-[#00F5FF]",
+    alert: "bg-[#FF003C]/10 border border-[#FF003C]/30",
+    alertText: "text-[#FF003C]",
+    otpCodeFieldInput: "bg-[#050505] border-white/10 text-white",
+    formFieldRow: "",
+    main: "",
+    logoBox: "h-10",
+    logoImage: "h-10 w-auto",
+  },
+};
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+        fallbackRedirectUrl={`${basePath}/dashboard`}
+      />
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        fallbackRedirectUrl={`${basePath}/dashboard`}
+      />
+    </div>
+  );
+}
+
+// Landing page stays public; signed-in users get redirected straight into
+// the dashboard so they don't have to click through it on every visit.
+function HomeRoute() {
+  return (
+    <>
+      <Show when="signed-in">
+        <Redirect to="/dashboard" />
+      </Show>
+      <Show when="signed-out">
+        <LandingPage />
+      </Show>
+    </>
+  );
+}
+
+// Wraps every authenticated dashboard route. Signed-out visitors are bounced
+// to /sign-in; signed-in users get the normal Layout chrome.
+function Protected({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Show when="signed-in">{children}</Show>
+      <Show when="signed-out">
+        <Redirect to="/sign-in" />
+      </Show>
+    </>
+  );
+}
+
+// Invalidate the React Query cache when the signed-in user changes so a
+// previous user's data never bleeds into the next session.
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (
+        prevUserIdRef.current !== undefined &&
+        prevUserIdRef.current !== userId
+      ) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
-      {/* Landing gate — bypasses Layout chrome (no sidebar / no header), enforced
-          single-screen sovereign onboarding. Once acknowledged, user navigates
-          to /dashboard and the full Layout takes over. */}
-      <Route path="/" component={LandingPage} />
-      {/* All authenticated dashboard routes wrapped in shared Layout.
-          Suspense boundary catches lazy() route components — eager routes
-          render synchronously and never trip the fallback. */}
+      {/* Public auth screens — must come before the catch-all Layout route. */}
+      <Route path="/sign-in/*?" component={SignInPage} />
+      <Route path="/sign-up/*?" component={SignUpPage} />
+
+      {/* Public landing — redirects authed users to /dashboard. */}
+      <Route path="/" component={HomeRoute} />
+
+      {/* All authenticated dashboard routes. Wrapped in <Protected> inside
+          the Layout so the chrome (sidebar/header) only renders for
+          signed-in users; signed-out visitors bounce to /sign-in. */}
       <Route>
-        <Layout>
-          <Suspense fallback={<RouteFallback />}>
-            <Switch>
-              <Route path="/dashboard" component={DashboardPage} />
-              <Route path="/traces" component={TracesPage} />
-              <Route path="/topology" component={TopologyPage} />
-              <Route path="/warroom" component={WarRoomPage} />
-              <Route path="/agents" component={AgentsPage} />
-              <Route path="/registry" component={AgentsPage} />
-              <Route path="/compliance" component={CompliancePage} />
-              <Route path="/integrity" component={IntegrityPage} />
-              <Route path="/badge" component={BadgePage} />
-              <Route path="/swarmmap" component={SwarmMapPage} />
-              <Route path="/partner" component={PartnerPortalPage} />
-              <Route path="/partner-onboarding" component={PartnerOnboardingPage} />
-              <Route path="/eqa" component={EQAPage} />
-              <Route path="/pulse" component={PulsePage} />
-              <Route path="/status" component={StatusPage} />
-              <Route component={NotFound} />
-            </Switch>
-          </Suspense>
-        </Layout>
+        <Protected>
+          <Layout>
+            <Suspense fallback={<RouteFallback />}>
+              <Switch>
+                <Route path="/dashboard" component={DashboardPage} />
+                <Route path="/traces" component={TracesPage} />
+                <Route path="/topology" component={TopologyPage} />
+                <Route path="/warroom" component={WarRoomPage} />
+                <Route path="/agents" component={AgentsPage} />
+                <Route path="/registry" component={AgentsPage} />
+                <Route path="/compliance" component={CompliancePage} />
+                <Route path="/integrity" component={IntegrityPage} />
+                <Route path="/badge" component={BadgePage} />
+                <Route path="/swarmmap" component={SwarmMapPage} />
+                <Route path="/partner" component={PartnerPortalPage} />
+                <Route
+                  path="/partner-onboarding"
+                  component={PartnerOnboardingPage}
+                />
+                <Route path="/eqa" component={EQAPage} />
+                <Route path="/pulse" component={PulsePage} />
+                <Route path="/status" component={StatusPage} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </Layout>
+        </Protected>
       </Route>
     </Switch>
   );
 }
 
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      signInFallbackRedirectUrl={`${basePath}/dashboard`}
+      signUpFallbackRedirectUrl={`${basePath}/dashboard`}
+      localization={{
+        signIn: {
+          start: {
+            title: "Welcome to Agent-Sentinel",
+            subtitle: "Sign in to access the audit ledger",
+          },
+        },
+        signUp: {
+          start: {
+            title: "Create your Sentinel account",
+            subtitle: "Email or social login — verified, audit-grade",
+          },
+        },
+      }}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <Router />
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
 function App() {
   // ── Global Scaling Reset (Operator brief §3) ──
-  // Some browsers (notably Chromium on Android & Safari on iOS) auto-zoom
-  // when they encounter monospace / terminal-style fonts at small sizes,
-  // which throws off our pixel-perfect glassmorphic layout. Force the
-  // computed zoom back to 1.0 on mount so the viewport stays sovereign.
   useEffect(() => {
     try {
       (document.body.style as CSSStyleDeclaration & { zoom?: string }).zoom = "1.0";
@@ -115,16 +315,14 @@ function App() {
 
   return (
     <ThemeProvider attribute="class" forcedTheme="dark" enableSystem={false}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <ForensicProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </ForensicProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <TooltipProvider>
+        <ForensicProvider>
+          <WouterRouter base={basePath}>
+            <ClerkProviderWithRoutes />
+          </WouterRouter>
+          <Toaster />
+        </ForensicProvider>
+      </TooltipProvider>
     </ThemeProvider>
   );
 }
