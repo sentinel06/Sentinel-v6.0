@@ -260,7 +260,7 @@ export default function LandingPage() {
             boxShadow: `0 0 0 1px rgba(255,255,255,0.03), 0 0 60px ${VIOLET}28, inset 0 0 30px ${VIOLET}10`,
           }}
         >
-          {/* Header strip — friendly welcome instead of clearance gate */}
+          {/* Header strip — clear, action-oriented */}
           <div
             style={{
               display: "flex",
@@ -282,36 +282,63 @@ export default function LandingPage() {
                 fontFamily: "'Inter', system-ui, sans-serif",
               }}
             >
-              Take a guided tour
+              Get started in 3 steps
             </span>
-            <span
-              style={{
-                display: "inline-block",
-                width: 5,
-                height: 5,
-                borderRadius: "50%",
-                background: SAGE,
-                boxShadow: `0 0 6px ${SAGE}`,
-                marginLeft: 4,
-              }}
-            />
           </div>
 
-          {/* Friendly invitation copy */}
-          <p
+          {/* Concrete onboarding flow — replaces the demo-data flaff */}
+          <ol
             style={{
-              fontSize: 13,
-              color: "#94A3B8",
-              lineHeight: 1.55,
-              marginBottom: 18,
+              listStyle: "none",
+              padding: 0,
+              margin: "0 0 18px 0",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              textAlign: "left",
               fontFamily: "'Inter', system-ui, sans-serif",
-              letterSpacing: "0",
             }}
           >
-            Explore a live, read-only audit environment with{" "}
-            <span style={{ color: SAGE, fontWeight: 600 }}>1,535 sealed events</span>{" "}
-            across 41 agents — sign up free with email or social login.
-          </p>
+            {[
+              { n: "1", title: "Create your account", body: "Email or one-click social login." },
+              { n: "2", title: "Connect your AI agent", body: "Drop in the Sentinel-Bridge SDK or call the gateway API." },
+              { n: "3", title: "Watch your ledger fill up", body: "Every agent action signed, sealed, and audit-ready." },
+            ].map((s) => (
+              <li
+                key={s.n}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 12,
+                }}
+              >
+                <span
+                  style={{
+                    flex: "0 0 22px",
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    background: `${VIOLET}22`,
+                    border: `1px solid ${VIOLET}66`,
+                    color: SAGE,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                    marginTop: 1,
+                  }}
+                >
+                  {s.n}
+                </span>
+                <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ color: "#E5E7EB", fontSize: 13, fontWeight: 600 }}>{s.title}</span>
+                  <span style={{ color: "#94A3B8", fontSize: 12, lineHeight: 1.5 }}>{s.body}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {/* Primary — Sign up to access the dashboard */}
