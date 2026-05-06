@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import LatticeStrengthGauge from "@/components/widgets/LatticeStrengthGauge";
+import RedisPulse from "@/components/widgets/RedisPulse";
+import WorkerThreadHealth from "@/components/widgets/WorkerThreadHealth";
 import {
   Tooltip,
   TooltipContent,
@@ -254,7 +257,7 @@ export default function DashboardPage() {
   }, [stats]);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 page-transition">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Live Stream</h1>
@@ -313,6 +316,13 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Sentinel Health — Hardened Security telemetry row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <LatticeStrengthGauge bits={87} />
+        <RedisPulse />
+        <WorkerThreadHealth />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Live Feed */}
         <Card className="lg:col-span-2 flex flex-col overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm">
@@ -345,7 +355,7 @@ export default function DashboardPage() {
                   return (
                     <div 
                       key={log.id} 
-                      className={`p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-[#2C3136]/40 border-l-2 ${borderColor}`}
+                      className={`log-row-enter p-3 text-sm font-mono flex items-start gap-4 transition-colors hover:bg-[#2C3136]/40 border-l-2 ${borderColor} ${anomalous ? "glow-amber" : ""}`}
                     >
                       <div className="text-muted-foreground w-24 shrink-0 mt-0.5 text-xs">
                         {formatTime(log.timestamp)}
@@ -373,7 +383,7 @@ export default function DashboardPage() {
                         </div>
                         
                         {log.rationale && (
-                          <div className={`mt-1.5 text-xs leading-relaxed ${isHallucination ? 'text-[#D96161]/80' : anomalous ? 'text-[#EBC06D]/80' : 'text-foreground/75'}`}>
+                          <div className={`log-typewriter mt-1.5 text-xs leading-relaxed ${isHallucination ? 'text-[#D96161]/80' : anomalous ? 'text-[#EBC06D]/80' : 'text-foreground/75'}`}>
                             {log.rationale}
                           </div>
                         )}

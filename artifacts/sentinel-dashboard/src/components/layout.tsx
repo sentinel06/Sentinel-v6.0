@@ -1006,6 +1006,44 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <HelpCircle style={{ width: 14, height: 14 }} />
             </button>
 
+            <div style={{ width: 1, height: 20, background: "var(--sv-panel-border)" }} />
+
+            {/* System Frequency — animated wave */}
+            <div
+              title="System Frequency · live signal"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0 10px", height: 32, borderRadius: 8,
+                border: "1px solid rgba(0,245,255,0.28)",
+                background: "rgba(0,245,255,0.06)",
+                overflow: "hidden",
+              }}
+            >
+              <span style={{
+                fontSize: 9, fontFamily: "JetBrains Mono, monospace", fontWeight: 700,
+                letterSpacing: "0.16em", color: "#00F5FF", textShadow: "0 0 6px rgba(0,245,255,0.55)",
+              }}>FREQ</span>
+              <svg width="92" height="18" viewBox="0 0 92 18" style={{ display: "block", overflow: "hidden" }}>
+                <defs>
+                  <linearGradient id="freq-fade" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stopColor="#00F5FF" stopOpacity="0" />
+                    <stop offset="0.18" stopColor="#00F5FF" stopOpacity="1" />
+                    <stop offset="0.82" stopColor="#00F5FF" stopOpacity="1" />
+                    <stop offset="1" stopColor="#00F5FF" stopOpacity="0" />
+                  </linearGradient>
+                  <mask id="freq-mask"><rect width="92" height="18" fill="url(#freq-fade)" /></mask>
+                </defs>
+                <g mask="url(#freq-mask)">
+                  <path
+                    className="frequency-wave-track"
+                    d="M0 9 Q5 2 10 9 T20 9 T30 9 T40 9 T50 9 T60 9 T70 9 T80 9 T90 9 T100 9 T110 9 T120 9 T130 9"
+                    fill="none" stroke="#00F5FF" strokeWidth="1.4" strokeLinecap="round"
+                    style={{ filter: "drop-shadow(0 0 3px #00F5FF)" }}
+                  />
+                </g>
+              </svg>
+            </div>
+
             {/* LIVE indicator */}
             <div
               data-tour-id="live-pulse"

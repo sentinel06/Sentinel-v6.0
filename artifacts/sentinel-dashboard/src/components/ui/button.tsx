@@ -26,6 +26,10 @@ const buttonVariants = cva(
         // @replit no hover, transparent border
         ghost: "border border-transparent",
         link: "text-primary underline-offset-4 hover:underline",
+        // Hardened Security: ghost-style buttons that fill on hover
+        terminal: "btn-ghost-cyan rounded-md font-mono",
+        warning:  "btn-ghost-amber rounded-md font-mono",
+        block:    "btn-ghost-crimson rounded-md font-mono",
       },
       size: {
         // @replit changed sizes
