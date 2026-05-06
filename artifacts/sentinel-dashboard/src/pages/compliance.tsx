@@ -524,9 +524,9 @@ export default function CompliancePage() {
         <div className="flex items-center gap-2">
           <BarChart3 className="w-5 h-5" style={{ color: C.sage }} />
           <div>
-            <h1 className="text-xl font-bold font-mono tracking-tight">Professional Audit Report</h1>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">
-              Executive-grade governance summary — trust score, anomaly disposition, and quantum-readiness certification
+            <h1 className="text-xl font-bold tracking-tight">Audit Reports</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              One-click summary your board, auditor, or regulator can actually use — trust score, anomaly review, quantum-readiness.
             </p>
           </div>
         </div>
@@ -541,9 +541,9 @@ export default function CompliancePage() {
         <div className="flex items-center gap-2">
           <FileCheck className="w-5 h-5 text-primary" />
           <div>
-            <h2 className="text-lg font-semibold tracking-tight font-mono">Compliance Export</h2>
-            <p className="text-xs text-muted-foreground font-mono">
-              Immutable audit reports and signed PDF evidence packages for regulatory filing
+            <h2 className="text-lg font-semibold tracking-tight">Evidence Packages</h2>
+            <p className="text-xs text-muted-foreground">
+              Tamper-sealed PDFs and JSON bundles you can hand straight to a regulator.
             </p>
           </div>
         </div>

@@ -443,14 +443,14 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
             {/* Persona-select gate */}
             {stepIdx === -1 && (
               <>
-                <div style={{ fontSize: 9, letterSpacing: "0.22em", color: VIOLET_BRIGHT, fontWeight: 700, marginBottom: 6 }}>
-                  MISSION INDUCTION · OPERATOR PROFILE
+                <div style={{ fontSize: 10, letterSpacing: "0.16em", color: VIOLET_BRIGHT, fontWeight: 600, marginBottom: 6, fontFamily: "Inter, system-ui, sans-serif" }}>
+                  Welcome to Agent-Sentinel
                 </div>
-                <div id="induction-title" style={{ fontSize: 17, fontWeight: 700, color: "#F9FAFB", marginBottom: 8, letterSpacing: "-0.01em" }}>
-                  AGENT-SENTINEL v6.0 — NEURAL SOVEREIGNTY
+                <div id="induction-title" style={{ fontSize: 19, fontWeight: 600, color: "#F9FAFB", marginBottom: 10, letterSpacing: "-0.01em", fontFamily: "Inter, system-ui, sans-serif" }}>
+                  Let's give you a quick tour.
                 </div>
-                <div id="induction-body" style={{ fontSize: 11, lineHeight: 1.55, color: "#CBD5E1", marginBottom: 14 }}>
-                  Select your operator profile so this 90-second induction speaks in your domain.
+                <div id="induction-body" style={{ fontSize: 13, lineHeight: 1.55, color: "#CBD5E1", marginBottom: 16, fontFamily: "Inter, system-ui, sans-serif" }}>
+                  Pick your background so we can speak your language. The whole tour takes about 90 seconds.
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                   {(["business", "technical"] as Persona[]).map(opt => {
@@ -469,13 +469,13 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
                           transition: "all 0.2s ease",
                         }}
                       >
-                        <div style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, color: sel ? VIOLET_BRIGHT : "#64748B", marginBottom: 4 }}>
-                          {opt === "business" ? "BUSINESS" : "TECHNICAL"}
+                        <div style={{ fontSize: 10, letterSpacing: "0.06em", fontWeight: 600, color: sel ? VIOLET_BRIGHT : "#64748B", marginBottom: 4, fontFamily: "Inter, system-ui, sans-serif" }}>
+                          {opt === "business" ? "I'm in business" : "I'm technical"}
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3, fontFamily: "Inter, system-ui, sans-serif" }}>
                           {opt === "business" ? "Governance" : "Forensics"}
                         </div>
-                        <div style={{ fontSize: 9, color: sel ? "#CBD5E1" : "#64748B", lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 11, color: sel ? "#CBD5E1" : "#64748B", lineHeight: 1.45, fontFamily: "Inter, system-ui, sans-serif" }}>
                           {opt === "business" ? "Compliance · Board · Audit" : "Engineering · IR · Threat Hunt"}
                         </div>
                       </button>
@@ -486,23 +486,25 @@ export default function SovereignInduction({ forceOpen = false, onClose }: Induc
                   <button
                     onClick={handleSkip}
                     style={{
-                      fontSize: 9, letterSpacing: "0.16em", fontWeight: 700, fontFamily: "inherit",
-                      padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                      background: skipConfirm ? `${CRIMSON}22` : "transparent",
-                      color: skipConfirm ? "#FCA5A5" : "rgba(203,213,225,0.55)",
-                      border: `1px solid ${skipConfirm ? `${CRIMSON}66` : "rgba(203,213,225,0.18)"}`,
+                      fontSize: 12, letterSpacing: "0", fontWeight: 500,
+                      fontFamily: "Inter, system-ui, sans-serif",
+                      padding: "8px 14px", borderRadius: 8, cursor: "pointer",
+                      background: skipConfirm ? `${AMBER}18` : "transparent",
+                      color: skipConfirm ? AMBER : "rgba(203,213,225,0.7)",
+                      border: `1px solid ${skipConfirm ? `${AMBER}55` : "rgba(203,213,225,0.18)"}`,
                     }}
-                  >{skipConfirm ? "⚠ CONFIRM SKIP" : "SKIP BRIEFING"}</button>
+                  >{skipConfirm ? "Click again to skip" : "Maybe later"}</button>
                   <button
                     onClick={handleStart}
                     style={{
-                      fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, fontFamily: "inherit",
-                      padding: "9px 18px", borderRadius: 6, cursor: "pointer",
+                      fontSize: 13, letterSpacing: "0", fontWeight: 600,
+                      fontFamily: "Inter, system-ui, sans-serif",
+                      padding: "10px 20px", borderRadius: 8, cursor: "pointer",
                       background: `linear-gradient(180deg, ${VIOLET} 0%, #6D28D9 100%)`,
                       color: "#fff", border: `1px solid ${VIOLET_BRIGHT}`,
                       boxShadow: `0 4px 14px ${VIOLET}66, inset 0 1px 0 rgba(255,255,255,0.18)`,
                     }}
-                  >BEGIN INDUCTION →</button>
+                  >Start the tour →</button>
                 </div>
               </>
             )}

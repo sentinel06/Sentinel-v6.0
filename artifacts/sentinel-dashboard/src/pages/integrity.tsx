@@ -88,13 +88,13 @@ export default function IntegrityPage() {
             fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em",
             color: "var(--sv-text-primary)", marginBottom: 4,
           }}>
-            Hash Chain Integrity
+            Ledger Integrity
           </h1>
           <p style={{
-            fontSize: 12, fontFamily: "JetBrains Mono, monospace",
+            fontSize: 13,
             color: "var(--sv-text-dim)", lineHeight: 1.5,
           }}>
-            Two-phase cryptographic verification: SHA-256 sequential chain + Merkle tree
+            Proof your audit log hasn't been tampered with — checked two ways, every five seconds.
           </p>
         </div>
 

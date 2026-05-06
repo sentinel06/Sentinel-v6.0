@@ -1173,10 +1173,10 @@ export default function WarRoomPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
               <ShieldAlert className="w-6 h-6 text-destructive" />
-              Governance War Room
+              War Room
             </h1>
-            <p className="text-sm text-muted-foreground font-mono mt-1">
-              Active circuit breaker · Human-in-the-loop approvals · EU AI Act Art. 14
+            <p className="text-sm text-muted-foreground mt-1">
+              Pause any agent in one click. Every approval is logged for your auditor (EU AI Act Art. 14).
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">

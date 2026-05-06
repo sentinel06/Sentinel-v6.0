@@ -152,9 +152,9 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
               <Lock className="w-8 h-8" style={{ color: P.gold }} />
             </div>
           </div>
-          <h1 className="text-2xl font-mono font-bold text-white mb-1">Alpha Onboarding</h1>
-          <p className="text-sm font-mono" style={{ color: P.dim }}>
-            Apex-Fintech Partner Suite · Restricted Access
+          <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">Welcome, partner.</h1>
+          <p className="text-sm" style={{ color: P.dim }}>
+            Sign in to your Apex-Fintech alpha workspace.
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono"
             style={{ background: `${P.gold}12`, border: `1px solid ${P.gold}33`, color: P.gold }}>
@@ -244,17 +244,16 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
             }}
           >
             {guestLoading
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Provisioning Guest Session…</>
-              : <><Shield className="w-4 h-4" /> LOG IN AS GUEST AUDITOR</>}
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Setting up your guest session…</>
+              : <><Shield className="w-4 h-4" /> Take a look as a guest</>}
           </button>
-          <p className="text-[10px] font-mono text-center -mt-1" style={{ color: P.dim }}>
-            Read-only M&amp;A demo session · auto-fills{" "}
-            <span style={{ color: P.gold }}>{DEMO_KEY}</span>
+          <p className="text-[11px] text-center -mt-1" style={{ color: P.dim }}>
+            Read-only demo · we'll fill in the key for you
           </p>
 
-          <p className="text-[10px] font-mono text-center" style={{ color: P.dim }}>
-            This portal is restricted to Apex-Fintech alpha partners.
-            <br />Contact your Sentinel account manager for access.
+          <p className="text-[11px] text-center" style={{ color: P.dim }}>
+            Already an Apex-Fintech alpha partner? Sign in above.
+            <br />Otherwise, your account manager can get you set up.
           </p>
         </form>
 

@@ -151,6 +151,14 @@ Full mobile-first physics and UX for the Swarm Map:
 - Expanded: `maxHeight: 58vh` — full KPI grid, selected node info, CRISPR + Trace quick-action buttons.
 - CSS `max-height` transition `0.32s cubic-bezier(0.22,1,0.36,1)` for smooth open/close.
 
+## Tone & Copy
+
+The dashboard underwent a "warming pass" (May 2026) shifting all-caps mono "sovereign" jargon to mixed-case Inter, benefit-led copy:
+- `SovereignInduction.tsx` persona-gate: "Welcome to Agent-Sentinel / Let's give you a quick tour" + "Start the tour →" / "Maybe later"
+- Page headers warmed: War Room, Audit Reports (was "Professional Audit Report"), Ledger Integrity (was "Hash Chain Integrity"), Your Agents (was "Agent Registry"), Welcome partner (was "Restricted Access")
+- Landing page CTAs: "Explore the Live Dashboard" / "Read the White Paper"
+- Step body copy in induction tour intentionally kept (already plain-English, persona-aware via `lex` adapter)
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

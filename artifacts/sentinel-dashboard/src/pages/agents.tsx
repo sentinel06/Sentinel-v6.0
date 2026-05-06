@@ -268,16 +268,16 @@ export default function AgentsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <Cpu className="w-6 h-6 text-primary" />
-            Agent Registry
+            Your Agents
             <span
-              className="text-[9px] font-mono font-bold px-2 py-0.5 rounded border ml-1"
-              style={{ color: VIOLET, borderColor: VIOLET + "44", background: VIOLET + "12", letterSpacing: "0.12em" }}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded border ml-1"
+              style={{ color: VIOLET, borderColor: VIOLET + "44", background: VIOLET + "12", letterSpacing: "0.04em" }}
             >
-              SOVEREIGN AUDIT GRADE
+              Audit-grade
             </span>
           </h1>
-          <p className="text-sm text-muted-foreground font-mono mt-1">
-            Governed identity · SLSA L4 provenance · Manual interdiction · ML-DSA-87 sealed
+          <p className="text-sm text-muted-foreground mt-1">
+            Every agent has a signed identity, a verified build chain, and a one-click stop button.
           </p>
         </div>
         <div className="flex items-center gap-2">
