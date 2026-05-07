@@ -5,7 +5,7 @@ generated = []
 id = "0-tJnC-84_iG5aQ0Wk6c9"
 uri = "file://screenshots/sentinel-landing.jpg"
 type = "image"
-title = "Landing Page — Hero (1280×720)"
+title = "Landing Page — 1280×720"
 
 [[outputs]]
 id = "pCkidCIkmE0xRF6NL5Kfw"
@@ -18,3 +18,21 @@ id = "uNk0746GHGZg6lbj5sIG-"
 uri = "file://screenshots/sentinel-signin.jpg"
 type = "image"
 title = "Sign-in Screen"
+
+[[outputs]]
+id = "TV_pnfGMvZGlPn9RF3Uh4"
+uri = "file://screenshots/landing-hero-1440.jpg"
+type = "image"
+title = "Landing Page — Hero (1440×900)"
+
+[[outputs]]
+id = "b6FIrFNnJlTlMj-RRTIG0"
+uri = "file://screenshots/sign-up.jpg"
+type = "image"
+title = "Sign-Up Screen"
+
+[[outputs]]
+id = "ul2ltuLBuXuv2jbSNkgYB"
+uri = "file://screenshots/sign-in.jpg"
+type = "image"
+title = "Sign-In Screen"
