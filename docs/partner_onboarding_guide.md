@@ -1,9 +1,7 @@
-# Agent-Sentinel v4.0 — Apex-Fintech Alpha Partner Onboarding Guide
+# Agent-Sentinel v6.0 — Partner Onboarding Guide
 
-**Classification:** CONFIDENTIAL — Apex-Fintech Alpha Partners Only  
-**Key Required:** `SENTINEL-DEMO-GOLDEN-2026`  
 **Compliance Framework:** EU AI Act Art. 12/14 · NIST AI RMF · FIPS-204 (QL-2.0)  
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-05-07
 
 ---
 
@@ -15,7 +13,7 @@
 4. [Secondary Sovereign Key Provisioning](#4-secondary-sovereign-key-provisioning)
 5. [Two-Man Rule — Multi-Sig Gate Integration](#5-two-man-rule--multi-sig-gate-integration)
 6. [Post-Interdiction SLA — 100% Signature Sampling](#6-post-interdiction-sla--100-signature-sampling)
-7. [Apex-Fintech Breach Scenario Demo](#7-apex-fintech-breach-scenario-demo)
+7. [Breach Scenario Demo](#7-breach-scenario-demo)
 8. [API Reference](#8-api-reference)
 9. [Support & Escalation](#9-support--escalation)
 
@@ -23,9 +21,9 @@
 
 ## 1. Overview
 
-Agent-Sentinel v4.0 is a full-stack AI governance framework built for high-risk AI deployments under the EU AI Act 2026 obligations. This guide covers the complete onboarding procedure for Apex-Fintech's alpha deployment, including:
+Agent-Sentinel v6.0 is a full-stack AI governance framework built for high-risk AI deployments under the EU AI Act 2026 obligations. This guide covers the complete onboarding procedure for authorized partners, including:
 
-- Authentication via the SENTINEL-DEMO-GOLDEN-2026 Golden Key
+- Authentication via the partner Golden Key
 - Dynamic EU AI Act Art. 12/14 compliance readiness assessment
 - Secondary Sovereign Key provisioning for Two-Man Rule enforcement
 - Service Level Agreement for the mandatory post-interdiction 100% signature sampling period
@@ -33,7 +31,7 @@ Agent-Sentinel v4.0 is a full-stack AI governance framework built for high-risk 
 **Architecture summary:**
 
 ```
-Apex-Fintech Agent Swarm
+Your Agent Swarm
         │
         ▼
 ┌───────────────────────────────────────────────────────────────┐
@@ -57,23 +55,23 @@ Apex-Fintech Agent Swarm
 
 ## 2. Alpha Access — Golden Key Authentication
 
-The Apex-Fintech Alpha Onboarding Suite is restricted to the SENTINEL-DEMO-GOLDEN-2026 key.
+The Partner Onboarding Suite is restricted to authorized Golden Key holders. Contact your Sentinel account manager to receive your key.
 
 ### Using the Dashboard
 
 1. Navigate to **Alpha Onboarding** in the sidebar (Governance section)
-2. Enter `SENTINEL-DEMO-GOLDEN-2026` in the key field
+2. Enter your Golden Key in the key field
 3. The compliance readiness dashboard loads with live system metrics
 
 ### Using the API directly
 
 ```bash
 # GET /v1/partner/onboarding — returns full compliance checklist + SLA
-curl -H "X-Partner-Key: SENTINEL-DEMO-GOLDEN-2026" \
+curl -H "X-Partner-Key: <your-golden-key>" \
   https://<your-sentinel-host>/api/v1/partner/onboarding
 
 # Or via query parameter:
-curl "https://<your-sentinel-host>/api/v1/partner/onboarding?key=SENTINEL-DEMO-GOLDEN-2026"
+curl "https://<your-sentinel-host>/api/v1/partner/onboarding?key=<your-golden-key>"
 ```
 
 **Response structure:**
@@ -81,7 +79,7 @@ curl "https://<your-sentinel-host>/api/v1/partner/onboarding?key=SENTINEL-DEMO-G
 ```json
 {
   "authorized": true,
-  "partner": "Apex-Fintech",
+  "partner": "<your-org>",
   "tier": "Enterprise",
   "accessLevel": "GOLDEN_DEMO",
   "overallStatus": "PARTIAL",
@@ -151,34 +149,34 @@ Using the Sentinel CLI:
 sentinel keygen \
   --algo ml-dsa-87 \
   --output-format pem \
-  --label apex-sovereign \
-  --out ./keys/apex-sovereign
+  --label sovereign-key \
+  --out ./keys/sovereign
 ```
 
 This produces:
-- `apex-sovereign.pub` — the public key (submit to Sentinel)
-- `apex-sovereign.priv` — the private key (**never share; store in HSM or air-gapped vault**)
+- `sovereign.pub` — the public key (submit to Sentinel)
+- `sovereign.priv` — the private key (**never share; store in HSM or air-gapped vault**)
 
 **Step 2: Export the public key as base64url DER**
 
 ```bash
 sentinel key export \
-  --input ./keys/apex-sovereign.pub \
+  --input ./keys/sovereign.pub \
   --format base64url-der \
-  --out ./keys/apex-sovereign.b64
+  --out ./keys/sovereign.b64
 ```
 
 **Step 3: Register with Sentinel**
 
 ```bash
 curl -X POST https://<your-sentinel-host>/api/v1/governance/sovereign-key/register \
-  -H "X-Partner-Key: SENTINEL-DEMO-GOLDEN-2026" \
+  -H "X-Partner-Key: <your-golden-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "publicKey": "<base64url-DER from step 2>",
     "keyHolderName": "Jane Smith",
-    "keyHolderEmail": "jane.smith@apex-fintech.com",
-    "organizationId": "apex-fintech"
+    "keyHolderEmail": "jane.smith@your-org.com",
+    "organizationId": "your-org"
   }'
 ```
 
@@ -186,7 +184,7 @@ curl -X POST https://<your-sentinel-host>/api/v1/governance/sovereign-key/regist
 
 ```bash
 curl https://<your-sentinel-host>/api/v1/governance/sovereign-key/status \
-  -H "X-Partner-Key: SENTINEL-DEMO-GOLDEN-2026"
+  -H "X-Partner-Key: <your-golden-key>"
 ```
 
 Expected response:
@@ -196,7 +194,7 @@ Expected response:
   "keyHolderName": "Jane Smith",
   "algorithm": "ML-DSA-87",
   "securityLevel": 5,
-  "enrolledAt": "2026-04-14T..."
+  "enrolledAt": "2026-05-07T..."
 }
 ```
 
@@ -292,7 +290,7 @@ After a successful commit, the API broadcasts via WebSocket:
 {
   "type": "recursive_fix_verified",
   "data": {
-    "agentId": "apex-fintech-alpha",
+    "agentId": "<your-agent-id>",
     "forensicAuditId": "...",
     "fixVerifiedEventId": "..."
   }
@@ -322,16 +320,15 @@ Immediately following any successful Two-Man Rule interdiction (i.e., after a `R
 ### Fix Monitor API
 
 ```bash
-# Check current Fix Monitor status for an agent
-curl "https://<host>/api/v1/governance/fix-monitor/apex-fintech-alpha"
+curl "https://<host>/api/v1/governance/fix-monitor/<your-agent-id>"
 ```
 
 ```json
 {
-  "agentId": "apex-fintech-alpha",
+  "agentId": "<your-agent-id>",
   "fixMonitorActive": true,
   "eventsRemaining": 87,
-  "windowStart": "2026-04-14T10:00:00Z",
+  "windowStart": "2026-05-07T10:00:00Z",
   "samplingRate": "100%",
   "algorithm": "ML-DSA-87",
   "triggeredBy": "RECURSIVE_FIX_VERIFIED",
@@ -358,12 +355,11 @@ When the 100-event window closes:
 If a critical breach is detected during the window, the Kill Switch can be activated:
 
 ```bash
-# EMERGENCY SOLO REVOKE — bypasses Two-Man Rule
 curl -X POST https://<host>/api/v1/forensic/kill-switch-log \
-  -H "X-Partner-Key: SENTINEL-DEMO-GOLDEN-2026" \
+  -H "X-Partner-Key: <your-golden-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "agentId": "apex-fintech-alpha",
+    "agentId": "<your-agent-id>",
     "operatorId": "operator-jane-smith",
     "reason": "Critical breach detected during fix monitor window"
   }'
@@ -373,7 +369,7 @@ This logs an `EMERGENCY_SOLO_REVOKE` event and immediately halts the agent.
 
 ---
 
-## 7. Apex-Fintech Breach Scenario Demo
+## 7. Breach Scenario Demo
 
 The `demo_breach_apex.ts` script simulates a realistic multi-stage logic poisoning attack for partner demos and security audits.
 
@@ -382,9 +378,6 @@ The `demo_breach_apex.ts` script simulates a realistic multi-stage logic poisoni
 ```bash
 # From the workspace root:
 pnpm --filter @workspace/scripts run breach
-
-# Or directly:
-npx tsx scripts/src/demo_breach_apex.ts
 ```
 
 The script outputs a JSON breach report to stdout and logs progress to stderr.
@@ -392,50 +385,34 @@ The script outputs a JSON breach report to stdout and logs progress to stderr.
 ### Stage 1: Cognitive Drift (Amber Topology)
 
 **What happens:**
-- `apex-research-agent-x1` generates 10 events with progressively degrading `consistencyScore` (0.88 → 0.48)
+- A research agent generates 10 events with progressively degrading `consistencyScore` (0.88 → 0.48)
 - Events at score < 0.65 are flagged `isAnomalous: true` with `anomalyReason: "Cognitive drift detected"`
 - These appear as **amber nodes** in the Causal Dependency Graph
-
-**Topology signature:**
-- Node color: Amber (`#EBC06D`)
-- Edge drift heatmap: orange → red gradient
-- Drift bleed visible on downstream edges
 
 **EU AI Act implication:** Art. 14 §2 — operator must review drift events and initiate governance action
 
 ### Stage 2: Honey-Token Breach (Terra Red)
 
 **What happens:**
-- Research agent attempts to access `VAULT://sovereign-treasury-prod` — a forbidden honey-token vault
+- Research agent attempts to access a forbidden honey-token vault
 - Immediate `AGENT_REVOKED` event is written with `consistencyScore: 0.0`
 - Agent session set to `status: "revoked"`
-
-**Topology signature:**
-- Node color: Terracotta red (`#D96161`)
-- Revocation timestamp visible in node tooltip
-- Honey-token ID: `HT-XXXXXX` traceable in audit log
 
 **EU AI Act implication:** Art. 12 §3 — prohibited tool scope breach. Automatic revocation is the correct response.
 
 ### Stage 3: Causal Chain Break (Critical)
 
 **What happens:**
-- `apex-execution-agent-x1` receives a poisoned handoff from the revoked research agent
-- The execution agent's hash chain is deliberately broken (`currentHash ≠ hashChain(prevHash, payload)`)
+- An execution agent receives a poisoned handoff from the revoked research agent
+- The execution agent's hash chain is deliberately broken
 - `parentTraceId` links back to the breach trace, creating a visible cross-agent contamination graph
-
-**Topology signature:**
-- Chain integrity: `chainIntact: false`
-- Edge color: Terracotta red
-- EdgeDiffPanel shows the hash mismatch
-- Timeline Scrubber shows the exact breach timestamp
 
 **EU AI Act implication:** Art. 12 §2 — immutable chain integrity violated. Causal graph confirms attack vector.
 
 ### Remediating the Breach
 
 After running the simulation:
-1. Open **Traces** → search for trace ID from the breach report
+1. Open **Traces** → search for the trace ID from the breach report
 2. Select the research agent's drift events → click **Interdict**
 3. Apply a corrected rationale using the **Two-Man Rule** modal
 4. Kill Switch the execution agent if chain break propagation is detected
@@ -450,29 +427,29 @@ After running the simulation:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/api/v1/partner/onboarding` | Golden Key | EU AI Act compliance checklist + SLA |
-| `POST` | `/api/v1/partner/demo/seed` | None (demo) | Seed Apex-Fintech demo environment |
+| `POST` | `/api/v1/partner/demo/seed` | None (demo) | Seed demo environment |
 | `GET` | `/api/v1/partner/demo/golden-key` | None | Golden Key metadata |
-| `POST` | `/api/v1/partner/keys` | None | Generate API key |
-| `GET` | `/api/v1/partner/health` | None | Partner trust score feed |
+| `GET` | `/api/v1/me/key` | Clerk session | Retrieve your Sentinel API key |
+| `POST` | `/api/v1/me/key` | Clerk session | Provision your Sentinel API key |
 
 ### Governance & Multi-Sig
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/v1/governance/confirm-fix` | Operator Key | Commit Two-Man Rule dual-sig fix |
-| `GET` | `/api/v1/governance/fix-monitor/:agentId` | Operator Key | Fix Monitor sampling window status |
+| `GET` | `/api/v1/governance/fix-monitor/:agentId` | Clerk session | Fix Monitor sampling window status |
 | `POST` | `/api/v1/forensic/override` | Operator Key | Human-in-the-loop rationale override |
 | `POST` | `/api/v1/forensic/kill-switch-log` | Operator Key | Log EMERGENCY_SOLO_REVOKE |
-| `POST` | `/api/v1/admin/kill-switch` | Operator Key | Activate/deactivate global kill switch |
+| `POST` | `/api/v1/admin/kill-switch` | Admin only | Activate/deactivate global kill switch |
 
 ### Audit & Compliance
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/compliance/executive-summary` | None | 24h board-level executive audit |
-| `GET` | `/api/v1/compliance/audit-report` | None | Partner-scoped time-windowed report |
-| `POST` | `/api/v1/forensic/chain-verify/:traceId` | None | SHA-512 chain integrity verification |
-| `GET` | `/api/v1/topology/:traceId` | None | Causal dependency graph for trace |
+| `GET` | `/api/v1/compliance/executive-summary` | Clerk session | 24h board-level executive audit |
+| `GET` | `/api/v1/compliance/audit-report` | Clerk session | Partner-scoped time-windowed report |
+| `GET` | `/api/v1/export/audit-pdf` | Clerk session | Download PDF audit report |
+| `GET` | `/api/v1/topology/:traceId` | Clerk session | Causal dependency graph for trace |
 
 ---
 
@@ -480,7 +457,7 @@ After running the simulation:
 
 | Channel | Contact | SLA |
 |---------|---------|-----|
-| Alpha Partner Slack | `#apex-fintech-sentinel-alpha` | < 2h response |
+| Partner Support | support@agent-sentinel.io | < 2h response |
 | Security Incidents | security@agent-sentinel.io | < 30min response |
 | Compliance Queries | compliance@agent-sentinel.io | < 4h response |
 | Sovereign Key Issues | sovereign-ops@agent-sentinel.io | < 1h response |
@@ -493,4 +470,4 @@ After running the simulation:
 
 ---
 
-*This document is CONFIDENTIAL and intended solely for Apex-Fintech Alpha Partners. All governance actions taken via this portal are logged to an immutable, quantum-secured audit ledger in accordance with EU AI Act Art. 12/14 and NIST FIPS-204.*
+*This document is CONFIDENTIAL and intended solely for authorized Agent-Sentinel partners. All governance actions taken via this portal are logged to an immutable, quantum-secured audit ledger in accordance with EU AI Act Art. 12/14 and NIST FIPS-204.*

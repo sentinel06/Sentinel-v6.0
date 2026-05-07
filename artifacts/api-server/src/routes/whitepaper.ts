@@ -1,7 +1,7 @@
 /**
  * GET /v1/whitepaper
  *
- * Generates and returns the Agent-Sentinel v4.0 Technical White Paper
+ * Generates and returns the Agent-Sentinel v6.0 Technical White Paper
  * dynamically from live system state. Accepts an optional ?format=markdown
  * query parameter (default) or ?format=json (returns structured data).
  *

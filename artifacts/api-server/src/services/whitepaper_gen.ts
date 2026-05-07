@@ -1,5 +1,5 @@
 /**
- * Agent-Sentinel v4.0 — Technical White Paper Generator
+ * Agent-Sentinel v6.0 — Technical White Paper Generator
  *
  * Dynamically assembles a Markdown white paper from live system state:
  *   • ML-DSA-87 lattice parameters pulled from pqc.ts constants
@@ -270,7 +270,7 @@ ${d.surgeSnippets.map((s) => {
 > *No White-Gold Surge events found in current ledger. The Two-Man Rule Multi-Sig Gate has not been exercised during this monitoring period.*
 `;
 
-  return `# Agent-Sentinel v4.0 — Technical White Paper
+  return `# Agent-Sentinel v6.0 — Technical White Paper
 
 **Post-Quantum Sovereign Governance for High-Risk AI Systems**
 
@@ -278,7 +278,7 @@ ${d.surgeSnippets.map((s) => {
 |-------|-------|
 | Document ID | \`AS-WP-${d.documentId}\` |
 | Generated | ${dateStr} |
-| Classification | CONFIDENTIAL — Apex-Fintech Alpha Partners |
+| Classification | CONFIDENTIAL — Authorized Partners Only |
 | Framework | EU AI Act 2026 · NIST AI RMF 2026 · FIPS-204 |
 | Document Seal | \`HMAC-SHA256: ${d.hmacSeal.substring(0, 24)}…\` |
 | Ledger Key | \`${d.signatureFingerprint}\` |
@@ -287,7 +287,7 @@ ${d.surgeSnippets.map((s) => {
 
 ## 1. Executive Summary
 
-Agent-Sentinel v4.0 is a **full-stack AI governance framework** engineered for organisations deploying high-risk AI systems under the EU Artificial Intelligence Act 2026 obligations. It provides cryptographically immutable audit infrastructure, real-time cognitive drift detection, and a post-quantum sovereign governance layer that remains computationally secure against CRQC-class (Cryptographically Relevant Quantum Computer) adversaries.
+Agent-Sentinel v6.0 is a **full-stack AI governance framework** engineered for organisations deploying high-risk AI systems under the EU Artificial Intelligence Act 2026 obligations. It provides cryptographically immutable audit infrastructure, real-time cognitive drift detection, and a post-quantum sovereign governance layer that remains computationally secure against CRQC-class (Cryptographically Relevant Quantum Computer) adversaries.
 
 ### The Governance Problem
 
@@ -561,7 +561,7 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
 
 \`\`\`
                         ┌──────────────────────────────────────┐
-                        │        Apex-Fintech Agent Swarm      │
+                        │         Your AI Agent Swarm          │
                         │  Research Agent · Execution Agent    │
                         │  Analysis Agent · Oversight Agent    │
                         └──────────────┬───────────────────────┘
@@ -605,9 +605,9 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
 
 | Phase | Target | Feature |
 |-------|--------|---------|
-| v4.1 | Q3 2026 | @noble/post-quantum full ML-DSA-87 integration (replace HMAC abstraction layer) |
-| v4.2 | Q3 2026 | Hardware Security Module (HSM) integration for sovereign key storage |
-| v4.3 | Q4 2026 | Multi-jurisdiction ledger replication (EU data residency) |
+| v6.1 | Q3 2026 | @noble/post-quantum full ML-DSA-87 integration (replace HMAC abstraction layer) |
+| v6.2 | Q3 2026 | Hardware Security Module (HSM) integration for sovereign key storage |
+| v6.3 | Q4 2026 | Multi-jurisdiction ledger replication (EU data residency) |
 | v5.0 | Q1 2027 | ML-KEM-1024 session encryption (full PQC transport layer) |
 | v5.1 | Q2 2027 | SLSA Level 4 supply-chain provenance for all agent model weights |
 
@@ -633,7 +633,7 @@ This white paper was generated from live system state and cryptographically seal
 
 ---
 
-*CONFIDENTIAL — Agent-Sentinel v4.0 — Apex-Fintech Alpha Partner Documentation*
+*CONFIDENTIAL — Agent-Sentinel v6.0 — Authorized Partner Documentation*
 *EU AI Act Art. 12/14 · NIST AI RMF 2026 · FIPS-204 ML-DSA-87 · QL-2.0*
 `;
 }

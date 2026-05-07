@@ -400,7 +400,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   return `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
-<title>Agent-Sentinel v4.0 — Technical White Paper — ${dateStr}</title>
+<title>Agent-Sentinel v6.0 — Technical White Paper — ${dateStr}</title>
 <style>
   @page {
     size: A4 landscape;
@@ -508,17 +508,17 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
 </style></head>
 <body>
 <div class="screen-toolbar">
-  <span>AGENT-SENTINEL v4.0 — TECHNICAL WHITE PAPER · ${dateStr} ${timeStr}</span>
+  <span>AGENT-SENTINEL v6.0 — TECHNICAL WHITE PAPER · ${dateStr} ${timeStr}</span>
   <button class="print-btn" onclick="window.print()">⎙ SAVE AS PDF</button>
 </div>
 <div class="document">
   <div class="cover-header">
     <div>
-      <div class="logo">AGENT-<em>SENTINEL</em> <span style="font-size:11px;color:#9AA4B1;font-weight:normal;">v4.0</span></div>
+      <div class="logo">AGENT-<em>SENTINEL</em> <span style="font-size:11px;color:#9AA4B1;font-weight:normal;">v6.0</span></div>
       <div style="font-size:8px;color:#9AA4B1;margin-top:3px;">Sovereign Pulse Engine · QL-2.0 · FIPS-204 · EU AI Act Art. 12/14</div>
     </div>
     <div class="badges">
-      <div class="badge-conf">CONFIDENTIAL — APEX-FINTECH ALPHA</div>
+      <div class="badge-conf">CONFIDENTIAL — AUTHORIZED PARTNERS ONLY</div>
       <div class="badge-ver">QUANTUM-SEALED · ML-DSA-87 · SL5</div>
     </div>
   </div>
@@ -566,7 +566,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   </div>
   ${bodyHtml}
   <div class="footer">
-    Agent-Sentinel v4.0 · Document AS-WP-${wp.documentId} · Generated ${dateStr} ${timeStr} ·
+    Agent-Sentinel v6.0 · Document AS-WP-${wp.documentId} · Generated ${dateStr} ${timeStr} ·
     ML-DSA-87 (FIPS-204 SL5) · EU AI Act Art. 12/14 · NIST AI RMF 2026 · CONFIDENTIAL
   </div>
 </div>

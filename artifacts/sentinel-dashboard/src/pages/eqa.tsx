@@ -720,7 +720,7 @@ const EQAPage = React.memo(function EQAPage() {
       toast({
         variant: "destructive",
         title: "REQUIRED: Enter Partner ID to initialize forensic audit",
-        description: "Try a sample ID such as Apex-Fintech to begin.",
+        description: "Try a sample ID such as demo-partner to begin.",
       });
       return;
     }
@@ -977,7 +977,7 @@ const EQAPage = React.memo(function EQAPage() {
           value={partnerId}
           onChange={(e) => setPartnerId(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && !sealing && handleGenerate()}
-          placeholder="Partner ID (e.g. Apex-Fintech)"
+          placeholder="Partner ID (e.g. demo-partner)"
           className="flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground"
           style={{ color: C.light }}
           disabled={loading || sealing}
@@ -1025,9 +1025,9 @@ const EQAPage = React.memo(function EQAPage() {
           <button
             type="button"
             onClick={() => {
-              setPartnerId("Apex-Fintech");
+              setPartnerId("demo-partner");
               // Fire generation immediately — populates the input AND runs the audit
-              handleGenerate("Apex-Fintech");
+              handleGenerate("demo-partner");
             }}
             className="font-mono text-[10px] mt-3 px-3 py-1.5 rounded transition-colors hover:opacity-90 focus:outline-none focus:ring-2"
             style={{
@@ -1038,7 +1038,7 @@ const EQAPage = React.memo(function EQAPage() {
             }}
             title="Click to populate Partner ID and run forensic audit"
           >
-            Try: <span style={{ color: C.sage, textDecoration: "underline" }}>Apex-Fintech</span>
+            Try: <span style={{ color: C.sage, textDecoration: "underline" }}>demo-partner</span>
           </button>
         </div>
       )}

@@ -154,7 +154,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
           </div>
           <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">Welcome, partner.</h1>
           <p className="text-sm" style={{ color: P.dim }}>
-            Sign in to your Apex-Fintech alpha workspace.
+            Sign in to your Sentinel partner workspace.
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono"
             style={{ background: `${P.gold}12`, border: `1px solid ${P.gold}33`, color: P.gold }}>
@@ -252,7 +252,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
           </p>
 
           <p className="text-[11px] text-center" style={{ color: P.dim }}>
-            Already an Apex-Fintech alpha partner? Sign in above.
+            Already an authorized partner? Sign in above.
             <br />Otherwise, your account manager can get you set up.
           </p>
         </form>
@@ -495,7 +495,7 @@ function OnboardingDashboard({ data, partnerKey }: { data: OnboardingData; partn
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Building2 className="w-5 h-5" style={{ color: P.gold }} />
-            <h1 className="text-xl font-mono font-bold text-white">Apex-Fintech Alpha Onboarding</h1>
+            <h1 className="text-xl font-mono font-bold text-white">Partner Alpha Onboarding</h1>
           </div>
           <p className="text-sm font-mono" style={{ color: P.dim }}>
             EU AI Act Art. 12/14 Compliance Readiness · {data.tier} Tier · {data.accessLevel}
@@ -619,7 +619,7 @@ function OnboardingDashboard({ data, partnerKey }: { data: OnboardingData; partn
           <div className="flex items-center gap-2 mb-1">
             <Zap className="w-4 h-4" style={{ color: P.terra }} />
             <span className="text-xs font-mono font-bold" style={{ color: P.terra }}>
-              APEX-FINTECH BREACH SCENARIO
+              BREACH SCENARIO DEMO
             </span>
           </div>
           <p className="text-[11px] font-mono" style={{ color: P.dim }}>
@@ -649,7 +649,7 @@ function OnboardingDashboard({ data, partnerKey }: { data: OnboardingData; partn
         style={{ borderColor: P.border, color: P.dim }}>
         <div className="flex items-center gap-2">
           <Shield className="w-3 h-3" style={{ color: P.sage }} />
-          Agent-Sentinel v4.0 · QL-2.0 FIPS-204 · EU AI Act Art. 12/14
+          Agent-Sentinel v6.0 · QL-2.0 FIPS-204 · EU AI Act Art. 12/14
         </div>
         <div>
           Key: {partnerKey.substring(0, 12)}••••

@@ -10,7 +10,7 @@
  *     │     ├── EQA_Report_*.pdf      (last 5 EQA v6.0 PDFs)
  *     │     └── integrity_ledger.jsonld
  *     ├── 02_Technical_Specs/
- *     │     ├── Technical_White_Paper_v4.0.pdf
+ *     │     ├── Technical_White_Paper_v6.0.pdf
  *     │     ├── Addendum_v5.0.pdf
  *     │     └── Addendum_v6.0_Neural_Sovereignty.pdf
  *     ├── 03_Forensic_Evidence/
@@ -434,8 +434,8 @@ export function DataRoomExport() {
       // ── Stage 3 — Technical white papers ────────────────────────
       if (await checkpoint(3)) return;
       const tech = zip.folder("02_Technical_Specs")!;
-      tech.file("Technical_White_Paper_v4.0.pdf",
-        buildWhitePaperPdf("v4.0", "Sovereign Watcher: Autonomous Quarantine Foundations"));
+      tech.file("Technical_White_Paper_v6.0.pdf",
+        buildWhitePaperPdf("v6.0", "Sovereign Watcher: Autonomous Quarantine Foundations"));
       tech.file("Addendum_v5.0_Multi_Cluster.pdf",
         buildWhitePaperPdf("v5.0", "Multi-Cluster Federation & Cross-Tenant Isolation"));
       tech.file("Addendum_v6.0_Neural_Sovereignty.pdf",
@@ -501,7 +501,7 @@ SENTINEL_V6_DATA_ROOM_${timestampFilename()}.zip
 │     ├── EQA_Report_01_…pdf  through  EQA_Report_05_…pdf
 │     └── integrity_ledger.jsonld
 ├── 02_Technical_Specs/
-│     ├── Technical_White_Paper_v4.0.pdf
+│     ├── Technical_White_Paper_v6.0.pdf
 │     ├── Addendum_v5.0_Multi_Cluster.pdf
 │     └── Addendum_v6.0_Neural_Sovereignty.pdf
 ├── 03_Forensic_Evidence/

@@ -703,7 +703,7 @@ export default function PartnerPortalPage() {
 
   const handleLaunchDemo = useCallback(async () => {
     setDemoLoading(true);
-    setDemoStatus("Seeding Apex-Fintech environment…");
+    setDemoStatus("Seeding demo environment…");
     try {
       const r = await fetch(`${BASE}/api/v1/partner/demo/seed`, { method: "POST" });
       const data = await r.json();
@@ -715,7 +715,7 @@ export default function PartnerPortalPage() {
       setDemoStatus(`✓ ${data.eventsInserted} events seeded — redirecting to EQA…`);
       // Short delay so the user reads the confirmation, then navigate
       setTimeout(() => {
-        window.location.href = `${BASE}/eqa?partnerId=${encodeURIComponent("Apex-Fintech")}`;
+        window.location.href = `${BASE}/eqa?partnerId=${encodeURIComponent("demo-partner")}`;
       }, 900);
     } catch {
       setDemoStatus("Network error — check the API server");
@@ -789,7 +789,7 @@ export default function PartnerPortalPage() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-mono font-bold text-foreground">
-            WHITE PAPER: Agent-Sentinel (v1.0 – v4.0)
+            WHITE PAPER: Agent-Sentinel v6.0
           </div>
           <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
             The Sovereign Infrastructure for Agentic Governance (2026–2030) — full technical specification including quantum roadmap, swarm ancestry, and EU AI Act compliance framework
