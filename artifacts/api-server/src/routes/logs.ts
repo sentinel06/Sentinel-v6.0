@@ -27,6 +27,7 @@ import { signWithMLDSA, getQuantumIntegrityManifest } from "../crypto/pqc";
 import { quantumSigner } from "../crypto/quantum_ledger";
 import { buildDriftReportFromLogs } from "../lib/driftDetector";
 import { resolveOwnerFromKey, getViewerUserId, viewerScopeCondition } from "../lib/owner";
+import { requireAuth } from "../lib/requireAuth";
 
 const router: IRouter = Router();
 
@@ -282,7 +283,7 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/logs", async (req, res): Promise<void> => {
+router.get("/v1/logs", requireAuth, async (req, res): Promise<void> => {
   const parsed = GetAuditLogsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -337,7 +338,7 @@ router.get("/v1/logs", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/logs/:id", async (req, res): Promise<void> => {
+router.get("/v1/logs/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const parsed = GetAuditLogParams.safeParse({ id: raw });
   if (!parsed.success) {
@@ -361,7 +362,7 @@ router.get("/v1/logs/:id", async (req, res): Promise<void> => {
   res.json(rowToLog(row));
 });
 
-router.get("/v1/traces/:traceId", async (req, res): Promise<void> => {
+router.get("/v1/traces/:traceId", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.traceId) ? req.params.traceId[0] : req.params.traceId;
   const parsed = GetTraceParams.safeParse({ traceId: raw });
   if (!parsed.success) {
@@ -397,7 +398,7 @@ router.get("/v1/traces/:traceId", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/stats", async (req, res): Promise<void> => {
+router.get("/v1/stats", requireAuth, async (req, res): Promise<void> => {
   // Per-tenant: a signed-in user sees stats over THEIR ledger slice;
   // anonymous viewers see only the public demo slice.
   const ownerWhere = viewerScopeCondition(req);
@@ -453,7 +454,7 @@ router.get("/v1/stats", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/agents", async (req, res): Promise<void> => {
+router.get("/v1/agents", requireAuth, async (req, res): Promise<void> => {
   const ownerWhere = viewerScopeCondition(req);
   const rows = await db
     .select({
@@ -477,7 +478,7 @@ router.get("/v1/agents", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/compliance/export", async (req, res): Promise<void> => {
+router.get("/v1/compliance/export", requireAuth, async (req, res): Promise<void> => {
   const parsed = ExportComplianceReportQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

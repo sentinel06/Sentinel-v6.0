@@ -64,8 +64,8 @@ export function viewerScopeCondition(req: Request): SQL {
   const viewerId = getViewerUserId(req);
   if (viewerId) return eq(auditLogsTable.ownerUserId, viewerId);
 
-  // Anonymous viewers see nothing — visitors must sign up to connect an
-  // agent. The marketing landing page (`pages/landing.tsx`) is pure copy
-  // and does not call any tenant-scoped endpoint, so this returns no rows.
+  // Defensive fallback only — every caller of this function is mounted
+  // behind `requireAuth` (lib/requireAuth.ts), so anonymous requests are
+  // 401'd before reaching here. If somehow they do, return zero rows.
   return sql`false`;
 }

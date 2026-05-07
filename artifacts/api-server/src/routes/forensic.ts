@@ -17,6 +17,7 @@ import { Router } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, auditLogsTable } from "@workspace/db";
 import { viewerScopeCondition } from "../lib/owner";
+import { requireAuth } from "../lib/requireAuth";
 import { computeHash, getLastHash } from "../lib/hash.js";
 import { quantumSigner } from "../crypto/quantum_ledger.js";
 import { signWithMLDSA } from "../crypto/pqc.js";
@@ -47,7 +48,7 @@ export function tickFixMonitor(agentId: string): void {
 
 // ── POST /v1/forensic/override ──────────────────────────────────────────────
 
-router.post("/v1/forensic/override", async (req, res): Promise<void> => {
+router.post("/v1/forensic/override", requireAuth, async (req, res): Promise<void> => {
   const { logId, newRationale, newToolParams, operatorId } = req.body;
 
   if (!logId || typeof logId !== "string") {
@@ -152,7 +153,7 @@ router.post("/v1/forensic/override", async (req, res): Promise<void> => {
 
 // ── GET /v1/forensic/overrides ──────────────────────────────────────────────
 
-router.get("/v1/forensic/overrides", async (req, res): Promise<void> => {
+router.get("/v1/forensic/overrides", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(auditLogsTable)
@@ -180,8 +181,9 @@ router.get("/v1/forensic/overrides", async (req, res): Promise<void> => {
 // ── POST /v1/forensic/chain-verify/:traceId ─────────────────────────────────
 // Returns per-step hash-chain integrity for a trace
 
-router.post("/v1/forensic/chain-verify/:traceId", async (req, res): Promise<void> => {
-  const traceId = req.params.traceId;
+router.post("/v1/forensic/chain-verify/:traceId", requireAuth, async (req, res): Promise<void> => {
+  const rawTraceId = req.params.traceId;
+  const traceId = Array.isArray(rawTraceId) ? rawTraceId[0] : rawTraceId;
   if (!traceId) { res.status(400).json({ error: "traceId required" }); return; }
 
   const { asc: ascFn } = await import("drizzle-orm");
