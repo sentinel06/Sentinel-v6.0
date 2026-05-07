@@ -86,14 +86,13 @@ router.post("/v1/me/key", async (req, res): Promise<void> => {
       hasKey: true,
       key: {
         id: existing.id,
-        keyValue: maskKey(existing.keyValue),
+        keyValue: existing.keyValue,
         keyPrefix: existing.keyValue.substring(0, KEY_PREFIX.length + 4),
         label: existing.label,
         tier: existing.tier,
         createdAt: existing.createdAt,
         lastUsedAt: existing.lastUsedAt,
       },
-      message: "Key already provisioned. Plaintext is shown only once on creation.",
     });
     return;
   }
