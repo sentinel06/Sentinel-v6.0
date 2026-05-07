@@ -61,13 +61,6 @@ function rowToLog(row: typeof auditLogsTable.$inferSelect) {
   };
 }
 
-function verifySentinelKey(req: any): boolean {
-  const key = req.headers["x-sentinel-key"];
-  const expected = process.env["SENTINEL_KEY"];
-  if (!expected) return true;
-  return key === expected;
-}
-
 router.post("/v1/simulate", async (req, res): Promise<void> => {
   const { rationale, eventType, payload } = req.body ?? {};
   if (!eventType || !payload) {
@@ -84,7 +77,27 @@ router.post("/v1/simulate", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
-  if (!verifySentinelKey(req)) {
+  // Resolve the tenant owner from the API key first — this validates partner
+  // keys (sk_sent_*) against the partner_keys table and returns the Clerk
+  // userId, or null for the legacy SENTINEL_KEY admin path.
+  const ownerUserId = await resolveOwnerFromKey(req);
+
+  // Auth gate: accept if
+  //   (a) valid partner key  → ownerUserId is set
+  //   (b) admin SENTINEL_KEY → key matches the env var exactly
+  //   (c) dev mode           → SENTINEL_KEY env var is not configured
+  const providedKey = req.headers["x-sentinel-key"];
+  const expectedKey = process.env["SENTINEL_KEY"];
+  const isPartnerKey = typeof providedKey === "string" && providedKey.startsWith("sk_sent_");
+  const isAdminKey = Boolean(expectedKey && providedKey === expectedKey);
+  const isDevMode = !expectedKey;
+
+  if (isPartnerKey && !ownerUserId) {
+    // Key looks like a partner key but wasn't found / is inactive in the DB.
+    res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
+    return;
+  }
+  if (!isPartnerKey && !isAdminKey && !isDevMode) {
     res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
     return;
   }
@@ -181,9 +194,6 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   const pqEnvelope = quantumSigner.sign(currentHash);
   // Legacy single-field for backward-compat with older dashboard queries
   const pqcSig = signWithMLDSA(currentHash);
-
-  // Resolve per-tenant owner from the API key (null = legacy/admin path).
-  const ownerUserId = await resolveOwnerFromKey(req);
 
   const [inserted] = await db
     .insert(auditLogsTable)
@@ -568,7 +578,9 @@ router.get("/v1/integrity/status", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/integrity/verify", async (req, res): Promise<void> => {
-  if (!verifySentinelKey(req)) {
+  const providedKey = req.headers["x-sentinel-key"];
+  const expectedKey = process.env["SENTINEL_KEY"];
+  if (expectedKey && providedKey !== expectedKey) {
     res.status(401).json({ error: "Unauthorized: invalid or missing Sentinel-Key" });
     return;
   }
