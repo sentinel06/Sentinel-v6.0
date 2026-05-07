@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "0-tJnC-84_iG5aQ0Wk6c9"
+uri = "file://screenshots/sentinel-landing.jpg"
+type = "image"
+title = "Landing Page — Hero (1280×720)"
+
+[[outputs]]
+id = "pCkidCIkmE0xRF6NL5Kfw"
+uri = "file://screenshots/sentinel-landing-full.jpg"
+type = "image"
+title = "Landing Page — Full scroll"
+
+[[outputs]]
+id = "uNk0746GHGZg6lbj5sIG-"
+uri = "file://screenshots/sentinel-signin.jpg"
+type = "image"
+title = "Sign-in Screen"
