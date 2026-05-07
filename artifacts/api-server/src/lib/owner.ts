@@ -15,7 +15,8 @@
 import type { Request } from "express";
 import { getAuth } from "@clerk/express";
 import { db, partnerKeysTable, auditLogsTable } from "@workspace/db";
-import { and, eq, isNull, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { isAdminViewer } from "./admin";
 
 export async function resolveOwnerFromKey(req: Request): Promise<string | null> {
   const raw = req.headers["x-sentinel-key"];
@@ -55,6 +56,10 @@ export function getViewerUserId(req: Request): string | null {
  * and accidentally leak cross-tenant rows.
  */
 export function viewerScopeCondition(req: Request): SQL {
+  // Admins see everything (their own slice + every other tenant + the
+  // public demo slice). Resolved by `attachAdminFlag` middleware.
+  if (isAdminViewer(req)) return sql`true`;
+
   const viewerId = getViewerUserId(req);
   return viewerId
     ? eq(auditLogsTable.ownerUserId, viewerId)

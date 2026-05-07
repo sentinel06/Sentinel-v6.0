@@ -13,6 +13,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { attachAdminFlag } from "./lib/admin";
 
 const app: Express = express();
 
@@ -55,6 +56,11 @@ app.use(
     ),
   })),
 );
+
+// ── Admin flag resolution ───────────────────────────────────────────────────
+// Stamps `req.isAdmin` based on the signed-in user's email matching
+// SENTINEL_ADMIN_EMAILS. Must run after clerkMiddleware so getAuth() works.
+app.use(attachAdminFlag);
 
 // ── Sentinel admin guard ────────────────────────────────────────────────────
 // Any request whose URL path contains "/admin/" must carry a valid
