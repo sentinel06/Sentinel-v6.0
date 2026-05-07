@@ -336,8 +336,8 @@ router.get("/v1/registry", async (req, res): Promise<void> => {
   //   admin    → only entries owned by a real user email (excludes seeded
   //              demo rows like ownerEmail = "Apex-Fintech")
   //   user     → only their own ownerEmail
-  //   anon     → unscoped (public demo / partner landing surface)
-  let scope: SQL | undefined;
+  //   anon     → empty list (must sign up to connect an agent)
+  let scope: SQL;
   if (isAdminViewer(req)) {
     scope = like(agentRegistryTable.ownerEmail, "%@%");
   } else if (getViewerUserId(req)) {
@@ -345,12 +345,15 @@ router.get("/v1/registry", async (req, res): Promise<void> => {
     scope = email
       ? eq(agentRegistryTable.ownerEmail, email)
       : eq(agentRegistryTable.ownerEmail, "__no_match__");
+  } else {
+    scope = eq(agentRegistryTable.ownerEmail, "__anon_no_data__");
   }
 
-  const query = db.select().from(agentRegistryTable);
-  const rows = scope
-    ? await query.where(scope).orderBy(asc(agentRegistryTable.registeredAt))
-    : await query.orderBy(asc(agentRegistryTable.registeredAt));
+  const rows = await db
+    .select()
+    .from(agentRegistryTable)
+    .where(scope)
+    .orderBy(asc(agentRegistryTable.registeredAt));
   res.json({ agents: rows });
 });
 

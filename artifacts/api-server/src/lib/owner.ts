@@ -15,7 +15,7 @@
 import type { Request } from "express";
 import { getAuth } from "@clerk/express";
 import { db, partnerKeysTable, auditLogsTable } from "@workspace/db";
-import { and, eq, isNull, isNotNull, type SQL } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import { isAdminViewer } from "./admin";
 
 export async function resolveOwnerFromKey(req: Request): Promise<string | null> {
@@ -57,12 +57,15 @@ export function getViewerUserId(req: Request): string | null {
  */
 export function viewerScopeCondition(req: Request): SQL {
   // Admins see all real-user data (every tenant), but NEVER the seeded
-  // demo slice (owner_user_id IS NULL). The demo slice stays visible to
-  // anonymous viewers on the public landing surface only.
+  // demo slice (owner_user_id IS NULL).
   if (isAdminViewer(req)) return isNotNull(auditLogsTable.ownerUserId);
 
+  // Signed-in users see only their own tenant.
   const viewerId = getViewerUserId(req);
-  return viewerId
-    ? eq(auditLogsTable.ownerUserId, viewerId)
-    : isNull(auditLogsTable.ownerUserId);
+  if (viewerId) return eq(auditLogsTable.ownerUserId, viewerId);
+
+  // Anonymous viewers see nothing — visitors must sign up to connect an
+  // agent. The marketing landing page (`pages/landing.tsx`) is pure copy
+  // and does not call any tenant-scoped endpoint, so this returns no rows.
+  return sql`false`;
 }
