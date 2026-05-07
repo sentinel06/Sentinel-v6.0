@@ -21,8 +21,10 @@
 
 import { Router, type IRouter } from "express";
 import { db, agentRegistryTable, authorizationRequestsTable, auditLogsTable } from "@workspace/db";
-import { eq, desc, asc, and } from "drizzle-orm";
+import { eq, desc, asc, and, like, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { isAdminViewer, getViewerEmail } from "../lib/admin";
+import { getViewerUserId } from "../lib/owner";
 import {
   getSessionHealth,
   isHighRiskAction,
@@ -329,11 +331,26 @@ router.get("/v1/authorize/history", async (_req, res): Promise<void> => {
 
 // ── /v1/registry ──────────────────────────────────────────────────────────
 
-router.get("/v1/registry", async (_req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(agentRegistryTable)
-    .orderBy(asc(agentRegistryTable.registeredAt));
+router.get("/v1/registry", async (req, res): Promise<void> => {
+  // Scope rules:
+  //   admin    → only entries owned by a real user email (excludes seeded
+  //              demo rows like ownerEmail = "Apex-Fintech")
+  //   user     → only their own ownerEmail
+  //   anon     → unscoped (public demo / partner landing surface)
+  let scope: SQL | undefined;
+  if (isAdminViewer(req)) {
+    scope = like(agentRegistryTable.ownerEmail, "%@%");
+  } else if (getViewerUserId(req)) {
+    const email = getViewerEmail(req);
+    scope = email
+      ? eq(agentRegistryTable.ownerEmail, email)
+      : eq(agentRegistryTable.ownerEmail, "__no_match__");
+  }
+
+  const query = db.select().from(agentRegistryTable);
+  const rows = scope
+    ? await query.where(scope).orderBy(asc(agentRegistryTable.registeredAt))
+    : await query.orderBy(asc(agentRegistryTable.registeredAt));
   res.json({ agents: rows });
 });
 

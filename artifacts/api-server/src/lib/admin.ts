@@ -20,18 +20,25 @@ const ADMIN_EMAILS = (process.env.SENTINEL_ADMIN_EMAILS ?? "afaiz9078@gmail.com"
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
-const adminCache = new Map<string, boolean>();
+interface AdminCacheEntry { isAdmin: boolean; email: string | null }
+const adminCache = new Map<string, AdminCacheEntry>();
 
-async function resolveIsAdmin(userId: string): Promise<boolean> {
-  if (adminCache.has(userId)) return adminCache.get(userId)!;
+async function resolveIdentity(userId: string): Promise<AdminCacheEntry> {
+  const cached = adminCache.get(userId);
+  if (cached) return cached;
   try {
     const user = await clerkClient.users.getUser(userId);
-    const emails = user.emailAddresses.map((e) => e.emailAddress.toLowerCase());
-    const isAdmin = emails.some((e) => ADMIN_EMAILS.includes(e));
-    adminCache.set(userId, isAdmin);
-    return isAdmin;
+    const primary = user.emailAddresses.find(
+      (e) => e.id === user.primaryEmailAddressId,
+    );
+    const email = (primary?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? null);
+    const emailLower = email?.toLowerCase() ?? null;
+    const isAdmin = emailLower !== null && ADMIN_EMAILS.includes(emailLower);
+    const entry: AdminCacheEntry = { isAdmin, email: emailLower };
+    adminCache.set(userId, entry);
+    return entry;
   } catch {
-    return false;
+    return { isAdmin: false, email: null };
   }
 }
 
@@ -43,12 +50,16 @@ export async function attachAdminFlag(
   try {
     const auth = getAuth(req);
     if (auth.userId) {
-      req.isAdmin = await resolveIsAdmin(auth.userId);
+      const id = await resolveIdentity(auth.userId);
+      req.isAdmin = id.isAdmin;
+      req.viewerEmail = id.email;
     } else {
       req.isAdmin = false;
+      req.viewerEmail = null;
     }
   } catch {
     req.isAdmin = false;
+    req.viewerEmail = null;
   }
   next();
 }
@@ -57,10 +68,15 @@ export function isAdminViewer(req: Request): boolean {
   return req.isAdmin === true;
 }
 
+export function getViewerEmail(req: Request): string | null {
+  return req.viewerEmail ?? null;
+}
+
 declare global {
   namespace Express {
     interface Request {
       isAdmin?: boolean;
+      viewerEmail?: string | null;
     }
   }
 }

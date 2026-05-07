@@ -15,7 +15,7 @@
 import type { Request } from "express";
 import { getAuth } from "@clerk/express";
 import { db, partnerKeysTable, auditLogsTable } from "@workspace/db";
-import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, type SQL } from "drizzle-orm";
 import { isAdminViewer } from "./admin";
 
 export async function resolveOwnerFromKey(req: Request): Promise<string | null> {
@@ -56,9 +56,10 @@ export function getViewerUserId(req: Request): string | null {
  * and accidentally leak cross-tenant rows.
  */
 export function viewerScopeCondition(req: Request): SQL {
-  // Admins see everything (their own slice + every other tenant + the
-  // public demo slice). Resolved by `attachAdminFlag` middleware.
-  if (isAdminViewer(req)) return sql`true`;
+  // Admins see all real-user data (every tenant), but NEVER the seeded
+  // demo slice (owner_user_id IS NULL). The demo slice stays visible to
+  // anonymous viewers on the public landing surface only.
+  if (isAdminViewer(req)) return isNotNull(auditLogsTable.ownerUserId);
 
   const viewerId = getViewerUserId(req);
   return viewerId

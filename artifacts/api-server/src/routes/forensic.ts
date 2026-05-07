@@ -14,8 +14,9 @@
  */
 
 import { Router } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db, auditLogsTable } from "@workspace/db";
+import { viewerScopeCondition } from "../lib/owner";
 import { computeHash, getLastHash } from "../lib/hash.js";
 import { quantumSigner } from "../crypto/quantum_ledger.js";
 import { signWithMLDSA } from "../crypto/pqc.js";
@@ -58,11 +59,13 @@ router.post("/v1/forensic/override", async (req, res): Promise<void> => {
     return;
   }
 
-  // 1. Fetch the original event
+  // 1. Fetch the original event (scoped — admins/users can only override
+  //    rows they're allowed to see; demo NULL-owner rows are off-limits to
+  //    signed-in users)
   const [original] = await db
     .select()
     .from(auditLogsTable)
-    .where(eq(auditLogsTable.id, logId));
+    .where(and(eq(auditLogsTable.id, logId), viewerScopeCondition(req)));
 
   if (!original) {
     res.status(404).json({ error: "Original log entry not found" });
@@ -153,7 +156,10 @@ router.get("/v1/forensic/overrides", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(auditLogsTable)
-    .where(eq(auditLogsTable.eventType, "HUMAN_IN_THE_LOOP_OVERRIDE"))
+    .where(and(
+      eq(auditLogsTable.eventType, "HUMAN_IN_THE_LOOP_OVERRIDE"),
+      viewerScopeCondition(req),
+    ))
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(50);
 
@@ -182,7 +188,7 @@ router.post("/v1/forensic/chain-verify/:traceId", async (req, res): Promise<void
   const rows = await db
     .select()
     .from(auditLogsTable)
-    .where(eq(auditLogsTable.traceId, traceId))
+    .where(and(eq(auditLogsTable.traceId, traceId), viewerScopeCondition(req)))
     .orderBy(ascFn(auditLogsTable.timestamp));
 
   const steps = rows.map((row, i) => {
