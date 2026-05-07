@@ -21,10 +21,10 @@
 
 import { Router, type IRouter } from "express";
 import { db, agentRegistryTable, authorizationRequestsTable, auditLogsTable } from "@workspace/db";
-import { eq, desc, asc, and, like, type SQL } from "drizzle-orm";
+import { eq, desc, asc, and, like, inArray, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { isAdminViewer, getViewerEmail } from "../lib/admin";
-import { getViewerUserId } from "../lib/owner";
+import { getViewerUserId, viewerScopeCondition } from "../lib/owner";
 import { requireAuth } from "../lib/requireAuth";
 import {
   getSessionHealth,
@@ -273,9 +273,39 @@ router.post("/v1/authorize", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/authorize/:id/status", async (req, res): Promise<void> => {
-  const { id } = req.params;
+/**
+ * IDOR guard: confirms the authenticated viewer owns the authorization
+ * request by joining its traceId back to audit_logs.ownerUserId. Admins
+ * can see any non-demo request. Returns the in-memory request state if
+ * authorized, otherwise null so callers can 404 uniformly.
+ */
+async function getAuthRequestForViewer(req: import("express").Request, id: string) {
   const existing = getAuthRequest(id);
+  if (!existing) return null;
+  if (isAdminViewer(req)) return existing;
+
+  const viewerId = getViewerUserId(req);
+  if (!viewerId) return null;
+
+  const [owned] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(and(
+      eq(auditLogsTable.traceId, existing.traceId),
+      eq(auditLogsTable.ownerUserId, viewerId),
+    ))
+    .limit(1);
+  return owned ? existing : null;
+}
+
+router.get("/v1/authorize/:id/status", requireAuth, async (req, res): Promise<void> => {
+  const idParam = req.params.id;
+  if (typeof idParam !== "string") {
+    res.status(400).json({ error: "id is required" });
+    return;
+  }
+  const id: string = idParam;
+  const existing = await getAuthRequestForViewer(req, id);
   if (!existing) {
     res.status(404).json({ error: "Authorization request not found" });
     return;
@@ -288,9 +318,20 @@ router.get("/v1/authorize/:id/status", async (req, res): Promise<void> => {
   res.json(resolved);
 });
 
-router.post("/v1/authorize/:id/resolve", async (req, res): Promise<void> => {
-  const { id } = req.params;
+router.post("/v1/authorize/:id/resolve", requireAuth, async (req, res): Promise<void> => {
+  const idParam = req.params.id;
+  if (typeof idParam !== "string") {
+    res.status(400).json({ error: "id is required" });
+    return;
+  }
+  const id: string = idParam;
   const { decision, resolvedBy, notes } = req.body ?? {};
+
+  const owned = await getAuthRequestForViewer(req, id);
+  if (!owned) {
+    res.status(404).json({ error: "Authorization request not found" });
+    return;
+  }
 
   if (!["AUTHORIZED", "BLOCKED"].includes(decision)) {
     res.status(400).json({ error: "decision must be AUTHORIZED or BLOCKED" });
@@ -317,14 +358,47 @@ router.post("/v1/authorize/:id/resolve", async (req, res): Promise<void> => {
   res.json(resolved);
 });
 
-router.get("/v1/authorize/pending", (_req, res): void => {
-  res.json({ requests: getAllPendingRequests() });
+router.get("/v1/authorize/pending", requireAuth, async (req, res): Promise<void> => {
+  const all = getAllPendingRequests();
+  if (isAdminViewer(req)) {
+    res.json({ requests: all });
+    return;
+  }
+  const viewerId = getViewerUserId(req);
+  if (!viewerId || all.length === 0) { res.json({ requests: [] }); return; }
+  // Scope: keep only requests whose traceId has at least one audit_log row
+  // owned by this viewer.
+  const traceIds = Array.from(new Set(all.map((r) => r.traceId)));
+  const owned = await db
+    .select({ traceId: auditLogsTable.traceId })
+    .from(auditLogsTable)
+    .where(and(
+      inArray(auditLogsTable.traceId, traceIds),
+      eq(auditLogsTable.ownerUserId, viewerId),
+    ));
+  const ownedTraceIds = new Set(owned.map((o) => o.traceId));
+  res.json({ requests: all.filter((r) => ownedTraceIds.has(r.traceId)) });
 });
 
-router.get("/v1/authorize/history", async (_req, res): Promise<void> => {
+router.get("/v1/authorize/history", requireAuth, async (req, res): Promise<void> => {
+  // Scope by joining authorization_requests.traceId → audit_logs.ownerUserId.
+  // Admins see every real-tenant trace; users see only their own.
+  let scope: SQL;
+  if (isAdminViewer(req)) {
+    scope = sql`EXISTS (SELECT 1 FROM ${auditLogsTable}
+      WHERE ${auditLogsTable.traceId} = ${authorizationRequestsTable.traceId}
+        AND ${auditLogsTable.ownerUserId} IS NOT NULL)`;
+  } else {
+    const viewerId = getViewerUserId(req);
+    if (!viewerId) { res.json({ requests: [] }); return; }
+    scope = sql`EXISTS (SELECT 1 FROM ${auditLogsTable}
+      WHERE ${auditLogsTable.traceId} = ${authorizationRequestsTable.traceId}
+        AND ${auditLogsTable.ownerUserId} = ${viewerId})`;
+  }
   const rows = await db
     .select()
     .from(authorizationRequestsTable)
+    .where(scope)
     .orderBy(desc(authorizationRequestsTable.requestedAt))
     .limit(200);
   res.json({ requests: rows });
@@ -355,10 +429,22 @@ router.get("/v1/registry", requireAuth, async (req, res): Promise<void> => {
   res.json({ agents: rows });
 });
 
-router.post("/v1/registry", async (req, res): Promise<void> => {
-  const { agentId, ownerEmail, authorizedTools, riskTier, maxBudgetPerTrace } = req.body ?? {};
-  if (!agentId || !ownerEmail) {
-    res.status(400).json({ error: "agentId and ownerEmail are required" });
+router.post("/v1/registry", requireAuth, async (req, res): Promise<void> => {
+  const { agentId, authorizedTools, riskTier, maxBudgetPerTrace } = req.body ?? {};
+  // Trust-on-input fix: non-admin callers cannot impersonate another tenant by
+  // passing an arbitrary ownerEmail. We always derive it from the auth context.
+  // Admins may pass an explicit ownerEmail (used to back-fill rows on behalf
+  // of a partner during support escalation).
+  const viewerEmail = getViewerEmail(req);
+  const requestedOwner = typeof req.body?.ownerEmail === "string" ? req.body.ownerEmail.trim() : null;
+  const ownerEmail = isAdminViewer(req) && requestedOwner ? requestedOwner : viewerEmail;
+
+  if (!agentId) {
+    res.status(400).json({ error: "agentId is required" });
+    return;
+  }
+  if (!ownerEmail) {
+    res.status(400).json({ error: "could not resolve viewer email" });
     return;
   }
 
@@ -388,12 +474,35 @@ router.post("/v1/registry", async (req, res): Promise<void> => {
   res.status(201).json(inserted);
 });
 
-router.patch("/v1/registry/:agentId", async (req, res): Promise<void> => {
-  const { agentId } = req.params;
+router.patch("/v1/registry/:agentId", requireAuth, async (req, res): Promise<void> => {
+  const agentIdParam = req.params.agentId;
+  if (typeof agentIdParam !== "string") {
+    res.status(400).json({ error: "agentId is required" });
+    return;
+  }
+  const agentId: string = agentIdParam;
   const { ownerEmail, authorizedTools, riskTier, maxBudgetPerTrace, isActive } = req.body ?? {};
 
+  // Tenant isolation: a non-admin can only mutate registry rows they own.
+  // Look up the row first; if it isn't theirs, 404 (don't leak existence).
+  const viewerEmail = getViewerEmail(req);
+  const [existing] = await db
+    .select({ ownerEmail: agentRegistryTable.ownerEmail })
+    .from(agentRegistryTable)
+    .where(eq(agentRegistryTable.agentId, agentId))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  if (!isAdminViewer(req) && existing.ownerEmail !== viewerEmail) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+
   const updates: Partial<typeof agentRegistryTable.$inferInsert> = { updatedAt: new Date() };
-  if (ownerEmail !== undefined) updates.ownerEmail = ownerEmail;
+  // Non-admins cannot reassign ownership.
+  if (ownerEmail !== undefined && isAdminViewer(req)) updates.ownerEmail = ownerEmail;
   if (authorizedTools !== undefined) updates.authorizedTools = authorizedTools;
   if (riskTier !== undefined) updates.riskTier = riskTier;
   if (maxBudgetPerTrace !== undefined) updates.maxBudgetPerTrace = maxBudgetPerTrace;
@@ -418,7 +527,13 @@ router.patch("/v1/registry/:agentId", async (req, res): Promise<void> => {
 
 // ── /v1/admin/kill-switch ─────────────────────────────────────────────────
 
-router.post("/v1/admin/kill-switch", async (req, res): Promise<void> => {
+router.post("/v1/admin/kill-switch", requireAuth, async (req, res): Promise<void> => {
+  // Only admins (SENTINEL_ADMIN_EMAILS allowlist) can flip the global
+  // kill-switch — it revokes every active agent session in the system.
+  if (!isAdminViewer(req)) {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
   const { activate, reason, resolvedBy } = req.body ?? {};
 
   if (activate) {
@@ -438,7 +553,11 @@ router.post("/v1/admin/kill-switch", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/v1/admin/kill-switch", (_req, res): void => {
+router.get("/v1/admin/kill-switch", requireAuth, (req, res): void => {
+  if (!isAdminViewer(req)) {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
   res.json({ active: isGlobalKillActive(), revokedAgents: getRevokedAgents() });
 });
 
@@ -453,7 +572,7 @@ router.get("/v1/honeypot/tokens", (_req, res): void => {
 
 // ── /v1/export/audit-pdf ─────────────────────────────────────────────────
 
-router.get("/v1/export/audit-pdf", async (req, res): Promise<void> => {
+router.get("/v1/export/audit-pdf", requireAuth, async (req, res): Promise<void> => {
   const { agentId, traceId, startTime, endTime } = req.query;
 
   await generateAuditPDF(res, {
@@ -461,6 +580,7 @@ router.get("/v1/export/audit-pdf", async (req, res): Promise<void> => {
     traceId: typeof traceId === "string" ? traceId : undefined,
     startTime: typeof startTime === "string" ? new Date(startTime) : undefined,
     endTime: typeof endTime === "string" ? new Date(endTime) : undefined,
+    ownerScope: viewerScopeCondition(req),
   });
 });
 

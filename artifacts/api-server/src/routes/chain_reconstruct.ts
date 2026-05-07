@@ -25,10 +25,21 @@ import { db, auditLogsTable, merkleCheckpointsTable } from "@workspace/db";
 import { computeHash } from "../lib/hash.js";
 import { buildMerkleRoot, BLOCK_SIZE } from "../lib/merkle.js";
 import { logger } from "../lib/logger.js";
+import { requireAuth } from "../lib/requireAuth";
+import { isAdminViewer } from "../lib/admin";
 
 const router = Router();
 
-router.post("/v1/admin/chain-reconstruct", async (req, res): Promise<void> => {
+router.post("/v1/admin/chain-reconstruct", requireAuth, async (req, res): Promise<void> => {
+  // ── Guard 0: must be a Sentinel admin ─────────────────────────────────────
+  // The env flag + magic header are operational safety latches; they aren't
+  // an auth boundary. Anyone reaching this endpoint must additionally be on
+  // the SENTINEL_ADMIN_EMAILS allowlist.
+  if (!isAdminViewer(req)) {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+
   // ── Guard 1: explicit opt-in env flag ─────────────────────────────────────
   if (process.env.ALLOW_CHAIN_RECONSTRUCT !== "true") {
     res.status(403).json({

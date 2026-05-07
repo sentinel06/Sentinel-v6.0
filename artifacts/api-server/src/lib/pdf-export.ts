@@ -62,10 +62,16 @@ export async function generateAuditPDF(
     traceId?: string;
     startTime?: Date;
     endTime?: Date;
-  } = {},
+    /**
+     * Caller's tenant scope predicate (built from `viewerScopeCondition`).
+     * Required — passing `undefined` would expose every tenant's audit logs
+     * in the exported PDF.
+     */
+    ownerScope: import("drizzle-orm").SQL;
+  },
 ): Promise<void> {
   const generatedAt = new Date();
-  const { agentId, traceId, startTime, endTime } = options;
+  const { agentId, traceId, startTime, endTime, ownerScope } = options;
 
   // ── 1. Fetch audit logs ─────────────────────────────────────────────────
   let logsQuery = db
@@ -75,12 +81,12 @@ export async function generateAuditPDF(
     .limit(500)
     .$dynamic();
 
-  const conditions = [];
+  const conditions = [ownerScope];
   if (agentId) conditions.push(eq(auditLogsTable.agentId, agentId));
   if (traceId) conditions.push(eq(auditLogsTable.traceId, traceId));
   if (startTime) conditions.push(gte(auditLogsTable.timestamp, startTime));
   if (endTime) conditions.push(lte(auditLogsTable.timestamp, endTime));
-  if (conditions.length > 0) logsQuery = logsQuery.where(and(...conditions));
+  logsQuery = logsQuery.where(and(...conditions));
 
   const logs = await logsQuery;
 

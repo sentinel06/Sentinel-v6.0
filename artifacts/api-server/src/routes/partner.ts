@@ -20,6 +20,8 @@ import fs from "fs";
 import { db, partnerKeysTable, agentRegistryTable, auditLogsTable, authorizationRequestsTable } from "@workspace/db";
 import { eq, desc, avg, count, and, inArray, gte, lte, sql, isNotNull } from "drizzle-orm";
 import { seedDemoEnvironment } from "../utils/demo_seeding.js";
+import { requireAuth } from "../lib/requireAuth";
+import { isAdminViewer, getViewerEmail } from "../lib/admin";
 
 // ── Golden Key constant (mirrors demo_seeding.ts) ─────────────────────────
 const GOLDEN_KEY = "SENTINEL-DEMO-GOLDEN-2026";
@@ -61,11 +63,20 @@ function generateKey(tier: Tier): string {
 
 // ── POST /v1/partner/keys ─────────────────────────────────────────────────
 
-router.post("/v1/partner/keys", async (req, res): Promise<void> => {
-  const { partnerId, partnerEmail, label, tier, swarmScope } = req.body ?? {};
+router.post("/v1/partner/keys", requireAuth, async (req, res): Promise<void> => {
+  const { label, tier, swarmScope } = req.body ?? {};
+  // Trust-on-input fix: non-admins cannot mint a key for somebody else.
+  // Owner identity is always the signed-in viewer's userId + email; admins
+  // may pass an explicit partnerId/partnerEmail (used to provision keys on
+  // behalf of partners during onboarding/support).
+  const viewerEmail = getViewerEmail(req);
+  const reqPartnerId = typeof req.body?.partnerId === "string" ? req.body.partnerId : null;
+  const reqPartnerEmail = typeof req.body?.partnerEmail === "string" ? req.body.partnerEmail : null;
+  const partnerId = isAdminViewer(req) && reqPartnerId ? reqPartnerId : (req as any).auth?.()?.userId ?? null;
+  const partnerEmail = isAdminViewer(req) && reqPartnerEmail ? reqPartnerEmail : viewerEmail;
 
   if (!partnerId || !partnerEmail) {
-    res.status(400).json({ error: "partnerId and partnerEmail are required" });
+    res.status(400).json({ error: "could not resolve viewer identity" });
     return;
   }
 
@@ -96,12 +107,21 @@ router.post("/v1/partner/keys", async (req, res): Promise<void> => {
 
 // ── GET /v1/partner/keys ──────────────────────────────────────────────────
 
-router.get("/v1/partner/keys", async (req, res): Promise<void> => {
-  const { partnerId } = req.query;
-
-  const rows = partnerId
-    ? await db.select().from(partnerKeysTable).where(eq(partnerKeysTable.partnerId, String(partnerId))).orderBy(desc(partnerKeysTable.createdAt))
-    : await db.select().from(partnerKeysTable).orderBy(desc(partnerKeysTable.createdAt));
+router.get("/v1/partner/keys", requireAuth, async (req, res): Promise<void> => {
+  // Tenant isolation: a non-admin can only ever list their own keys, even
+  // if they pass a different `partnerId` in the query string. Admins may
+  // narrow by `partnerId` or list everything.
+  const viewerId = (req as any).auth?.()?.userId ?? null;
+  let scope: import("drizzle-orm").SQL | undefined;
+  if (isAdminViewer(req)) {
+    const requested = typeof req.query.partnerId === "string" ? req.query.partnerId : null;
+    if (requested) scope = eq(partnerKeysTable.partnerId, requested);
+  } else {
+    if (!viewerId) { res.json({ keys: [], total: 0 }); return; }
+    scope = eq(partnerKeysTable.partnerId, viewerId);
+  }
+  const baseQuery = db.select().from(partnerKeysTable);
+  const rows = await (scope ? baseQuery.where(scope) : baseQuery).orderBy(desc(partnerKeysTable.createdAt));
 
   // Mask the key value — return only first 20 chars + ****
   const masked = rows.map((k) => ({
@@ -114,8 +134,30 @@ router.get("/v1/partner/keys", async (req, res): Promise<void> => {
 
 // ── PATCH /v1/partner/keys/:keyId/revoke ──────────────────────────────────
 
-router.patch("/v1/partner/keys/:keyId/revoke", async (req, res): Promise<void> => {
-  const { keyId } = req.params;
+router.patch("/v1/partner/keys/:keyId/revoke", requireAuth, async (req, res): Promise<void> => {
+  const keyIdParam = req.params.keyId;
+  if (typeof keyIdParam !== "string") {
+    res.status(400).json({ error: "keyId is required" });
+    return;
+  }
+  const keyId: string = keyIdParam;
+
+  // Tenant isolation: only the key's owner (or an admin) can revoke it.
+  // 404 (not 403) avoids leaking which keyIds exist.
+  const viewerId = (req as any).auth?.()?.userId ?? null;
+  const [existing] = await db
+    .select({ partnerId: partnerKeysTable.partnerId })
+    .from(partnerKeysTable)
+    .where(eq(partnerKeysTable.id, keyId))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Key not found" });
+    return;
+  }
+  if (!isAdminViewer(req) && existing.partnerId !== viewerId) {
+    res.status(404).json({ error: "Key not found" });
+    return;
+  }
 
   const [updated] = await db
     .update(partnerKeysTable)
@@ -288,11 +330,20 @@ async function generate_executive_summary(
 
 // ── GET /v1/compliance/executive-summary ──────────────────────────────────
 
-router.get("/v1/compliance/executive-summary", async (req, res): Promise<void> => {
-  const { partnerId, hours } = req.query;
+router.get("/v1/compliance/executive-summary", requireAuth, async (req, res): Promise<void> => {
+  const { hours } = req.query;
+  // Trust-on-input: non-admins cannot summarize a different partner's data.
+  // Admins may pass any partnerId (or null = platform-wide).
+  const viewerEmail = getViewerEmail(req);
+  const requested = typeof req.query.partnerId === "string" ? req.query.partnerId : null;
+  const partnerId = isAdminViewer(req) ? requested : viewerEmail;
+  if (!isAdminViewer(req) && !partnerId) {
+    res.status(400).json({ error: "could not resolve viewer email" });
+    return;
+  }
   try {
     const summary = await generate_executive_summary(
-      partnerId ? String(partnerId) : null,
+      partnerId,
       hours ? Math.max(1, Math.min(168, Number(hours))) : 24,
     );
     res.json(summary);
@@ -307,8 +358,13 @@ router.get("/v1/compliance/executive-summary", async (req, res): Promise<void> =
 // Aggregates trust score, anomaly disposition (detected vs blocked), and
 // quantum-readiness certification score across all partner swarms.
 
-router.get("/v1/compliance/audit-report", async (req, res): Promise<void> => {
-  const { partnerId, timeHorizon = "30d" } = req.query;
+router.get("/v1/compliance/audit-report", requireAuth, async (req, res): Promise<void> => {
+  const { timeHorizon = "30d" } = req.query;
+  // Trust-on-input: non-admins always get their own report regardless of
+  // any partnerId they try to pass.
+  const viewerEmail = getViewerEmail(req);
+  const requested = typeof req.query.partnerId === "string" ? req.query.partnerId : null;
+  const partnerId = isAdminViewer(req) ? requested : viewerEmail;
 
   if (!partnerId) {
     res.status(400).json({ error: "partnerId (ownerEmail) is required" });
@@ -434,9 +490,18 @@ router.get("/v1/compliance/audit-report", async (req, res): Promise<void> => {
 // aggregate the average consistencyScore across all their agents' audit logs,
 // plus anomaly counts and status classification.
 
-router.get("/v1/partner/health", async (_req, res): Promise<void> => {
-  // 1. Get all registered agents
-  const agents = await db.select().from(agentRegistryTable);
+router.get("/v1/partner/health", requireAuth, async (req, res): Promise<void> => {
+  // Tenant isolation: a non-admin only ever sees the trust-score row for
+  // their own ownerEmail. Admins see the full cross-tenant feed (but never
+  // the demo Apex-Fintech rows — those have no Clerk-owned audit logs and
+  // are unreachable through `viewerScopeCondition` anyway).
+  const viewerEmail = getViewerEmail(req);
+  const agentsBase = db.select().from(agentRegistryTable);
+  const agents = isAdminViewer(req)
+    ? await agentsBase
+    : viewerEmail
+      ? await db.select().from(agentRegistryTable).where(eq(agentRegistryTable.ownerEmail, viewerEmail))
+      : [];
 
   // 2. Group by ownerEmail
   const byOwner = new Map<string, typeof agentRegistryTable.$inferSelect[]>();
@@ -676,10 +741,15 @@ async function generate_quantum_audit(partnerId: string, limit = 1000) {
 
 // ── GET /v1/partner/quantum-audit ─────────────────────────────────────────────
 
-router.get("/v1/partner/quantum-audit", async (req, res): Promise<void> => {
-  const { partnerId, limit } = req.query;
+router.get("/v1/partner/quantum-audit", requireAuth, async (req, res): Promise<void> => {
+  const { limit } = req.query;
+  // Trust-on-input: non-admins always get their own tenant's audit; the
+  // `partnerId` query param is only honored for admins.
+  const viewerEmail = getViewerEmail(req);
+  const requested = typeof req.query.partnerId === "string" ? req.query.partnerId : null;
+  const partnerId = isAdminViewer(req) ? requested : viewerEmail;
 
-  if (!partnerId || typeof partnerId !== "string") {
+  if (!partnerId) {
     res.status(400).json({ error: "partnerId query parameter is required" });
     return;
   }
@@ -788,15 +858,47 @@ router.get("/v1/partner/onboarding", async (req, res): Promise<void> => {
   const now      = new Date();
   const window7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [totalEventsRow]   = await db.select({ n: count() }).from(auditLogsTable);
-  const [quantumSignedRow] = await db.select({ n: count() }).from(auditLogsTable).where(isNotNull(auditLogsTable.pqSignature));
-  const [hashedRow]        = await db.select({ n: count() }).from(auditLogsTable).where(isNotNull(auditLogsTable.currentHash));
-  const [anomalousRow]     = await db.select({ n: count() }).from(auditLogsTable).where(eq(auditLogsTable.isAnomalous, true));
-  const [humanResolvedRow] = await db.select({ n: count() }).from(authorizationRequestsTable).where(isNotNull(authorizationRequestsTable.resolvedAt));
-  const [humanTotalRow]    = await db.select({ n: count() }).from(authorizationRequestsTable);
-  const [driftRow]         = await db.select({ n: count() }).from(auditLogsTable).where(and(eq(auditLogsTable.isAnomalous, true), sql`${auditLogsTable.anomalyReason} ILIKE ${"%" + "drift" + "%"}`));
-  const [recursiveFixRow]  = await db.select({ n: count() }).from(auditLogsTable).where(sql`${auditLogsTable.eventType} ILIKE ${"RECURSIVE_FIX_VERIFIED%"}`);
-  const [recentLogsRow]    = await db.select({ n: count() }).from(auditLogsTable).where(gte(auditLogsTable.timestamp, window7d));
+  // Tenant isolation: when the caller is using their own partner key (not
+  // the Golden demo key), every system stat below is scoped to that
+  // partner's agents. Otherwise we expose the platform-wide totals (Golden
+  // demo path is the only public-stats surface).
+  let scope: import("drizzle-orm").SQL | undefined;
+  let traceScope: import("drizzle-orm").SQL | undefined;
+  if (!isGolden) {
+    const ownerAgents = await db
+      .select({ agentId: agentRegistryTable.agentId })
+      .from(agentRegistryTable)
+      .where(eq(agentRegistryTable.ownerEmail, authorizedPartner));
+    const ownerAgentIds = ownerAgents.map((a) => a.agentId);
+    if (ownerAgentIds.length === 0) {
+      // No agents → all counts are 0; short-circuit with a sentinel scope.
+      scope = sql`false`;
+      traceScope = sql`false`;
+    } else {
+      scope = inArray(auditLogsTable.agentId, ownerAgentIds);
+      // authorization_requests has no agentId, so scope by traceId →
+      // audit_logs.agentId IN (ownerAgentIds).
+      traceScope = sql`${authorizationRequestsTable.traceId} IN (
+        SELECT DISTINCT ${auditLogsTable.traceId}
+          FROM ${auditLogsTable}
+          WHERE ${auditLogsTable.agentId} IN (${sql.join(ownerAgentIds.map((id) => sql`${id}`), sql`, `)})
+      )`;
+    }
+  }
+  const withScope = (extra?: import("drizzle-orm").SQL) =>
+    scope && extra ? and(scope, extra) : scope ?? extra;
+  const withTraceScope = (extra?: import("drizzle-orm").SQL) =>
+    traceScope && extra ? and(traceScope, extra) : traceScope ?? extra;
+
+  const [totalEventsRow]   = await db.select({ n: count() }).from(auditLogsTable).where(withScope());
+  const [quantumSignedRow] = await db.select({ n: count() }).from(auditLogsTable).where(withScope(isNotNull(auditLogsTable.pqSignature)));
+  const [hashedRow]        = await db.select({ n: count() }).from(auditLogsTable).where(withScope(isNotNull(auditLogsTable.currentHash)));
+  const [anomalousRow]     = await db.select({ n: count() }).from(auditLogsTable).where(withScope(eq(auditLogsTable.isAnomalous, true)));
+  const [humanResolvedRow] = await db.select({ n: count() }).from(authorizationRequestsTable).where(withTraceScope(isNotNull(authorizationRequestsTable.resolvedAt)));
+  const [humanTotalRow]    = await db.select({ n: count() }).from(authorizationRequestsTable).where(withTraceScope());
+  const [driftRow]         = await db.select({ n: count() }).from(auditLogsTable).where(withScope(and(eq(auditLogsTable.isAnomalous, true), sql`${auditLogsTable.anomalyReason} ILIKE ${"%" + "drift" + "%"}`)));
+  const [recursiveFixRow]  = await db.select({ n: count() }).from(auditLogsTable).where(withScope(sql`${auditLogsTable.eventType} ILIKE ${"RECURSIVE_FIX_VERIFIED%"}`));
+  const [recentLogsRow]    = await db.select({ n: count() }).from(auditLogsTable).where(withScope(gte(auditLogsTable.timestamp, window7d)));
 
   const totalEvents    = Number(totalEventsRow?.n ?? 0);
   const quantumSigned  = Number(quantumSignedRow?.n ?? 0);

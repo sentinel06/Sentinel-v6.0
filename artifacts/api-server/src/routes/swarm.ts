@@ -8,15 +8,17 @@
  */
 
 import { Router, type IRouter } from "express";
-import { db, agentSessionsTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { db, agentSessionsTable, auditLogsTable } from "@workspace/db";
+import { eq, inArray, and } from "drizzle-orm";
 import { revokeAgent, recursiveRevokeTree } from "../lib/governance";
+import { requireAuth } from "../lib/requireAuth";
+import { viewerScopeCondition } from "../lib/owner";
 
 const router: IRouter = Router();
 
 // ── POST /v1/swarm/sessions ───────────────────────────────────────────────
 
-router.post("/v1/swarm/sessions", async (req, res): Promise<void> => {
+router.post("/v1/swarm/sessions", requireAuth, async (req, res): Promise<void> => {
   const { agentId, parentUid, rootSwarmId, swarmId } = req.body ?? {};
 
   if (!agentId || typeof agentId !== "string") {
@@ -138,9 +140,28 @@ router.get("/v1/swarm/map", async (_req, res): Promise<void> => {
 
 // ── POST /v1/swarm/revoke-tree/:agentId ──────────────────────────────────
 
-router.post("/v1/swarm/revoke-tree/:agentId", async (req, res): Promise<void> => {
-  const { agentId } = req.params;
+router.post("/v1/swarm/revoke-tree/:agentId", requireAuth, async (req, res): Promise<void> => {
+  const agentIdParam = req.params.agentId;
+  if (typeof agentIdParam !== "string") {
+    res.status(400).json({ error: "agentId is required" });
+    return;
+  }
+  const agentId: string = agentIdParam;
   const { reason } = req.body ?? {};
+
+  // IDOR guard: only allow revoking trees the viewer can see in their
+  // tenant slice. Probe audit_logs for at least one row tying this agent to
+  // the viewer (admins see any non-demo agent).
+  const [owned] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(and(eq(auditLogsTable.agentId, agentId), viewerScopeCondition(req)))
+    .limit(1);
+  if (!owned) {
+    res.status(404).json({ error: "Agent not found in your scope" });
+    return;
+  }
+
   const revokedChain = await recursiveRevokeTree(agentId, reason ?? "Manual recursive revocation");
   res.json({
     revokedChain,

@@ -16,7 +16,7 @@
 import { Router } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, auditLogsTable } from "@workspace/db";
-import { viewerScopeCondition } from "../lib/owner";
+import { viewerScopeCondition, getViewerUserId } from "../lib/owner";
 import { requireAuth } from "../lib/requireAuth";
 import { computeHash, getLastHash } from "../lib/hash.js";
 import { quantumSigner } from "../crypto/quantum_ledger.js";
@@ -226,7 +226,7 @@ router.post("/v1/forensic/chain-verify/:traceId", requireAuth, async (req, res):
 //   3. On consensus: commit HUMAN_IN_THE_LOOP_OVERRIDE + RECURSIVE_FIX_VERIFIED
 //   4. Set FIX_MONITOR_ACTIVE (100 event 100% sampling window)
 
-router.post("/v1/governance/confirm-fix", async (req, res): Promise<void> => {
+router.post("/v1/governance/confirm-fix", requireAuth, async (req, res): Promise<void> => {
   const {
     logId, newRationale, newToolParams, operatorId, challengeId,
     sovereignOverrideDev,
@@ -248,8 +248,17 @@ router.post("/v1/governance/confirm-fix", async (req, res): Promise<void> => {
     return;
   }
 
-  const [original] = await db.select().from(auditLogsTable).where(eq(auditLogsTable.id, logId));
+  // IDOR guard: only return the row if it's in the viewer's scope. Returning
+  // a 404 (rather than 403) avoids leaking existence of rows the viewer
+  // doesn't own.
+  const [original] = await db
+    .select()
+    .from(auditLogsTable)
+    .where(and(eq(auditLogsTable.id, logId), viewerScopeCondition(req)));
   if (!original) { res.status(404).json({ error: "Original log entry not found" }); return; }
+  // Re-stamp the override + fix-verified entries with the original row's
+  // owner so they remain visible to the same tenant.
+  const ownerUserId = original.ownerUserId ?? getViewerUserId(req);
 
   const { agentId, traceId } = original;
   const originalPayload = (original.payload ?? {}) as Record<string, unknown>;
@@ -287,6 +296,7 @@ router.post("/v1/governance/confirm-fix", async (req, res): Promise<void> => {
     consistencyScore: 1.0, consistencyReasons: [],
     quantumSig: pqc1.signature.substring(0, 88),
     pqSignature: pqe1,
+    ownerUserId,
   } as any).returning();
 
   // ── LEDGER ENTRY 2: RECURSIVE_FIX_VERIFIED ──────────────────────────────
@@ -316,6 +326,7 @@ router.post("/v1/governance/confirm-fix", async (req, res): Promise<void> => {
     consistencyScore: 1.0, consistencyReasons: [],
     quantumSig: pqc2.signature.substring(0, 88),
     pqSignature: pqe2,
+    ownerUserId,
   } as any).returning();
 
   // ── Activate Fix Monitor (100-event elevated sampling window) ────────────
@@ -343,8 +354,27 @@ router.post("/v1/governance/confirm-fix", async (req, res): Promise<void> => {
 });
 
 // ── GET /v1/governance/fix-monitor/:agentId ──────────────────────────────────
-router.get("/v1/governance/fix-monitor/:agentId", (req, res): void => {
-  const { agentId } = req.params;
+router.get("/v1/governance/fix-monitor/:agentId", requireAuth, async (req, res): Promise<void> => {
+  const agentIdParam = req.params.agentId;
+  if (typeof agentIdParam !== "string") {
+    res.status(400).json({ error: "agentId is required" });
+    return;
+  }
+  const agentId: string = agentIdParam;
+
+  // Tenant isolation: probe audit_logs under viewer scope before exposing
+  // any monitor metadata for this agent. Otherwise an attacker could iterate
+  // agentIds to learn governance state across tenants.
+  const [owned] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(and(eq(auditLogsTable.agentId, agentId), viewerScopeCondition(req)))
+    .limit(1);
+  if (!owned) {
+    res.status(404).json({ error: "Agent not found in your scope" });
+    return;
+  }
+
   const entry = getFixMonitorStatus(agentId);
   res.json({
     agentId,
@@ -358,9 +388,24 @@ router.get("/v1/governance/fix-monitor/:agentId", (req, res): void => {
 // Writes EMERGENCY_SOLO_REVOKE to the immutable audit ledger as a record
 // that this was a unilateral emergency action (bypasses Two-Man Rule).
 
-router.post("/v1/forensic/kill-switch-log", async (req, res): Promise<void> => {
+router.post("/v1/forensic/kill-switch-log", requireAuth, async (req, res): Promise<void> => {
   const { agentId, traceId, operatorId, reason } = req.body;
   if (!agentId) { res.status(400).json({ error: "agentId required" }); return; }
+
+  // IDOR guard: only allow killing agents the viewer can already see in
+  // their tenant slice. Admins (per viewerScopeCondition) can act on any
+  // real-tenant agent. We probe audit_logs first — if no row matches the
+  // viewer scope for this agentId, refuse with 404.
+  const [owned] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(and(eq(auditLogsTable.agentId, agentId), viewerScopeCondition(req)))
+    .limit(1);
+  if (!owned) {
+    res.status(404).json({ error: "Agent not found in your scope" });
+    return;
+  }
+  const ownerUserId = getViewerUserId(req);
 
   const ts = new Date();
   const payload = {
@@ -385,6 +430,7 @@ router.post("/v1/forensic/kill-switch-log", async (req, res): Promise<void> => {
     consistencyScore: 1.0, consistencyReasons: [],
     quantumSig: pqc.signature.substring(0, 88),
     pqSignature: pqe,
+    ownerUserId,
   } as any).returning();
 
   res.json({

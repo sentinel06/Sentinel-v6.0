@@ -10,17 +10,41 @@
  *   (sent payload vs received payload, field-by-field).
  */
 
-import { Router } from "express";
+import { Router, type Request } from "express";
+import { db, auditLogsTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { buildTopologyGraph } from "../services/topology_mapper.js";
+import { requireAuth } from "../lib/requireAuth";
+import { viewerScopeCondition } from "../lib/owner";
 
 const router = Router();
 
+/**
+ * Confirms the authenticated viewer is allowed to see this trace by checking
+ * that at least one audit_logs row with this traceId is in their scope
+ * (their own ownerUserId, or — for admins — any non-NULL ownerUserId).
+ * Returns true if allowed, false if the viewer cannot see this trace.
+ */
+async function viewerOwnsTrace(req: Request, traceId: string): Promise<boolean> {
+  const [hit] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(and(eq(auditLogsTable.traceId, traceId), viewerScopeCondition(req)))
+    .limit(1);
+  return !!hit;
+}
+
 // ── GET /v1/topology/:traceId ─────────────────────────────────────────────────
-router.get("/v1/topology/:traceId", async (req, res): Promise<void> => {
+router.get("/v1/topology/:traceId", requireAuth, async (req, res): Promise<void> => {
   const { traceId } = req.params;
 
   if (!traceId || typeof traceId !== "string") {
     res.status(400).json({ error: "traceId is required" });
+    return;
+  }
+
+  if (!(await viewerOwnsTrace(req, traceId))) {
+    res.status(404).json({ error: "No events found for this trace", traceId });
     return;
   }
 
@@ -40,8 +64,18 @@ router.get("/v1/topology/:traceId", async (req, res): Promise<void> => {
 });
 
 // ── GET /v1/topology/:traceId/diff/:edgeId ───────────────────────────────────
-router.get("/v1/topology/:traceId/diff/:edgeId", async (req, res): Promise<void> => {
+router.get("/v1/topology/:traceId/diff/:edgeId", requireAuth, async (req, res): Promise<void> => {
   const { traceId, edgeId } = req.params;
+
+  if (typeof traceId !== "string" || typeof edgeId !== "string") {
+    res.status(400).json({ error: "traceId and edgeId are required" });
+    return;
+  }
+
+  if (!(await viewerOwnsTrace(req, traceId))) {
+    res.status(404).json({ error: "Trace not found" });
+    return;
+  }
 
   try {
     const graph = await buildTopologyGraph(traceId);
