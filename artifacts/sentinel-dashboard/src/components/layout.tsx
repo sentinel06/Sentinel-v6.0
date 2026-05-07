@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
 import SovereignInduction from "./SovereignInduction";
+import SupportWidget from "./support-widget";
 
 // DataRoomExport pulls in jspdf + jszip + qrcode (~500 KB combined). It only
 // renders for Certified Operators in the sidebar footer, so we defer the
@@ -1220,6 +1221,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Sovereign Induction Onboarding ── */}
       <SovereignInduction />
+
+      {/* ── Sentinel Assistant (AI support) ── */}
+      <SupportWidget />
 
       {/* ── Responsive sidebar choreography ──
            Below 1024px: sidebar is fixed-positioned & translated off-canvas

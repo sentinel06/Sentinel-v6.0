@@ -16,6 +16,7 @@ import whitepaperRouter from "./whitepaper";
 import gatewayRouter from "./gateway";
 import chainReconstructRouter from "./chain_reconstruct";
 import meRouter from "./me";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(whitepaperRouter);
 router.use(gatewayRouter);
 router.use(chainReconstructRouter);
 router.use(meRouter);
+router.use(supportRouter);
 
 export default router;
