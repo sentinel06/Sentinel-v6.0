@@ -26,6 +26,7 @@ import {
 import { signWithMLDSA, getQuantumIntegrityManifest } from "../crypto/pqc";
 import { quantumSigner } from "../crypto/quantum_ledger";
 import { buildDriftReportFromLogs } from "../lib/driftDetector";
+import { resolveOwnerFromKey, getViewerUserId, viewerScopeCondition } from "../lib/owner";
 
 const router: IRouter = Router();
 
@@ -180,6 +181,9 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
   // Legacy single-field for backward-compat with older dashboard queries
   const pqcSig = signWithMLDSA(currentHash);
 
+  // Resolve per-tenant owner from the API key (null = legacy/admin path).
+  const ownerUserId = await resolveOwnerFromKey(req);
+
   const [inserted] = await db
     .insert(auditLogsTable)
     .values({
@@ -202,6 +206,7 @@ router.post("/v1/log", logRateLimiter(), async (req, res): Promise<void> => {
       computeOriginRegion,
       quantumSig: pqcSig.signature.substring(0, 88),
       pqSignature: pqEnvelope,
+      ownerUserId,
     } as any)
     .returning();
 
@@ -295,7 +300,9 @@ router.get("/v1/logs", async (req, res): Promise<void> => {
     anomaliesOnly,
   } = parsed.data;
 
-  const conditions = [];
+  // Per-tenant scope: signed-in viewers see only their own ledger;
+  // anonymous viewers see only the public demo slice (owner IS NULL).
+  const conditions = [viewerScopeCondition(req)];
   if (agentId) conditions.push(eq(auditLogsTable.agentId, agentId));
   if (traceId) conditions.push(eq(auditLogsTable.traceId, traceId));
   if (eventType) conditions.push(eq(auditLogsTable.eventType, eventType));
@@ -338,10 +345,13 @@ router.get("/v1/logs/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Tenant scope: signed-in viewers can only see their rows; anonymous viewers
+  // can only see public demo rows. Out-of-scope IDs return 404 (not 403) so we
+  // don't leak existence of other tenants' rows.
   const [row] = await db
     .select()
     .from(auditLogsTable)
-    .where(eq(auditLogsTable.id, parsed.data.id));
+    .where(and(eq(auditLogsTable.id, parsed.data.id), viewerScopeCondition(req)));
 
   if (!row) {
     res.status(404).json({ error: "Audit log entry not found" });
@@ -362,7 +372,7 @@ router.get("/v1/traces/:traceId", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(auditLogsTable)
-    .where(eq(auditLogsTable.traceId, parsed.data.traceId))
+    .where(and(eq(auditLogsTable.traceId, parsed.data.traceId), viewerScopeCondition(req)))
     .orderBy(asc(auditLogsTable.timestamp));
 
   if (rows.length === 0) {
@@ -387,7 +397,12 @@ router.get("/v1/traces/:traceId", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/stats", async (_req, res): Promise<void> => {
+router.get("/v1/stats", async (req, res): Promise<void> => {
+  // Per-tenant: a signed-in user sees stats over THEIR ledger slice;
+  // anonymous viewers see only the public demo slice.
+  const ownerWhere = viewerScopeCondition(req);
+  const anomalyWhere = and(eq(auditLogsTable.isAnomalous, true), ownerWhere);
+
   const [
     [{ totalLogs }],
     [{ totalAgents }],
@@ -397,20 +412,22 @@ router.get("/v1/stats", async (_req, res): Promise<void> => {
     recentRows,
     integrityStatus,
   ] = await Promise.all([
-    db.select({ totalLogs: count() }).from(auditLogsTable),
-    db.select({ totalAgents: sql<number>`count(distinct ${auditLogsTable.agentId})` }).from(auditLogsTable),
-    db.select({ totalTraces: sql<number>`count(distinct ${auditLogsTable.traceId})` }).from(auditLogsTable),
-    db.select({ anomalyCount: count() }).from(auditLogsTable).where(eq(auditLogsTable.isAnomalous, true)),
+    db.select({ totalLogs: count() }).from(auditLogsTable).where(ownerWhere),
+    db.select({ totalAgents: sql<number>`count(distinct ${auditLogsTable.agentId})` }).from(auditLogsTable).where(ownerWhere),
+    db.select({ totalTraces: sql<number>`count(distinct ${auditLogsTable.traceId})` }).from(auditLogsTable).where(ownerWhere),
+    db.select({ anomalyCount: count() }).from(auditLogsTable).where(anomalyWhere),
     db
       .select({
         eventType: auditLogsTable.eventType,
         cnt: count(),
       })
       .from(auditLogsTable)
+      .where(ownerWhere)
       .groupBy(auditLogsTable.eventType),
     db
       .select()
       .from(auditLogsTable)
+      .where(ownerWhere)
       .orderBy(desc(auditLogsTable.timestamp))
       .limit(10),
     verifyHashChain(),
@@ -436,7 +453,8 @@ router.get("/v1/stats", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/agents", async (_req, res): Promise<void> => {
+router.get("/v1/agents", async (req, res): Promise<void> => {
+  const ownerWhere = viewerScopeCondition(req);
   const rows = await db
     .select({
       agentId: auditLogsTable.agentId,
@@ -445,6 +463,7 @@ router.get("/v1/agents", async (_req, res): Promise<void> => {
       anomalyCount: sql<number>`count(*) filter (where ${auditLogsTable.isAnomalous} = true)`,
     })
     .from(auditLogsTable)
+    .where(ownerWhere)
     .groupBy(auditLogsTable.agentId)
     .orderBy(desc(sql`max(${auditLogsTable.timestamp})`));
 
@@ -467,7 +486,11 @@ router.get("/v1/compliance/export", async (req, res): Promise<void> => {
 
   const { agentId, startTime, endTime } = parsed.data;
 
+  // Tenant scope: a signed-in user can only export their own ledger; anonymous
+  // requests can only export the public demo slice. This prevents IDOR via
+  // arbitrary agentId in the query string.
   const conditions = [
+    viewerScopeCondition(req),
     eq(auditLogsTable.agentId, agentId),
     gte(auditLogsTable.timestamp, new Date(startTime)),
     lte(auditLogsTable.timestamp, new Date(endTime)),

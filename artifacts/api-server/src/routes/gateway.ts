@@ -28,6 +28,7 @@ import {
   recordConsistencyScore,
 } from "../lib/governance";
 import { broadcastGatewayEvent } from "../lib/ws";
+import { resolveOwnerFromKey } from "../lib/owner";
 
 const router: IRouter = Router();
 
@@ -207,6 +208,7 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
   const qs       = makeFakeQuantumSig();
   const payload  = { event: "GATEWAY_REGISTRATION", agentId, name, capabilities, swarmId, parentId, tokenId: token.tokenId };
   const hash     = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(payload));
+  const ownerUserId = await resolveOwnerFromKey(req);
   await db.insert(auditLogsTable).values({
     agentId,
     traceId:          `gw-reg-${token.tokenId}`,
@@ -226,7 +228,8 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
       sigHex:     token.signature.substring(0, 48),
       verified:   true,
     },
-  });
+    ownerUserId,
+  } as any);
 
   // Broadcast birth event → ZEN_GOLD_SPARK on Swarm Map
   broadcastGatewayEvent("GATEWAY_SPARK", {
@@ -378,6 +381,7 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
   // anchor stays consistent across both helpers.
   const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(fullPayload));
 
+  const ownerUserId = await resolveOwnerFromKey(req);
   const [inserted] = await db.insert(auditLogsTable).values({
     agentId,
     traceId,
@@ -398,7 +402,8 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
       sigHex:     qs.substring(0, 48),
       verified:   true,
     },
-  }).returning({ id: auditLogsTable.id });
+    ownerUserId,
+  } as any).returning({ id: auditLogsTable.id });
 
   // ── Swarm Map Animation Broadcasts ────────────────────────────────────────
   const baseEvent = { agentId, traceId, swarmId: swarmId ?? null, driftScore: effectiveDrift, consistencyScore: consistency.score };

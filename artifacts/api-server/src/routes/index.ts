@@ -15,6 +15,7 @@ import topologyRouter from "./topology";
 import whitepaperRouter from "./whitepaper";
 import gatewayRouter from "./gateway";
 import chainReconstructRouter from "./chain_reconstruct";
+import meRouter from "./me";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(topologyRouter);
 router.use(whitepaperRouter);
 router.use(gatewayRouter);
 router.use(chainReconstructRouter);
+router.use(meRouter);
 
 export default router;

@@ -688,9 +688,9 @@ function ForensicInspector() {
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const NAV_FEATURED = [
-  { path: "/warroom", label: "War Room",       icon: ShieldAlert },
-  { path: "/traces",  label: "Evidence Bag",   icon: ListTree },
-  { path: "/eqa",     label: "Security Audit", icon: Zap },
+  { path: "/warroom", label: "War Room",     icon: ShieldAlert },
+  { path: "/traces",  label: "Evidence Bag", icon: ListTree },
+  { path: "/onboarding", label: "Connect Agent", icon: Rocket },
 ];
 
 const NAV_GROUPS = [
@@ -707,12 +707,10 @@ const NAV_GROUPS = [
   {
     label: "Governance",
     items: [
-      { path: "/registry",           label: "Registry",         icon: Cpu },
-      { path: "/compliance",         label: "Compliance",       icon: FileCheck },
-      { path: "/integrity",          label: "Hash Chain",       icon: ShieldCheck },
-      { path: "/badge",              label: "Sentinel Badge",   icon: Award },
-      { path: "/partner",            label: "Partner Portal",   icon: Building2 },
-      { path: "/partner-onboarding", label: "Alpha Onboarding", icon: Rocket },
+      { path: "/registry",   label: "Registry",       icon: Cpu },
+      { path: "/compliance", label: "Compliance",     icon: FileCheck },
+      { path: "/integrity",  label: "Hash Chain",     icon: ShieldCheck },
+      { path: "/badge",      label: "Sentinel Badge", icon: Award },
     ],
   },
 ];

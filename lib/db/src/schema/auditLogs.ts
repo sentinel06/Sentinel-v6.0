@@ -32,6 +32,10 @@ export const auditLogsTable = pgTable(
     // QL-2.0 Hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
     // Stores a HybridSignatureEnvelope as JSONB. Null for pre-QL-2.0 entries.
     pqSignature: jsonb("pq_signature"),
+    // Per-tenant ownership: Clerk user id of the account whose API key produced
+    // this entry. Null = legacy/system/admin (demo seed) — never shown to a
+    // signed-in dashboard user, only to the SENTINEL_KEY admin path.
+    ownerUserId: text("owner_user_id"),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),
@@ -40,6 +44,7 @@ export const auditLogsTable = pgTable(
     index("audit_logs_is_anomalous_idx").on(table.isAnomalous),
     index("audit_logs_consistency_score_idx").on(table.consistencyScore),
     index("audit_logs_parent_trace_id_idx").on(table.parentTraceId),
+    index("audit_logs_owner_user_id_idx").on(table.ownerUserId),
   ],
 );
 

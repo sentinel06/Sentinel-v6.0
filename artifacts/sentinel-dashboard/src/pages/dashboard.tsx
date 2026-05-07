@@ -256,6 +256,34 @@ export default function DashboardPage() {
     }
   }, [stats]);
 
+  // Empty-state: a brand-new signed-in user with zero owned events.
+  // We hide the demo widgets and point them at /onboarding instead.
+  const totalLogs = stats?.totalLogs ?? 0;
+  const showEmptyState = !isLoading && totalLogs === 0;
+
+  if (showEmptyState) {
+    return (
+      <div className="page-transition flex items-center justify-center min-h-[60vh] px-4">
+        <div className="glass-panel rounded-2xl p-8 md:p-12 max-w-xl w-full text-center">
+          <div className="mx-auto w-14 h-14 rounded-xl bg-[#00F5FF]/10 border border-[#00F5FF]/30 flex items-center justify-center mb-5">
+            <Activity className="w-7 h-7 text-[#00F5FF]" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">Your ledger is empty</h1>
+          <p className="text-sm text-[#9AA4B1] mb-6">
+            No events have been recorded against your Sentinel key yet. Connect your first agent to start sealing actions in real time.
+          </p>
+          <a
+            href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/onboarding`}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00F5FF] hover:bg-[#00d4dc] text-[#050505] font-semibold uppercase tracking-wider text-xs transition-colors"
+          >
+            Connect your first agent
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 page-transition">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

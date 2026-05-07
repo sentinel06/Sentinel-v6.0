@@ -27,6 +27,7 @@ import TopologyPage from "@/pages/topology";
 import BadgePage from "@/pages/badge";
 import PulsePage from "@/pages/pulse";
 import StatusPage from "@/pages/status";
+import OnboardingPage from "@/pages/onboarding";
 
 // Lazy-loaded pages — see notes in original App.tsx.
 const WarRoomPage = lazy(() => import("@/pages/warroom"));
@@ -161,7 +162,7 @@ function SignUpPage() {
         routing="path"
         path={`${basePath}/sign-up`}
         signInUrl={`${basePath}/sign-in`}
-        fallbackRedirectUrl={`${basePath}/dashboard`}
+        fallbackRedirectUrl={`${basePath}/onboarding`}
       />
     </div>
   );
@@ -238,6 +239,7 @@ function Router() {
             <Suspense fallback={<RouteFallback />}>
               <Switch>
                 <Route path="/dashboard" component={DashboardPage} />
+                <Route path="/onboarding" component={OnboardingPage} />
                 <Route path="/traces" component={TracesPage} />
                 <Route path="/topology" component={TopologyPage} />
                 <Route path="/warroom" component={WarRoomPage} />
@@ -276,7 +278,7 @@ function ClerkProviderWithRoutes() {
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
       signInFallbackRedirectUrl={`${basePath}/dashboard`}
-      signUpFallbackRedirectUrl={`${basePath}/dashboard`}
+      signUpFallbackRedirectUrl={`${basePath}/onboarding`}
       localization={{
         signIn: {
           start: {
