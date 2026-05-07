@@ -52,7 +52,11 @@ export default function LandingPage() {
       // on short viewports.
       // pb-24 reserves clear space at the bottom so the "Made with Replit"
       // badge (and mobile browser URL bar) never overlap the primary CTA.
-      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen p-4 pb-24"
+      // Mobile-first single-column flex; `w-full max-w-full` + `overflow-x-hidden`
+      // guarantee no element can push the page wider than the viewport. Extra
+      // bottom padding on mobile reserves room for the absolute regulatory
+      // legend so it never overlaps the CTA button.
+      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen w-full max-w-full px-3 pt-4 pb-32 sm:px-4 sm:pb-24"
       style={{
         background: SLATE,
         color: "#E5E7EB",
@@ -98,15 +102,7 @@ export default function LandingPage() {
 
       {/* ── Layer 3: top-left integrity wordmark ── */}
       <div
-        style={{
-          position: "absolute",
-          top: 24,
-          left: 32,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          zIndex: 5,
-        }}
+        className="absolute top-3 left-3 sm:top-6 sm:left-8 z-[5] flex items-center gap-2 sm:gap-2.5 max-w-[calc(100%-1.5rem)]"
       >
         <ShieldCheck className="w-5 h-5" style={{ color: SAGE }} />
         <div className="font-mono text-[11px] font-bold tracking-[0.24em]" style={{ color: "#9CA3AF" }}>
@@ -162,16 +158,16 @@ export default function LandingPage() {
         // (Headline + Cards + Vault) fits comfortably even on mobile, so the
         // sovereign gap-8 spacing is preserved end-to-end and the Identity
         // Verification vault settles into the optical center of the screen.
-        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-8 w-full"
+        className="relative z-[2] flex-1 flex flex-col items-center justify-center gap-6 sm:gap-8 w-full max-w-full"
       >
         {/* Headline + sub-headline */}
-        <div className="text-center w-full max-w-[980px] mx-auto">
+        <div className="text-center w-full max-w-[980px] mx-auto px-1">
           <h1
             // Warmer mixed-case headline — sovereign weight from the gradient
             // and shadow, not from punishing all-caps tracking. Slightly
             // larger scale (md:text-5xl) since we no longer need wide
             // letter-spacing to carry the brand.
-            className="font-semibold text-3xl sm:text-4xl md:text-5xl mt-12 md:mt-0 mb-4 md:mb-6 leading-tight tracking-tight md:leading-[1.05]"
+            className="font-semibold text-[26px] xs:text-3xl sm:text-4xl md:text-5xl mt-10 sm:mt-12 md:mt-0 mb-3 sm:mb-4 md:mb-6 leading-[1.1] tracking-tight md:leading-[1.05] break-words"
             style={{
               fontFamily: "'Inter', system-ui, sans-serif",
               marginInline: 0,
@@ -185,7 +181,7 @@ export default function LandingPage() {
             Govern your AI agents<br />with confidence.
           </h1>
           <p
-            className="mt-4 md:mt-5 mx-auto max-w-[720px] text-sm md:text-base lg:text-lg leading-relaxed"
+            className="mt-3 sm:mt-4 md:mt-5 mx-auto max-w-[720px] text-[13px] sm:text-sm md:text-base lg:text-lg leading-relaxed break-words px-1"
             style={{
               color: "#CBD5E1",
               fontFamily: "'Inter', system-ui, sans-serif",
@@ -201,19 +197,20 @@ export default function LandingPage() {
              Per Operator brief: flex-col lg:flex-row gives tablets a generous
              vertical layout where each card can breathe, then snaps to the
              three-column row only when there's true desktop real-estate. */}
-        <div className="flex flex-col lg:flex-row gap-3 md:gap-4 w-full max-w-[1080px]">
+        <div className="flex flex-col lg:flex-row gap-2.5 md:gap-4 w-full max-w-[1080px]">
           {proofCards.map(({ icon: Icon, color, title, body }) => (
             <div
               key={title}
               // Full width on mobile/tablet, exact thirds on lg+.
-              className="w-full lg:w-1/3 rounded-xl flex flex-col gap-2 px-4 py-4 md:px-[18px] md:py-4"
+              // No fixed minHeight on mobile — let content size the card so
+              // body copy doesn't get visually orphaned under empty space.
+              className="w-full lg:w-1/3 rounded-xl flex flex-col gap-1.5 px-3.5 py-3 sm:px-4 sm:py-4 md:px-[18px] md:py-4 lg:min-h-[100px] box-border"
               style={{
                 background: "rgba(15, 23, 42, 0.55)",
                 border: `1px solid ${color}33`,
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
                 boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.02), 0 0 24px ${color}10`,
-                minHeight: 100,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -251,7 +248,7 @@ export default function LandingPage() {
              URL bar even on the smallest viewports. overflow-y-auto lets the
              internal terminal lines scroll if the screen is truly tiny. */}
         <div
-          className="w-full max-w-[540px] text-center rounded-[14px] px-5 py-5 md:px-7 md:pt-[18px] md:pb-[22px] max-h-[90vh] overflow-y-auto"
+          className="w-full max-w-[540px] text-center rounded-[14px] px-4 py-5 sm:px-5 md:px-7 md:pt-[18px] md:pb-[22px] box-border"
           style={{
             background: "rgba(2, 6, 23, 0.65)",
             border: `1px solid ${VIOLET}44`,
@@ -447,10 +444,11 @@ export default function LandingPage() {
       </div>
 
       {/* ── Layer 6: bottom-edge regulatory legend ──
-           flex-wrap + gap ensures EU AI ACT / NIST etc. wrap onto multiple
-           lines on narrow viewports instead of overlapping or overflowing. */}
+           In-flow on mobile (mt-8 spacer + flex-wrap) so it sits cleanly
+           below the CTA card without overlapping it. On larger screens it
+           returns to absolute-bottom positioning for the original look. */}
       <div
-        className="absolute bottom-4 left-0 right-0 z-[3] px-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-[10px] md:text-xs"
+        className="z-[3] mt-8 mb-2 px-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-[10px] md:text-xs w-full sm:absolute sm:bottom-4 sm:left-0 sm:right-0 sm:mt-0 sm:mb-0 sm:w-auto"
         style={{
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           color: "#475569",
