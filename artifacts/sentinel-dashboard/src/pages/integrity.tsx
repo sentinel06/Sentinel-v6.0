@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, ShieldAlert, RefreshCw, Database,
-  Link as LinkIcon, GitBranch, Layers, CheckCircle2, XCircle, Wrench,
+  Link as LinkIcon, GitBranch, Layers, CheckCircle2, XCircle,
 } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/audit-utils";
 
@@ -19,11 +19,7 @@ export default function IntegrityPage() {
     query: { queryKey: ["integrity"] },
   });
   const status = rawStatus as any;
-  const [isVerifying,      setIsVerifying]      = useState(false);
-  const [isReconstructing, setIsReconstructing] = useState(false);
-  const [reconstructResult, setReconstructResult] = useState<{
-    status: string; entriesPatched: number; blocksResealed: number; durationMs: number;
-  } | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -34,37 +30,6 @@ export default function IntegrityPage() {
       console.error("Failed to verify integrity:", error);
     } finally {
       setIsVerifying(false);
-    }
-  };
-
-  const handleReconstruct = async () => {
-    if (!confirm(
-      "Sovereign Ledger Reconstruction Protocol\n\n" +
-      "This will recalculate all SHA-256 hashes in-place and reseal the Merkle blocks.\n\n" +
-      "The immutability trigger will be suspended for the duration of the operation and " +
-      "immediately re-enabled. The math will be restored without deleting any entries.\n\n" +
-      "Proceed?"
-    )) return;
-
-    setIsReconstructing(true);
-    setReconstructResult(null);
-    try {
-      const r = await fetch(`${BASE}/api/v1/admin/chain-reconstruct`, {
-        method: "POST",
-        headers: { "X-Sovereign-Reconstruct": "true", "Content-Type": "application/json" },
-        body: JSON.stringify({ forceSeal: true }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Reconstruction failed");
-      setReconstructResult(data);
-      // Auto-verify after reconstruction
-      await fetch(`${BASE}/api/v1/integrity/verify`, { method: "POST" });
-      await refetch();
-    } catch (err: any) {
-      console.error("Reconstruction failed:", err);
-      alert("Reconstruction failed: " + err.message);
-    } finally {
-      setIsReconstructing(false);
     }
   };
 
@@ -99,21 +64,9 @@ export default function IntegrityPage() {
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {/* Reconstruct button — shown when compromised */}
-          {isCompromised && (
-            <Button
-              onClick={handleReconstruct}
-              disabled={isReconstructing || isVerifying}
-              variant="outline"
-              className="font-mono border-[#FF003C]/40 text-[#FF003C] hover:bg-[#FF003C]/10"
-            >
-              <Wrench className={`w-4 h-4 mr-2 ${isReconstructing ? "animate-spin" : ""}`} />
-              {isReconstructing ? "Reconstructing…" : "Reconstruct Chain"}
-            </Button>
-          )}
           <Button
             onClick={handleVerify}
-            disabled={isVerifying || isLoading || isReconstructing}
+            disabled={isVerifying || isLoading}
             className="font-mono shadow-[0_0_15px_rgba(64,181,149,0.25)]"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isVerifying ? "animate-spin" : ""}`} />
@@ -121,32 +74,6 @@ export default function IntegrityPage() {
           </Button>
         </div>
       </div>
-
-      {/* ── Reconstruction result banner ────────────────────────────── */}
-      {reconstructResult && (
-        <div style={{
-          borderRadius: 10, padding: "12px 16px",
-          background: `${SAGE}12`, border: `1px solid ${SAGE}30`,
-          display: "flex", alignItems: "center", gap: 12,
-          fontSize: 11, fontFamily: "JetBrains Mono, monospace",
-        }}>
-          <CheckCircle2 style={{ width: 16, height: 16, color: SAGE, flexShrink: 0 }} />
-          <div>
-            <span style={{ color: SAGE, fontWeight: 700 }}>SOVEREIGN VERIFIED</span>
-            <span style={{ color: "var(--sv-text-dim)", marginLeft: 12 }}>
-              {reconstructResult.entriesPatched.toLocaleString()} entries rehashedّ·
-              {" "}{reconstructResult.blocksResealed} Merkle block(s) resealed ·
-              {" "}{reconstructResult.durationMs}ms
-            </span>
-          </div>
-          <button
-            onClick={() => setReconstructResult(null)}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--sv-text-dim)", fontSize: 14 }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* ════════════════════════════════════════════════════════════
           ROW 1 — Mathematical Sovereignty (Hash Fn + Design + Stats)
@@ -278,7 +205,13 @@ export default function IntegrityPage() {
             />
             <StatBlock
               label="Merkle Blocks"
-              value={isLoading ? "—" : `${merkleChecked - merkleFailed} / ${merkleChecked}`}
+              value={
+                isLoading
+                  ? "—"
+                  : merkleChecked === 0
+                  ? "—"
+                  : `${merkleChecked - merkleFailed} / ${merkleChecked}`
+              }
               color={merkleFailed > 0 ? TERRA : SAGE}
               large
             />

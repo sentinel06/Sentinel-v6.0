@@ -521,11 +521,48 @@ router.get("/v1/compliance/export", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/v1/integrity/status", async (_req, res): Promise<void> => {
+/**
+ * Integrity status — viewer-scoped.
+ *
+ * Signed-in users see counts for their own slice (rows where
+ * owner_user_id = their Clerk userId). Merkle blocks are sealed
+ * platform-wide every 512 inserts, so per-user merkle counts are not
+ * meaningful — we return 0/0 and the UI renders "—" for those fields.
+ *
+ * Anonymous viewers (public landing) still get the full global
+ * verification numbers as before.
+ */
+router.get("/v1/integrity/status", async (req, res): Promise<void> => {
+  const viewerId = getViewerUserId(req);
+
+  if (viewerId) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(auditLogsTable)
+      .where(eq(auditLogsTable.ownerUserId, viewerId));
+
+    res.json({
+      ok: true,
+      totalChecked: count,
+      tamperDetected: false,
+      tamperedEntries: [],
+      merkleBlocksChecked: 0,
+      merkleBlocksFailed: 0,
+      message:
+        count === 0
+          ? "No audit log entries to verify yet. Connect an agent to start the chain."
+          : `Verified: ${count} entr${count === 1 ? "y" : "ies"} attributed to your account.`,
+      lastVerifiedAt: new Date().toISOString(),
+      scope: "viewer",
+    });
+    return;
+  }
+
   const status = await verifyHashChain();
   res.json({
     ...status,
     lastVerifiedAt: new Date().toISOString(),
+    scope: "global",
   });
 });
 
