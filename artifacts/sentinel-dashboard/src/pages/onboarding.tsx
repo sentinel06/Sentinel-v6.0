@@ -5,7 +5,9 @@ import {
   Check,
   Copy,
   KeyRound,
+  RefreshCw,
   Rocket,
+  ShieldAlert,
   ShieldCheck,
   Terminal,
 } from "lucide-react";
@@ -24,6 +26,7 @@ type KeyShape = {
 type KeyResponse = {
   hasKey: boolean;
   created?: boolean;
+  regenerated?: boolean;
   key?: KeyShape;
   message?: string;
 };
@@ -66,6 +69,9 @@ export default function OnboardingPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
+  const [confirmRegen, setConfirmRegen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -82,12 +88,31 @@ export default function OnboardingPage() {
       }
     })();
     return () => {
-      cancelled = false;
+      cancelled = true;
     };
   }, []);
 
+  async function regenerate() {
+    setRegenerating(true);
+    setConfirmRegen(false);
+    setError(null);
+    try {
+      const res = await fetch(`${BASE}/api/v1/me/key/regenerate`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as KeyResponse;
+      setData(json);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   const apiKey = data?.key?.keyValue ?? "";
-  const isFreshKey = data?.created === true;
+  const isFreshKey = data?.created === true || data?.regenerated === true;
 
   const sdkSnippet = useMemo(
     () =>
@@ -169,7 +194,7 @@ agent.log_action(
         <div className="glass-panel rounded-xl p-5">
           <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-[#9AA4B1] mb-2">
             <KeyRound className="w-3.5 h-3.5" />
-            {isFreshKey ? "Newly provisioned" : "Default agent key"}
+            {data?.regenerated ? "Newly regenerated" : isFreshKey ? "Newly provisioned" : "Default agent key"}
             <span className="ml-auto px-2 py-0.5 rounded border border-[#00F5FF]/30 text-[#00F5FF] text-[10px]">
               {data?.key?.tier ?? "Core"}
             </span>
@@ -177,7 +202,7 @@ agent.log_action(
 
           {error && (
             <div className="text-[#FF003C] text-sm font-mono">
-              Failed to provision key: {error}. Try refreshing.
+              Failed: {error}. Try refreshing.
             </div>
           )}
 
@@ -187,7 +212,13 @@ agent.log_action(
             </div>
           )}
 
-          {data && apiKey && (
+          {regenerating && (
+            <div className="text-[#9AA4B1] text-sm font-mono animate-pulse">
+              Revoking old key and generating a new one…
+            </div>
+          )}
+
+          {data && apiKey && !regenerating && (
             <>
               <div className="flex items-center gap-2 mt-1">
                 <code className="flex-1 font-mono text-[13px] text-white bg-[#050505] border border-white/10 rounded-lg px-3 py-2.5 overflow-x-auto">
@@ -211,9 +242,43 @@ agent.log_action(
                 </div>
               ) : (
                 <div className="mt-3 text-[12px] text-[#9AA4B1] font-mono">
-                  This key was already provisioned. If you lost it, contact support to rotate.
+                  This is your active key. Regenerating will immediately revoke it.
                 </div>
               )}
+
+              {/* Regenerate controls */}
+              <div className="mt-4 pt-4 border-t border-white/8">
+                {!confirmRegen ? (
+                  <button
+                    onClick={() => setConfirmRegen(true)}
+                    className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-[#9AA4B1] hover:text-[#FFB800] transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Regenerate key
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-[11px] font-mono text-[#FFB800]">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      Your old key will stop working immediately. Continue?
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={regenerate}
+                        className="px-3 py-1.5 rounded-lg border border-[#FF003C]/40 bg-[#FF003C]/10 hover:bg-[#FF003C]/20 text-[#FF003C] font-mono text-[11px] uppercase tracking-wider transition-colors"
+                      >
+                        Yes, revoke & regenerate
+                      </button>
+                      <button
+                        onClick={() => setConfirmRegen(false)}
+                        className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#9AA4B1] font-mono text-[11px] uppercase tracking-wider transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

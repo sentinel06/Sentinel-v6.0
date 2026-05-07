@@ -128,4 +128,52 @@ router.post("/v1/me/key", async (req, res): Promise<void> => {
   });
 });
 
+router.post("/v1/me/key/regenerate", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const existing = await findActiveKey(auth.userId);
+
+  if (existing) {
+    await db
+      .update(partnerKeysTable)
+      .set({ isActive: false })
+      .where(eq(partnerKeysTable.id, existing.id));
+  }
+
+  const email =
+    (await getPrimaryEmail(auth.userId)) ?? `${auth.userId}@clerk.unknown`;
+  const keyValue = generateKey();
+
+  const [created] = await db
+    .insert(partnerKeysTable)
+    .values({
+      keyValue,
+      partnerId: auth.userId,
+      partnerEmail: email,
+      label: DEFAULT_LABEL,
+      tier: TIER,
+      swarmScope: null,
+    })
+    .returning();
+
+  res.status(201).json({
+    regenerated: true,
+    hasKey: true,
+    key: {
+      id: created.id,
+      keyValue,
+      keyPrefix: keyValue.substring(0, KEY_PREFIX.length + 4),
+      label: created.label,
+      tier: created.tier,
+      createdAt: created.createdAt,
+      lastUsedAt: created.lastUsedAt,
+    },
+    message: "Old key revoked. Store this new key securely — it will not be shown again.",
+  });
+});
+
 export default router;
