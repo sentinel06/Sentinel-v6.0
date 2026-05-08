@@ -19,6 +19,7 @@ type KeyShape = {
   label: string;
   tier: string;
   createdAt: string | Date | null;
+  lastUsedAt?: string | Date | null;
 };
 
 type KeyResponse = {
@@ -121,6 +122,12 @@ export default function SettingsPage() {
 
   const createdAt = data?.key?.createdAt
     ? new Date(data.key.createdAt).toLocaleDateString("en-GB", {
+        day: "numeric", month: "short", year: "numeric",
+      })
+    : null;
+
+  const lastUsedAt = data?.key?.lastUsedAt
+    ? new Date(data.key.lastUsedAt as string | Date).toLocaleDateString("en-GB", {
         day: "numeric", month: "short", year: "numeric",
       })
     : null;
@@ -268,7 +275,9 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ fontSize: 11, color: "#475569", fontFamily: "Inter, system-ui, sans-serif" }}>
-              {createdAt ? `Provisioned ${createdAt}` : "Active"} · Click the eye icon to reveal the full key before copying.
+              {createdAt ? `Provisioned ${createdAt}` : "Active"}
+              {lastUsedAt ? ` · Last used ${lastUsedAt}` : " · Never used"}
+              {" · "}Click the eye icon to reveal the full key before copying.
             </div>
           </>
         )}

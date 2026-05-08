@@ -24,7 +24,7 @@ export async function resolveOwnerFromKey(req: Request): Promise<string | null> 
   if (!key || !key.startsWith("sk_sent_")) return null;
 
   const [row] = await db
-    .select({ partnerId: partnerKeysTable.partnerId })
+    .select({ id: partnerKeysTable.id, partnerId: partnerKeysTable.partnerId })
     .from(partnerKeysTable)
     .where(
       and(
@@ -34,7 +34,15 @@ export async function resolveOwnerFromKey(req: Request): Promise<string | null> 
     )
     .limit(1);
 
-  return row?.partnerId ?? null;
+  if (!row) return null;
+
+  // Stamp lastUsedAt — fire-and-forget (don't block the ingest hot path).
+  db.update(partnerKeysTable)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(partnerKeysTable.id, row.id))
+    .catch(() => { /* non-critical — ignore */ });
+
+  return row.partnerId;
 }
 
 export function getViewerUserId(req: Request): string | null {

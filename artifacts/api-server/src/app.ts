@@ -42,9 +42,35 @@ app.use(
 // authenticate without a CNAME. MUST be mounted before any body parser.
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// In production, lock CORS to the Replit-published domain(s) only.
+// REPLIT_DOMAINS is a comma-separated list set automatically by the platform
+// (e.g. "agent-sentinel.replit.app"). In dev it is unset, so we mirror back
+// the requesting origin (same as origin: true) for convenience.
+const replitDomains = process.env["REPLIT_DOMAINS"]
+  ? process.env["REPLIT_DOMAINS"]
+      .split(",")
+      .map((d) => `https://${d.trim()}`)
+  : null;
+
+app.use(
+  cors({
+    credentials: true,
+    origin: replitDomains
+      ? (incomingOrigin, callback) => {
+          // Allow same-origin requests (no Origin header) and listed domains.
+          if (!incomingOrigin || replitDomains.includes(incomingOrigin)) {
+            callback(null, true);
+          } else {
+            callback(new Error("Not allowed by CORS"));
+          }
+        }
+      : true,
+  }),
+);
+// Cap request bodies at 512 KB. Prevents a single large payload from
+// monopolising memory or the event loop on the log-ingest hot path.
+app.use(express.json({ limit: "512kb" }));
+app.use(express.urlencoded({ extended: true, limit: "512kb" }));
 
 // Resolve the publishable key from the request host so the same server can
 // serve multiple Clerk custom domains; falls back to CLERK_PUBLISHABLE_KEY.

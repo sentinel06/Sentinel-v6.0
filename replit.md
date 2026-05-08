@@ -79,6 +79,10 @@ Agent-Sentinel provides an immutable audit ledger system for AI agents, ensuring
 - **Anomaly Rationale Keywords**: Anomaly detection relies on specific keywords in the rationale (`"Access Denied", "Financial Transfer"`, etc.), which may require updates if new anomaly types emerge.
 - **SovereignInduction hook ordering**: The tour overlay uses a thin outer wrapper (`SovereignInduction`) that reads the route and returns `null` early; the hook-heavy inner component (`SovereignInductionInner`) is only mounted when needed — never violates React rules of hooks.
 - **Mobile Swarm Map Optimizations**: Mobile optimizations (e.g., simplified mutation filters, label filtering) mean the visual experience differs significantly from desktop.
+- **CORS in production**: `REPLIT_DOMAINS` env var (set automatically by the platform) locks allowed origins to the deployed domain(s). In dev this var is unset, so any origin is mirrored back for convenience.
+- **Body size limit**: `express.json` and `express.urlencoded` are capped at 512 KB. Payloads larger than this receive HTTP 413.
+- **Health check**: `GET /api/healthz` performs an actual `SELECT 1` DB round-trip. A 200 with `{ "db": "ok" }` means both the process and Postgres are reachable. 503 means the pool is down.
+- **`lastUsedAt` tracking**: `resolveOwnerFromKey()` fires a background UPDATE to `partner_keys.last_used_at` every time a `sk_sent_core_*` key authenticates a log ingestion. The `/settings` page displays this alongside the provisioning date.
 
 ## Pointers
 
