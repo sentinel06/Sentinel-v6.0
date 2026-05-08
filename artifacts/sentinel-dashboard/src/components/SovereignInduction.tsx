@@ -39,7 +39,20 @@ function generateOperatorHex(): string {
   return `SOV-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
 }
 
-export default function SovereignInduction({ forceOpen = false, onClose }: InductionProps) {
+// Suppressed routes: the tour must never overlay these pages
+const SUPPRESSED_ROUTES = ["/onboarding", "/sign-in", "/sign-up", "/settings"];
+
+// Outer wrapper: checks route before mounting the hook-heavy inner component
+export default function SovereignInduction(props: InductionProps) {
+  const [location] = useLocation();
+  const isSuppressed = SUPPRESSED_ROUTES.some(
+    r => location === r || location.startsWith(r + "/")
+  );
+  if (isSuppressed && !props.forceOpen) return null;
+  return <SovereignInductionInner {...props} />;
+}
+
+function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps) {
   const [, navigate] = useLocation();
   const { induceRogueQuarantine, setAgent, clusters, currentCluster, setCurrentCluster } = useForensic();
   const cardRef = useRef<HTMLDivElement | null>(null);

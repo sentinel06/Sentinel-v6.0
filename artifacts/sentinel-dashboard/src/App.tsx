@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,6 +29,7 @@ import BadgePage from "@/pages/badge";
 import PulsePage from "@/pages/pulse";
 import StatusPage from "@/pages/status";
 import OnboardingPage from "@/pages/onboarding";
+import SettingsPage from "@/pages/settings";
 
 // Lazy-loaded pages — see notes in original App.tsx.
 const WarRoomPage = lazy(() => import("@/pages/warroom"));
@@ -236,30 +238,33 @@ function Router() {
       <Route>
         <Protected>
           <Layout>
-            <Suspense fallback={<RouteFallback />}>
-              <Switch>
-                <Route path="/dashboard" component={DashboardPage} />
-                <Route path="/onboarding" component={OnboardingPage} />
-                <Route path="/traces" component={TracesPage} />
-                <Route path="/topology" component={TopologyPage} />
-                <Route path="/warroom" component={WarRoomPage} />
-                <Route path="/agents" component={AgentsPage} />
-                <Route path="/registry" component={AgentsPage} />
-                <Route path="/compliance" component={CompliancePage} />
-                <Route path="/integrity" component={IntegrityPage} />
-                <Route path="/badge" component={BadgePage} />
-                <Route path="/swarmmap" component={SwarmMapPage} />
-                <Route path="/partner" component={PartnerPortalPage} />
-                <Route
-                  path="/partner-onboarding"
-                  component={PartnerOnboardingPage}
-                />
-                <Route path="/eqa" component={EQAPage} />
-                <Route path="/pulse" component={PulsePage} />
-                <Route path="/status" component={StatusPage} />
-                <Route component={NotFound} />
-              </Switch>
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<RouteFallback />}>
+                <Switch>
+                  <Route path="/dashboard" component={DashboardPage} />
+                  <Route path="/onboarding" component={OnboardingPage} />
+                  <Route path="/settings" component={SettingsPage} />
+                  <Route path="/traces" component={TracesPage} />
+                  <Route path="/topology" component={TopologyPage} />
+                  <Route path="/warroom" component={WarRoomPage} />
+                  <Route path="/agents" component={AgentsPage} />
+                  <Route path="/registry" component={AgentsPage} />
+                  <Route path="/compliance" component={CompliancePage} />
+                  <Route path="/integrity" component={IntegrityPage} />
+                  <Route path="/badge" component={BadgePage} />
+                  <Route path="/swarmmap" component={SwarmMapPage} />
+                  <Route path="/partner" component={PartnerPortalPage} />
+                  <Route
+                    path="/partner-onboarding"
+                    component={PartnerOnboardingPage}
+                  />
+                  <Route path="/eqa" component={EQAPage} />
+                  <Route path="/pulse" component={PulsePage} />
+                  <Route path="/status" component={StatusPage} />
+                  <Route component={NotFound} />
+                </Switch>
+              </Suspense>
+            </ErrorBoundary>
           </Layout>
         </Protected>
       </Route>

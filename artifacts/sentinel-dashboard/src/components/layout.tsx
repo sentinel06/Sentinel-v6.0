@@ -5,7 +5,7 @@ import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
   Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight, HelpCircle,
-  Menu, LogOut,
+  Menu, LogOut, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -712,6 +712,12 @@ const NAV_GROUPS = [
       { path: "/compliance", label: "Compliance",     icon: FileCheck },
       { path: "/integrity",  label: "Hash Chain",     icon: ShieldCheck },
       { path: "/badge",      label: "Sentinel Badge", icon: Award },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { path: "/settings", label: "API Key & Settings", icon: Settings },
     ],
   },
 ];
