@@ -228,6 +228,7 @@ class SovereignGateway:
         api_key:   str,
         endpoint:  str,
         timeout:   float = 30.0,
+        verify_on_init: bool = True,
     ):
         self.api_key  = api_key
         self.endpoint = endpoint.rstrip("/")
@@ -235,10 +236,58 @@ class SovereignGateway:
         self._client  = _make_http_client(timeout)
         self._tokens: Dict[str, IdentityToken] = {}   # agent_id → token
 
+        if verify_on_init:
+            self._verify_key_live()
+
     # ── Core private helpers ──────────────────────────────────────────────────
 
     def _base_url(self) -> str:
         return f"{self.endpoint}/api/v1"
+
+    def _verify_key_live(self) -> None:
+        """
+        SDK Handshake — called once on __init__ (unless verify_on_init=False).
+
+        Calls POST /api/v1/auth/verify to confirm the key exists and is active
+        in the Sentinel ledger before the SDK attempts to register any agents
+        or commit any log entries.  Fails fast with a clear error message
+        instead of letting the first log write surface a cryptic 401.
+
+        Raises
+        ------
+        SentinelBridgeError  if the key is missing, revoked, or the server
+                             is unreachable.
+        """
+        url = f"{self._base_url()}/auth/verify"
+        try:
+            resp = _post(
+                self._client,
+                url,
+                {},
+                {"Content-Type": "application/json", "X-Sentinel-Key": self.api_key},
+                self.timeout,
+            )
+        except SentinelBridgeError as exc:
+            raise SentinelBridgeError(
+                f"Sentinel handshake failed (network): {exc}\n"
+                f"Check that your endpoint is reachable: {self.endpoint}"
+            ) from exc
+
+        data = resp.get("data", {})
+        if not data.get("valid"):
+            error_code = data.get("error", "unknown")
+            message    = data.get("message", "Key verification failed.")
+            raise SentinelBridgeError(
+                f"Sentinel handshake rejected [{error_code}]: {message}\n"
+                f"Obtain or rotate your key at {self.endpoint}/settings"
+            )
+
+        logger.info(
+            "Sentinel handshake OK — key=%s… tier=%s status=%s",
+            self.api_key[:20],
+            data.get("tier", "?"),
+            data.get("status", "?"),
+        )
 
     def _auth_headers(self, token: Optional[IdentityToken] = None) -> dict:
         h: dict = {

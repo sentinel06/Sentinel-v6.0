@@ -89,6 +89,8 @@ Body: { "agentId": "...", "traceId": "...", "eventType": "...", "payload": {...}
 - "Why is my dashboard empty?" → No events have hit /v1/log yet under your key. Check the curl/SDK snippet on /onboarding and verify the X-Sentinel-Key header.
 - "I see 401 from /v1/log" → Wrong or missing X-Sentinel-Key header. Your key starts with sk_sent_core_ — copy it from /settings.
 - "How do I rotate my key?" → Go to /settings → "Regenerate Key" → confirm. The old key stops working immediately; update your agents with the new key.
+- "SDK says 'handshake rejected' on startup" → The SDK calls POST /api/v1/auth/verify on init to confirm the key is live. A rejection means the key is invalid or was revoked — get a fresh key from /settings or /onboarding.
+- "How do I silence the SDK startup check?" → Pass verify_on_init=False to SovereignGateway() — but only do this if you're certain the key is valid.
 
 **Boundaries**
 - Don't invent prices, SLAs, or features that aren't in this prompt. If you genuinely don't know, say so and offer to escalate (the user can email support).

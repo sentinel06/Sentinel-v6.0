@@ -1,0 +1,32 @@
+That's the confirmed key from your logged-in Sentinel session. The issue may be that the SDK registers an agent first before logging. Let me install sentinel-bridge and test it directly — that'll tell us exactly what the SDK does differently:
+
+
+2 actions
+sentinel-bridge doesn't exist on PyPI — it's a placeholder in their UI. Let me dig into the exact payload format the Sentinel server validates, and also check if there's an agent registration step required before logging:
+
+
+3 actions
+The key works — it just needed to be fully persisted in Sentinel's DB after logging in. The onboarding call returned a full quantum-signed event response. Now let me verify our exact payload also works, then confirm the live Python service is now getting through:
+
+
+3 actions
+Both are working. Let me check the live API logs to confirm the Python service's Sentinel calls are now succeeding:
+
+
+2 actions
+It's live. The logs confirm it:
+
+[INFO] httpx: HTTP Request: POST https://agent-sentinel.replit.app/api/v1/log "HTTP/1.1 201 Created"
+[INFO] sentinel_service: Sentinel ✓ TASK_COMPLETE logged for policy trace b33ef0d1-... (HTTP 201)
+
+Sentinel is now fully connected. Every underwriting decision posts a quantum-signed event to your Sentinel ledger automatically — TASK_COMPLETE for approved/under_review, TASK_FAILED for declined. The call is fire-and-forget so it never slows down or blocks the underwriting response.
+
+What was happening: The key sk_sent_core_ST9VCali_CkeTsO0BWY0dCHaGDvlX59y is correct, but Sentinel only persists it to its database when you load the Connect page while fully logged in (it calls POST /api/v1/me/key with your session cookie). Once you went through that flow, the key was written to Sentinel's DB and all subsequent calls authenticated instantly.
+
+Current state — everything green:
+
+605/605 tests passing
+Sentinel integration live (HTTP 201 confirmed)
+Vision Mapper with SOL/BTC/ETH chart levels active
+Stoic Auditor + Mistake Log running on every trade close
+CEO + Ops + Quant Trader hierarchy operational

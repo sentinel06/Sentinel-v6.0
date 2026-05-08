@@ -193,4 +193,92 @@ router.post("/v1/me/key/regenerate", async (req, res): Promise<void> => {
   }
 });
 
+// ── POST /v1/auth/verify — SDK handshake ──────────────────────────────────
+// Called by the SDK on initialisation to confirm the key is live in the
+// Sentinel ledger before starting a run. Validates X-Sentinel-Key against
+// partner_keys and returns key metadata. Does NOT write a log entry.
+//
+// Response shape:
+//   200 { valid: true, tier, label, keyPrefix, ownerEmail, status: "live" }
+//   401 { valid: false, error: "missing_key" | "invalid_format" | "invalid_key" }
+//   500 { valid: false, error: "internal_error" }
+router.post("/v1/auth/verify", async (req, res): Promise<void> => {
+  const raw = req.headers["x-sentinel-key"];
+  const keyValue = typeof raw === "string" ? raw.trim() : "";
+
+  if (!keyValue) {
+    res.status(401).json({
+      valid: false,
+      error: "missing_key",
+      message: "X-Sentinel-Key header is required.",
+    });
+    return;
+  }
+
+  if (!keyValue.startsWith("sk_sent_")) {
+    res.status(401).json({
+      valid: false,
+      error: "invalid_format",
+      message: "Key must start with sk_sent_. Obtain a key from the onboarding page.",
+    });
+    return;
+  }
+
+  try {
+    const [row] = await db
+      .select({
+        id:           partnerKeysTable.id,
+        partnerId:    partnerKeysTable.partnerId,
+        partnerEmail: partnerKeysTable.partnerEmail,
+        label:        partnerKeysTable.label,
+        tier:         partnerKeysTable.tier,
+        keyValue:     partnerKeysTable.keyValue,
+        createdAt:    partnerKeysTable.createdAt,
+        lastUsedAt:   partnerKeysTable.lastUsedAt,
+      })
+      .from(partnerKeysTable)
+      .where(
+        and(
+          eq(partnerKeysTable.keyValue, keyValue),
+          eq(partnerKeysTable.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!row) {
+      res.status(401).json({
+        valid: false,
+        error: "invalid_key",
+        message: "Key not found or has been revoked. Obtain a new key from /settings.",
+      });
+      return;
+    }
+
+    // Stamp lastUsedAt — fire-and-forget (mirrors resolveOwnerFromKey).
+    db.update(partnerKeysTable)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(partnerKeysTable.id, row.id))
+      .catch(() => { /* non-critical */ });
+
+    res.json({
+      valid: true,
+      status: "live",
+      keyPrefix:  row.keyValue.substring(0, KEY_PREFIX.length + 4),
+      label:      row.label,
+      tier:       row.tier,
+      ownerEmail: row.partnerEmail,
+      createdAt:  row.createdAt,
+      lastUsedAt: row.lastUsedAt,
+      message: "Key verified — Sentinel ledger is ready to accept events.",
+    });
+  } catch (err) {
+    req.log.error({ err }, "POST /v1/auth/verify failed");
+    res.status(500).json({
+      valid: false,
+      error: "internal_error",
+      message: "Verification failed. Please try again.",
+    });
+  }
+});
+
 export default router;

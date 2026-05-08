@@ -83,6 +83,7 @@ Agent-Sentinel provides an immutable audit ledger system for AI agents, ensuring
 - **Body size limit**: `express.json` and `express.urlencoded` are capped at 512 KB. Payloads larger than this receive HTTP 413.
 - **Health check**: `GET /api/healthz` performs an actual `SELECT 1` DB round-trip. A 200 with `{ "db": "ok" }` means both the process and Postgres are reachable. 503 means the pool is down.
 - **`lastUsedAt` tracking**: `resolveOwnerFromKey()` fires a background UPDATE to `partner_keys.last_used_at` every time a `sk_sent_core_*` key authenticates a log ingestion. The `/settings` page displays this alongside the provisioning date.
+- **SDK Handshake (`/v1/auth/verify`)**: `SovereignGateway.__init__` calls `POST /api/v1/auth/verify` on startup (before any agent registration or log commit) to confirm the key is live in the ledger. Fails fast with a clear error instead of a cryptic 401 on the first write. Silenceable via `verify_on_init=False`.
 
 ## Pointers
 
