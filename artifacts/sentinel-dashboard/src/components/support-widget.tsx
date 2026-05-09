@@ -17,14 +17,14 @@ type Msg = { role: "user" | "assistant"; content: string };
 const SUGGESTIONS = [
   "How do I connect my first agent?",
   "Where do I find my API key?",
-  "Why is my dashboard empty?",
-  "What does cognitive drift mean?",
+  "I have a security incident",
+  "Sovereign Key enrollment is failing",
 ];
 
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi — I'm Sentinel Assistant. I can help you connect an agent, understand your dashboard, debug integration errors, or answer anything about the platform. What's on your mind?",
+    "Hi — I'm Sentinel Assistant. I can help you connect an agent, debug integrations, understand your dashboard, or route urgent issues to the right support team. What's on your mind?",
 };
 
 export default function SupportWidget() {

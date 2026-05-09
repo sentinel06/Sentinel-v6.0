@@ -1,13 +1,8 @@
 /**
- * Sentinel Support — AI assistant chat (SSE).
+ * Sentinel Support — AI assistant chat (SSE) + support triage agent.
  *
- * Powered by Anthropic Claude via Replit AI Integrations. Stateless: the
- * conversation history is sent on every call from the client, so no DB.
- *
- * POST /api/v1/support/chat
- *   body: { messages: [{ role: "user" | "assistant", content: string }, ...] }
- *   response: text/event-stream — `data: {"content": "..."}` deltas,
- *             terminated by `data: {"done": true}`.
+ * POST /api/v1/support/chat  — streaming chat, Clerk-auth required.
+ * POST /api/v1/support/triage — classify + auto-respond, Clerk-auth required.
  */
 
 import { Router, type IRouter } from "express";
@@ -83,6 +78,23 @@ Body: { "agentId": "...", "traceId": "...", "eventType": "...", "payload": {...}
 - /swarmmap — Visual lifecycle of all agents under your account.
 - /integrity — Hash-chain + Merkle block verification.
 - /pulse, /status — System health and live frequency.
+- /support — Support & Escalation — open a ticket, see SLAs, breach escalation path.
+
+**Support channels & SLAs (from Partner Onboarding Guide §9)**
+| Channel | Email | SLA |
+|---|---|---|
+| Partner Support | support@agent-sentinel.io | < 2 h |
+| Security Incidents | security@agent-sentinel.io | < 30 min |
+| Compliance Queries | compliance@agent-sentinel.io | < 4 h |
+| Sovereign Key Issues | sovereign-ops@agent-sentinel.io | < 1 h |
+
+Use /support to open a ticket — the onboarding agent will classify it and route to the right team automatically.
+
+**Escalation path for active breaches**
+1. Activate Kill Switch — Dashboard → War Room or POST /api/v1/admin/kill-switch.
+2. Log EMERGENCY_SOLO_REVOKE — POST /api/v1/forensic/kill-switch-log with agentId + reason.
+3. Contact Security Incidents immediately — security@agent-sentinel.io (< 30 min SLA).
+4. Preserve all forensic audit IDs and breach trace IDs for regulatory reporting.
 
 **Common questions**
 - "Where's my key?" → /onboarding shows the full key on first setup. After that, visit /settings (sidebar: Account → API Key & Settings) to see a masked preview, reveal it, copy it, or regenerate it.
@@ -91,9 +103,12 @@ Body: { "agentId": "...", "traceId": "...", "eventType": "...", "payload": {...}
 - "How do I rotate my key?" → Go to /settings → "Regenerate Key" → confirm. The old key stops working immediately; update your agents with the new key.
 - "SDK says 'handshake rejected' on startup" → The SDK calls POST /api/v1/auth/verify on init to confirm the key is live. A rejection means the key is invalid or was revoked — get a fresh key from /settings or /onboarding.
 - "How do I silence the SDK startup check?" → Pass verify_on_init=False to SovereignGateway() — but only do this if you're certain the key is valid.
+- "How do I open a support ticket?" → Go to /support — fill in the form and the onboarding agent will classify your issue and route it to the right team.
+- "I have a security incident" → Go to /support immediately or email security@agent-sentinel.io directly. SLA is < 30 min. Also activate the Kill Switch from the War Room.
+- "Sovereign Key enrollment is failing" → Go to /support — the sovereign-ops team (< 1 h SLA) handles all ML-DSA-87 key issues.
 
 **Boundaries**
-- Don't invent prices, SLAs, or features that aren't in this prompt. If you genuinely don't know, say so and offer to escalate (the user can email support).
+- Don't invent prices, SLAs, or features that aren't in this prompt. If you genuinely don't know, say so and offer to escalate (the user can email support or open a ticket at /support).
 - Never reveal API keys, secrets, or other users' data.
 - Keep responses tight — typically 1–4 short paragraphs or a single code snippet. Use bullet points for multi-step instructions.
 `;
@@ -177,6 +192,156 @@ router.post("/v1/support/chat", async (req, res): Promise<void> => {
       })}\n\n`,
     );
     res.end();
+  }
+});
+
+// ── Support Triage Agent ──────────────────────────────────────────────────────
+
+type TriageCategory = "partner" | "security" | "compliance" | "sovereign_key";
+
+const ROUTING: Record<
+  TriageCategory,
+  { email: string; sla: string; slaMinutes: number; label: string }
+> = {
+  security: {
+    email: "security@agent-sentinel.io",
+    sla: "< 30 min",
+    slaMinutes: 30,
+    label: "Security Incidents",
+  },
+  sovereign_key: {
+    email: "sovereign-ops@agent-sentinel.io",
+    sla: "< 1 h",
+    slaMinutes: 60,
+    label: "Sovereign Key Issues",
+  },
+  compliance: {
+    email: "compliance@agent-sentinel.io",
+    sla: "< 4 h",
+    slaMinutes: 240,
+    label: "Compliance Queries",
+  },
+  partner: {
+    email: "support@agent-sentinel.io",
+    sla: "< 2 h",
+    slaMinutes: 120,
+    label: "Partner Support",
+  },
+};
+
+const TRIAGE_SYSTEM = `You are a support triage agent for Agent-Sentinel (AI governance platform).
+
+Classify the incoming message and draft a first response. Reply ONLY with valid JSON — no markdown fences, no explanation.
+
+JSON format:
+{
+  "category": "security" | "sovereign_key" | "compliance" | "partner",
+  "urgency": "critical" | "high" | "normal",
+  "escalationRequired": boolean,
+  "autoResponse": "<concise first response, max 150 words, plain text>"
+}
+
+Classification rules:
+- "security": active breach, compromised key, unauthorized agent access, EMERGENCY events, agent hacked
+- "sovereign_key": Sovereign Key enrollment, Two-Man Rule failure, ML-DSA-87 key problems, QR challenge issues, key rotation
+- "compliance": EU AI Act Art.12/14 questions, compliance checklist, audit reports, regulatory deadlines
+- "partner": everything else — SDK integration, API errors, onboarding, dashboard questions, billing, general how-to
+
+Urgency:
+- "critical": active ongoing breach, agents actively compromised RIGHT NOW
+- "high": key enrollment blocked, compliance deadline risk, degraded service
+- "normal": general questions, integration help, how-to
+
+escalationRequired: true only for critical urgency.
+
+autoResponse: acknowledge the issue specifically, state the SLA commitment, give 1-2 immediate self-service steps if applicable. Do not invent features. Sign off as "Sentinel Support".`;
+
+function makeTicketId(): string {
+  const date = new Date();
+  const yyyymmdd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `SCT-${yyyymmdd}-${rand}`;
+}
+
+router.post("/v1/support/triage", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Sign in to submit a support ticket." });
+    return;
+  }
+
+  if (rateLimited(auth.userId)) {
+    res.status(429).json({ error: "Too many requests — please wait a moment." });
+    return;
+  }
+
+  const message: unknown = req.body?.message;
+  if (typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "message is required." });
+    return;
+  }
+  if (message.length > 4_000) {
+    res.status(400).json({ error: "message must be under 4,000 characters." });
+    return;
+  }
+
+  const contactEmail: unknown = req.body?.contactEmail;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 512,
+      system: TRIAGE_SYSTEM,
+      messages: [{ role: "user", content: message.trim() }],
+    });
+
+    const raw = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+
+    let parsed: {
+      category?: string;
+      urgency?: string;
+      escalationRequired?: boolean;
+      autoResponse?: string;
+    } = {};
+
+    try {
+      // Strip any accidental markdown fences.
+      const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
+      parsed = JSON.parse(cleaned) as typeof parsed;
+    } catch {
+      req.log.warn({ raw }, "triage: failed to parse Claude JSON, using defaults");
+    }
+
+    const validCategories: TriageCategory[] = ["security", "sovereign_key", "compliance", "partner"];
+    const category: TriageCategory = validCategories.includes(parsed.category as TriageCategory)
+      ? (parsed.category as TriageCategory)
+      : "partner";
+
+    const validUrgencies = ["critical", "high", "normal"];
+    const urgency = validUrgencies.includes(parsed.urgency ?? "")
+      ? (parsed.urgency as "critical" | "high" | "normal")
+      : "normal";
+
+    const route = ROUTING[category];
+
+    res.json({
+      ticketId: makeTicketId(),
+      category,
+      routingEmail: route.email,
+      sla: route.sla,
+      slaMinutes: route.slaMinutes,
+      urgency,
+      escalationRequired: parsed.escalationRequired === true,
+      autoResponse:
+        typeof parsed.autoResponse === "string" && parsed.autoResponse.length > 0
+          ? parsed.autoResponse
+          : `Thank you for reaching out. Your request has been routed to our ${route.label} team at ${route.email}. Expected response time: ${route.sla}. — Sentinel Support`,
+      submittedAt: new Date().toISOString(),
+      contactEmail: typeof contactEmail === "string" && contactEmail.trim() ? contactEmail.trim() : null,
+    });
+  } catch (err) {
+    req.log.error({ err }, "support triage failed");
+    res.status(500).json({ error: "Triage service temporarily unavailable. Please try again." });
   }
 });
 

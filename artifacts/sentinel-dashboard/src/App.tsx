@@ -30,6 +30,7 @@ import PulsePage from "@/pages/pulse";
 import StatusPage from "@/pages/status";
 import OnboardingPage from "@/pages/onboarding";
 import SettingsPage from "@/pages/settings";
+import SupportPage from "@/pages/support";
 
 // Lazy-loaded pages — see notes in original App.tsx.
 const WarRoomPage = lazy(() => import("@/pages/warroom"));
@@ -261,6 +262,7 @@ function Router() {
                   <Route path="/eqa" component={EQAPage} />
                   <Route path="/pulse" component={PulsePage} />
                   <Route path="/status" component={StatusPage} />
+                  <Route path="/support" component={SupportPage} />
                   <Route component={NotFound} />
                 </Switch>
               </Suspense>

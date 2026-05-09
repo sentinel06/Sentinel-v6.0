@@ -5,7 +5,7 @@ import {
   Activity, ListTree, Cpu, FileCheck, ShieldCheck, Search, Bell,
   GitBranch, ShieldAlert, X, Award, Network, Building2, Zap, Radio,
   Rocket, Skull, Fingerprint, Dna, Shield, ChevronRight, HelpCircle,
-  Menu, LogOut, Settings,
+  Menu, LogOut, Settings, LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useForensic } from "@/contexts/ForensicContext";
@@ -718,6 +718,7 @@ const NAV_GROUPS = [
     label: "Account",
     items: [
       { path: "/settings", label: "API Key & Settings", icon: Settings },
+      { path: "/support",  label: "Support & Escalation", icon: LifeBuoy },
     ],
   },
 ];
