@@ -53,7 +53,7 @@ After any successful interdiction, the affected agent enters the Fix Monitor —
 
 ---
 
-## 4. Cryptographic Core — ML-DSA-87 (FIPS-204 SL5)
+## 4. Post-Quantum Signing — ML-DSA-87 (FIPS-204 SL5)
 
 Agent-Sentinel uses the **ML-DSA-87** variant of the Module Lattice-Based Digital Signature Algorithm, standardised as **NIST FIPS-204** at Security Level 5 — the highest available, providing 256-bit collision resistance equivalent to AES-256.
 

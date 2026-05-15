@@ -18,10 +18,10 @@
 ---
 
 ### **Phase 3: The Financial Safety Layer (2028)**
-*Focus: Protecting the bottom line as agents gain "Wallet" permissions.*
+*Focus: Protecting the bottom line as agents gain access to financial API and payment gateway permissions.*
 * **Budgetary Circuit Breakers:** Hard-caps on API spend and financial transactions, governed by real-time health scores.
 * **Slashing Protocols:** Integration with insurance providers to automatically handle liabilities if a Sentinel-governed agent fails a consistency check.
-* **PQC Migration:** Transitioning all SHA-256 logs to Post-Quantum Cryptography (Lattice-based) to ensure 2030+ security.
+* **PQC Migration:** Transitioning all SHA-256 logs to post-quantum lattice-based signatures (ML-DSA-87) to ensure 2030+ security.
 
 ---
 

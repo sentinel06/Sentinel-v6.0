@@ -84,7 +84,7 @@ agent-sentinel/
 │   │   │   ├── attestation.ts        # SLSA-style build attestation manifest
 │   │   │   │
 │   │   │   ├── crypto/
-│   │   │   │   ├── pqc.ts            # Post-quantum crypto helpers (ML-DSA-87 / FIPS-204)
+│   │   │   │   ├── pqc.ts            # Post-quantum signing helpers (ML-DSA-87 / FIPS-204)
 │   │   │   │   └── quantum_ledger.ts # Dual-layer SHA-512 + PQC signing for audit rows
 │   │   │   │
 │   │   │   ├── lib/                  # Shared server utilities
@@ -92,7 +92,7 @@ agent-sentinel/
 │   │   │   │   ├── archiver.ts       # Compressed evidence bundle generator
 │   │   │   │   ├── consistency.ts    # Intent-action consistency scorer
 │   │   │   │   ├── crypto.ts         # SHA-256 hash chaining primitives
-│   │   │   │   ├── crypto-worker.ts  # Worker-thread crypto offload
+│   │   │   │   ├── crypto-worker.ts  # Worker-thread signing offload
 │   │   │   │   ├── driftDetector.ts  # Agent behavioral drift detection
 │   │   │   │   ├── environment.ts    # Typed env-var access with validation
 │   │   │   │   ├── governance.ts     # Pre-flight risk scoring engine

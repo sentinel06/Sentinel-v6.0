@@ -36,7 +36,7 @@ export default function WorkerThreadHealth() {
         <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/75">
           Worker Threads
         </div>
-        <div className="text-[9px] font-mono text-white/70">crypto pool · CPU%</div>
+        <div className="text-[9px] font-mono text-white/70">signing pool · CPU%</div>
       </div>
 
       <div className="flex items-end justify-between gap-3 h-[68px]">
