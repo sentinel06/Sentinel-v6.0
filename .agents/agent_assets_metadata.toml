@@ -5,13 +5,13 @@ generated = []
 id = "0-tJnC-84_iG5aQ0Wk6c9"
 uri = "file://screenshots/sentinel-landing.jpg"
 type = "image"
-title = "Landing Page — 1280×720"
+title = "Landing (widescreen)"
 
 [[outputs]]
 id = "pCkidCIkmE0xRF6NL5Kfw"
 uri = "file://screenshots/sentinel-landing-full.jpg"
 type = "image"
-title = "Landing Page — Full scroll"
+title = "Landing Full Page"
 
 [[outputs]]
 id = "uNk0746GHGZg6lbj5sIG-"
@@ -23,16 +23,34 @@ title = "Sign-in Screen"
 id = "TV_pnfGMvZGlPn9RF3Uh4"
 uri = "file://screenshots/landing-hero-1440.jpg"
 type = "image"
-title = "Landing Page — Hero (1440×900)"
+title = "Landing Hero (1440px wide)"
 
 [[outputs]]
 id = "b6FIrFNnJlTlMj-RRTIG0"
 uri = "file://screenshots/sign-up.jpg"
 type = "image"
-title = "Sign-Up Screen"
+title = "Sign Up (widescreen)"
 
 [[outputs]]
 id = "ul2ltuLBuXuv2jbSNkgYB"
 uri = "file://screenshots/sign-in.jpg"
 type = "image"
-title = "Sign-In Screen"
+title = "Sign In (widescreen)"
+
+[[outputs]]
+id = "yJMcLE87pSKDM7LgXlbif"
+uri = "file://attached_assets/screenshots/agent-sentinel_replit_app.png"
+type = "image"
+title = "Landing Page"
+
+[[outputs]]
+id = "Id_EydzOTbfEbM6xyl94B"
+uri = "file://attached_assets/screenshots/agent-sentinel_replit_app_sign-in.png"
+type = "image"
+title = "Sign In"
+
+[[outputs]]
+id = "QKroOcT0MtS5P5g0zipK6"
+uri = "file://attached_assets/screenshots/agent-sentinel_replit_app_sign-up.png"
+type = "image"
+title = "Sign Up"
