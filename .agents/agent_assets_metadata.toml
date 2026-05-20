@@ -1,5 +1,22 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "vkwLblen0TOIfnwsB2ltD"
+uri = "file://attached_assets/logo_shield_eye.png"
+type = "image"
+title = "sentinel shield eye logo"
+
+[[generated]]
+id = "4aWBJlbJwa4mr4WFwQyss"
+uri = "file://attached_assets/logo_s_hexagon.png"
+type = "image"
+title = "sentinel S hexagon logo"
+
+[[generated]]
+id = "fHyfAXliWNCXiNWM85ifC"
+uri = "file://attached_assets/logo_radar_triangle.png"
+type = "image"
+title = "sentinel radar triangle logo"
 
 [[outputs]]
 id = "0-tJnC-84_iG5aQ0Wk6c9"
@@ -60,3 +77,21 @@ id = "-JQl1GuirSo8oBi8nZbIP"
 uri = "file://.local/outputs/Agent-Sentinel-Pre-Seed-Pitch-Deck.pdf"
 type = "pdf"
 title = "Agent-Sentinel Pre-Seed Pitch Deck (Updated PDF)"
+
+[[outputs]]
+id = "bkbCG6qcl2c0dQOPimygE"
+uri = "file://attached_assets/logo_shield_eye.png"
+type = "image"
+title = "Option A — Shield + Eye"
+
+[[outputs]]
+id = "eA0KMEZqernSMVBWA9pri"
+uri = "file://attached_assets/logo_s_hexagon.png"
+type = "image"
+title = "Option B — S Hexagon Tower"
+
+[[outputs]]
+id = "hJH0WSAp1kXZHzlq4IYgb"
+uri = "file://attached_assets/logo_radar_triangle.png"
+type = "image"
+title = "Option C — Radar + Triangle"
