@@ -54,3 +54,9 @@ id = "QKroOcT0MtS5P5g0zipK6"
 uri = "file://attached_assets/screenshots/agent-sentinel_replit_app_sign-up.png"
 type = "image"
 title = "Sign Up"
+
+[[outputs]]
+id = "-JQl1GuirSo8oBi8nZbIP"
+uri = "file://.local/outputs/Agent-Sentinel-Pre-Seed-Pitch-Deck.pdf"
+type = "pdf"
+title = "Agent-Sentinel Pre-Seed Pitch Deck (PDF)"
