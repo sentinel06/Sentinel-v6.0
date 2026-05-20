@@ -103,13 +103,30 @@ export default function LandingPage() {
       {/* ── Layer 3: top-left integrity wordmark ── */}
       <div
         className="absolute top-3 left-3 sm:top-6 sm:left-8 z-[5] flex items-center gap-2 sm:gap-2.5 max-w-[calc(100%-1.5rem)]"
+        style={{
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(8px)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 10,
+          padding: "5px 10px 5px 6px",
+        }}
       >
-        <ShieldCheck className="w-5 h-5" style={{ color: SAGE }} />
-        <div className="font-mono text-[11px] font-bold tracking-[0.24em]" style={{ color: "#9CA3AF" }}>
+        <img
+          src="/logo.png"
+          alt="Sentinel"
+          style={{
+            width: 22,
+            height: 22,
+            objectFit: "contain",
+            flexShrink: 0,
+            filter: `drop-shadow(0 0 5px ${SAGE}88)`,
+          }}
+        />
+        <div className="font-mono text-[11px] font-bold tracking-[0.24em]" style={{ color: SAGE }}>
           AGENT-SENTINEL
         </div>
         <span
-          className="font-mono text-[9px] font-bold px-2 py-0.5 rounded"
+          className="font-mono text-[9px] font-bold px-2 py-0.5 rounded hidden sm:inline"
           style={{
             color: VIOLET,
             background: VIOLET + "18",
