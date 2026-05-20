@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: #0f172a;
+  --color-accent: #14b8a6;
+  --color-text: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-card: #1e293b;
+  --color-border: #334155;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Space Grotesk", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: "Space Grotesk", sans-serif;
+}

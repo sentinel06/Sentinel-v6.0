@@ -1,0 +1,159 @@
+Sub CreateAgentSentinelPitchDeck()
+
+    Dim pptApp As Object
+    Dim pptPres As Presentation
+    Dim sld As Slide
+    Dim titleShape As Shape
+    Dim bodyShape As Shape
+    Dim i As Integer
+    
+    Set pptApp = Application
+    Set pptPres = ActivePresentation
+
+    Dim bgColor As Long
+    Dim accentColor As Long
+    Dim whiteColor As Long
+    
+    bgColor = RGB(15, 23, 42)
+    accentColor = RGB(20, 184, 166)
+    whiteColor = RGB(255, 255, 255)
+
+    Dim titles(1 To 10) As String
+    Dim contents(1 To 10) As String
+
+    titles(1) = "Agent-Sentinel"
+    contents(1) = "The Immutable Compliance Ledger for Autonomous AI Agents" & vbCrLf & vbCrLf & _
+                  "Enterprise infrastructure for secure, auditable AI automation" & vbCrLf & _
+                  "Live MVP: agent-sentinel.replit.app"
+
+    titles(2) = "The Liability Blindspot"
+    contents(2) = "• Enterprises are deploying autonomous AI agents without governance" & vbCrLf & _
+                  "• AI agents can trigger legal, security, and compliance failures" & vbCrLf & _
+                  "• Existing logging tools cannot trace semantic agent decisions" & vbCrLf & _
+                  "• No immutable audit trail for AI-driven actions"
+
+    titles(3) = "Enterprise Guardrails"
+    contents(3) = "• Real-time proxy governance for autonomous AI systems" & vbCrLf & _
+                  "• Immutable audit ledger for every agent action and decision" & vbCrLf & _
+                  "• Tamper-proof compliance logging and replayability" & vbCrLf & _
+                  "• Lightweight SDK integration with existing agent frameworks"
+
+    titles(4) = "Product & Architecture"
+    contents(4) = "• Live MVP deployed at agent-sentinel.replit.app" & vbCrLf & _
+                  "• Proxy-layer architecture between agents and external systems" & vbCrLf & _
+                  "• Captures prompts, actions, tool calls, and semantic intent" & vbCrLf & _
+                  "• Built for scalable enterprise deployment"
+
+    titles(5) = "Why Now"
+    contents(5) = "• 2026 marks the shift from chatbots to autonomous AI agents" & vbCrLf & _
+                  "• Enterprises now allow AI systems to take direct actions" & vbCrLf & _
+                  "• Regulators are increasing AI accountability requirements" & vbCrLf & _
+                  "• Security and compliance infrastructure is lagging behind adoption"
+
+    titles(6) = "Market Opportunity"
+    contents(6) = "• Targeting DevSecOps and compliance teams" & vbCrLf & _
+                  "• Initial focus: financial services and healthcare" & vbCrLf & _
+                  "• Massive demand for AI governance infrastructure" & vbCrLf & _
+                  "• Positioned within the rapidly expanding AI infrastructure market"
+
+    titles(7) = "Business Model"
+    contents(7) = "• High-margin B2B SaaS platform" & vbCrLf & _
+                  "• Pricing based on logging volume and secured agents" & vbCrLf & _
+                  "• Recurring enterprise contracts and compliance retention" & vbCrLf & _
+                  "• Expansion opportunities via API and workflow integrations"
+
+    titles(8) = "Competition & Moat"
+    contents(8) = "• Legacy tools monitor systems, not autonomous decisions" & vbCrLf & _
+                  "• Agent-Sentinel traces semantic intent and agentic loops" & vbCrLf & _
+                  "• Immutable audit architecture creates high switching costs" & vbCrLf & _
+                  "• Purpose-built for autonomous AI governance"
+
+    titles(9) = "The Team"
+    contents(9) = "• Technical founder focused on rapid execution" & vbCrLf & _
+                  "• Deep focus on AI infrastructure and workflow automation" & vbCrLf & _
+                  "• Lean execution with fast MVP deployment capability" & vbCrLf & _
+                  "• Positioned to move quickly in an emerging market"
+
+    titles(10) = "The Ask & Milestones"
+    contents(10) = "• Raising £200,000 Pre-Seed (SEIS Eligible)" & vbCrLf & _
+                   "• Deploy 3 commercial enterprise pilots" & vbCrLf & _
+                   "• Expand SDK integrations and compliance tooling" & vbCrLf & _
+                   "• Target: £15k MRR within 12 months"
+
+    For i = 1 To 10
+
+        Set sld = pptPres.Slides.Add(pptPres.Slides.Count + 1, ppLayoutBlank)
+
+        ' Background
+        sld.FollowMasterBackground = msoFalse
+        sld.Background.Fill.ForeColor.RGB = bgColor
+
+        ' Title
+        Set titleShape = sld.Shapes.AddTextbox( _
+            Orientation:=msoTextOrientationHorizontal, _
+            Left:=40, _
+            Top:=30, _
+            Width:=850, _
+            Height:=80)
+
+        With titleShape.TextFrame.TextRange
+            .Text = titles(i)
+            .Font.Name = "Aptos Display"
+            .Font.Size = 28
+            .Font.Bold = True
+            .Font.Color.RGB = accentColor
+        End With
+
+        ' Body
+        Set bodyShape = sld.Shapes.AddTextbox( _
+            Orientation:=msoTextOrientationHorizontal, _
+            Left:=60, _
+            Top:=130, _
+            Width:=820, _
+            Height:=350)
+
+        With bodyShape.TextFrame
+            .MarginLeft = 8
+            .MarginRight = 8
+            .MarginTop = 8
+            .MarginBottom = 8
+            .WordWrap = msoTrue
+        End With
+
+        With bodyShape.TextFrame.TextRange
+            .Text = contents(i)
+            .Font.Name = "Aptos"
+            .Font.Size = 20
+            .Font.Color.RGB = whiteColor
+        End With
+
+        ' Accent line
+        Dim lineShape As Shape
+        Set lineShape = sld.Shapes.AddLine(40, 105, 860, 105)
+
+        With lineShape.Line
+            .ForeColor.RGB = accentColor
+            .Weight = 2.5
+        End With
+
+        ' Footer
+        Dim footerShape As Shape
+        Set footerShape = sld.Shapes.AddTextbox( _
+            Orientation:=msoTextOrientationHorizontal, _
+            Left:=40, _
+            Top:=500, _
+            Width:=400, _
+            Height:=20)
+
+        With footerShape.TextFrame.TextRange
+            .Text = "Agent-Sentinel | Pre-Seed Deck"
+            .Font.Name = "Aptos"
+            .Font.Size = 10
+            .Font.Color.RGB = RGB(180, 180, 180)
+        End With
+
+    Next i
+
+    MsgBox "Agent-Sentinel Pitch Deck Created Successfully!", vbInformation
+
+End Sub

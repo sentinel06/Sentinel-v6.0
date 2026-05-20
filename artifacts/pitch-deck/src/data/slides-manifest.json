@@ -1,0 +1,82 @@
+[
+  {
+    "id": "a1b2c3d4-0001-0000-0000-sentinel0001",
+    "position": 1,
+    "filepath": "src/pages/slides/Slide01Title.tsx",
+    "title": "Agent-Sentinel",
+    "description": "Cover — Immutable Compliance Ledger for Autonomous AI Agents",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0002-0000-0000-sentinel0002",
+    "position": 2,
+    "filepath": "src/pages/slides/Slide02Problem.tsx",
+    "title": "The Liability Blindspot",
+    "description": "The enterprise AI governance problem",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0003-0000-0000-sentinel0003",
+    "position": 3,
+    "filepath": "src/pages/slides/Slide03Solution.tsx",
+    "title": "Enterprise Guardrails",
+    "description": "Agent-Sentinel's core solution capabilities",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0004-0000-0000-sentinel0004",
+    "position": 4,
+    "filepath": "src/pages/slides/Slide04Product.tsx",
+    "title": "Product & Architecture",
+    "description": "Live MVP and technical architecture overview",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0005-0000-0000-sentinel0005",
+    "position": 5,
+    "filepath": "src/pages/slides/Slide05WhyNow.tsx",
+    "title": "Why Now",
+    "description": "Market timing and regulatory drivers",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0006-0000-0000-sentinel0006",
+    "position": 6,
+    "filepath": "src/pages/slides/Slide06Market.tsx",
+    "title": "Market Opportunity",
+    "description": "Target market and growth vectors",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0007-0000-0000-sentinel0007",
+    "position": 7,
+    "filepath": "src/pages/slides/Slide07BusinessModel.tsx",
+    "title": "Business Model",
+    "description": "B2B SaaS revenue model and pricing strategy",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0008-0000-0000-sentinel0008",
+    "position": 8,
+    "filepath": "src/pages/slides/Slide08Competition.tsx",
+    "title": "Competition & Moat",
+    "description": "Competitive differentiation and defensibility",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0009-0000-0000-sentinel0009",
+    "position": 9,
+    "filepath": "src/pages/slides/Slide09Team.tsx",
+    "title": "The Team",
+    "description": "Founding team and execution capability",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-0010-0000-0000-sentinel0010",
+    "position": 10,
+    "filepath": "src/pages/slides/Slide10Ask.tsx",
+    "title": "The Ask & Milestones",
+    "description": "£200k Pre-Seed raise and 12-month milestones",
+    "speakerNotes": ""
+  }
+]

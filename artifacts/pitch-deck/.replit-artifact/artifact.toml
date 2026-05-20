@@ -1,0 +1,22 @@
+kind = "slides"
+previewPath = "/pitch-deck"
+title = "Agent-Sentinel Pitch Deck"
+version = "1.0.0"
+id = "artifacts/pitch-deck"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/pitch-deck" ]
+localPort = 25419
+
+[services.development]
+run = "pnpm --filter @workspace/pitch-deck run dev"
+
+[services.env]
+PORT = "25419"
+BASE_PATH = "/pitch-deck"
