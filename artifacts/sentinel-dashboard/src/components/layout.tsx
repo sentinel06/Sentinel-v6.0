@@ -916,12 +916,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div style={{
-          flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
-          padding: "0 16px", height: 56,
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          padding: "0 12px", height: 56,
           borderBottom: "1px solid var(--sv-panel-border)",
           position: "relative", zIndex: 1,
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: P.sage, boxShadow: `0 0 6px ${P.sage}88`, flexShrink: 0 }} />
+          <img
+            src="/logo.png"
+            alt="Sentinel"
+            style={{ width: 30, height: 30, objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 0 6px #00F5FF66)" }}
+          />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
             <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", fontWeight: 700, letterSpacing: "-0.01em", color: "var(--sv-text-primary)" }}>
               SENTINEL v6.0

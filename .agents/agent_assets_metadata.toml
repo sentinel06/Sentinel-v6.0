@@ -95,3 +95,9 @@ id = "hJH0WSAp1kXZHzlq4IYgb"
 uri = "file://attached_assets/logo_radar_triangle.png"
 type = "image"
 title = "Option C — Radar + Triangle"
+
+[[outputs]]
+id = "NJmtF3Cl8sdadQLJjC6Xj"
+uri = "file://attached_assets/logo_sentinel_transparent.png"
+type = "image"
+title = "Sentinel Logo (transparent PNG)"
