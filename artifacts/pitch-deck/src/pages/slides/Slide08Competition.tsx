@@ -229,7 +229,7 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#0D2320",
-              padding: "3vh 2.5vw",
+              padding: "2.2vh 2.5vw",
               borderLeft: "0.4vw solid #14B8A6",
               display: "flex",
               alignItems: "flex-start",
@@ -256,6 +256,40 @@ export default function Slide08Competition() {
               }}
             >
               Purpose-built for autonomous AI governance
+            </div>
+          </div>
+
+          {/* Sentinel item 4 */}
+          <div
+            style={{
+              backgroundColor: "#0D2320",
+              padding: "2.2vh 2.5vw",
+              borderLeft: "0.4vw solid #14B8A6",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "1.5vw",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "2vw",
+                fontWeight: 700,
+                color: "#14B8A6",
+                flexShrink: 0,
+                lineHeight: 1.35,
+              }}
+            >
+              ✓
+            </div>
+            <div
+              style={{
+                fontSize: "2vw",
+                fontWeight: 600,
+                color: "#F8FAFC",
+                lineHeight: 1.35,
+              }}
+            >
+              Graph-Based Trace Topologies: Maps multi-agent interactions into visual dependencies to isolate and neutralize Patient Zero during cascading agent loop failures
             </div>
           </div>
         </div>

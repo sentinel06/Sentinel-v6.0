@@ -65,7 +65,7 @@ export default function Slide03Solution() {
                 lineHeight: 1.35,
               }}
             >
-              Real-time proxy governance for autonomous AI systems
+              Sentinel-Gate Compliance Proxy: Operates an active /authorize circuit breaker to block non-compliant tool executions, high-risk data transfers, and unauthorized API mutations before execution.
             </div>
           </div>
 

@@ -66,7 +66,7 @@ export default function Slide04Product() {
                 lineHeight: 1.35,
               }}
             >
-              Live MVP deployed at agent-sentinel.replit.app
+              Cryptographic Ledger Architecture: Implements append-only PostgreSQL WORM triggers and SHA-256 hash chaining to ensure tamper-proof provenance of all agent decisions.
             </div>
           </div>
 

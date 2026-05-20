@@ -158,7 +158,7 @@ export default function Slide07BusinessModel() {
               letterSpacing: "0.12em",
             }}
           >
-            Expansion
+            Pipeline
           </div>
           <div
             style={{
@@ -168,7 +168,7 @@ export default function Slide07BusinessModel() {
               lineHeight: 1.35,
             }}
           >
-            Expansion opportunities via API and workflow integrations
+            3 mid-market pilot agreements in active Q3 2026 negotiation to validate pricing tiers
           </div>
         </div>
       </div>

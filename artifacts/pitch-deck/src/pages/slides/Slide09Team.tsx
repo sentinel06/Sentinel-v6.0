@@ -56,7 +56,7 @@ export default function Slide09Team() {
               letterSpacing: "0.08em",
             }}
           >
-            Execution
+            Capital Efficiency
           </div>
           <div
             style={{
@@ -66,7 +66,7 @@ export default function Slide09Team() {
               lineHeight: 1.4,
             }}
           >
-            Technical founder focused on rapid execution
+            100% technical execution. Built, configured, and deployed the complete working proxy framework solo within 30 days, entirely eliminating development dependencies.
           </div>
         </div>
 

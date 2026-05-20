@@ -57,7 +57,7 @@ export default function Slide06Market() {
               letterSpacing: "0.12em",
             }}
           >
-            Buyers
+            AI TRiSM Sector
           </div>
           <div
             style={{
@@ -67,7 +67,7 @@ export default function Slide06Market() {
               lineHeight: 1.35,
             }}
           >
-            Targeting DevSecOps and compliance teams
+            Positioned inside the emerging $12.1B AI TRiSM (Trust, Risk, and Security Management) sector
           </div>
         </div>
 
@@ -127,7 +127,7 @@ export default function Slide06Market() {
               letterSpacing: "0.12em",
             }}
           >
-            Demand
+            SAM
           </div>
           <div
             style={{
@@ -137,7 +137,7 @@ export default function Slide06Market() {
               lineHeight: 1.35,
             }}
           >
-            Massive demand for AI governance infrastructure
+            Initial SAM targets £450M across UK FinTech and regulated automated healthcare infrastructure
           </div>
         </div>
 

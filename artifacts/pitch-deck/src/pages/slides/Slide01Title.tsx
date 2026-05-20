@@ -101,7 +101,7 @@ export default function Slide01Title() {
             maxWidth: "32vw",
           }}
         >
-          Enterprise infrastructure for secure, auditable AI automation
+          Real-time runtime interdiction, cryptographic audit ledger, and EU AI Act Article 12 compliance
         </div>
 
         {/* Live MVP badge */}
@@ -131,7 +131,7 @@ export default function Slide01Title() {
               color: "#14B8A6",
             }}
           >
-            Live MVP: agent-sentinel.replit.app
+            https://agent-sentinel.replit.app/
           </span>
         </div>
       </div>
