@@ -10,7 +10,7 @@ export default function Slide08Competition() {
       }}
     >
       {/* Header */}
-      <div style={{ padding: "5vh 8vw 0 8vw" }}>
+      <div style={{ padding: "4vh 8vw 0 8vw" }}>
         <div
           style={{
             fontSize: "3vw",
@@ -30,9 +30,10 @@ export default function Slide08Competition() {
         style={{
           flex: 1,
           display: "flex",
-          padding: "3vh 8vw 9vh 8vw",
+          padding: "2.5vh 8vw 8vh 8vw",
           gap: "3vw",
           alignItems: "stretch",
+          minHeight: 0,
         }}
       >
         {/* Left: Legacy Tools */}
@@ -41,17 +42,19 @@ export default function Slide08Competition() {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            gap: "2vh",
+            gap: "1.5vh",
+            minHeight: 0,
           }}
         >
           <div
             style={{
-              fontSize: "1.5vw",
+              fontSize: "1.4vw",
               fontWeight: 700,
               color: "#475569",
               textTransform: "uppercase",
               letterSpacing: "0.15em",
-              marginBottom: "1vh",
+              marginBottom: "0.5vh",
+              flexShrink: 0,
             }}
           >
             Legacy Tools
@@ -61,16 +64,17 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#161E2E",
-              padding: "3vh 2.5vw",
+              padding: "2.5vh 2.5vw",
               borderLeft: "0.4vw solid #334155",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#475569",
                 flexShrink: 0,
@@ -81,10 +85,10 @@ export default function Slide08Competition() {
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 500,
                 color: "#64748B",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               Legacy tools monitor systems, not autonomous decisions
@@ -95,16 +99,17 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#161E2E",
-              padding: "3vh 2.5vw",
+              padding: "2.5vh 2.5vw",
               borderLeft: "0.4vw solid #334155",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#475569",
                 flexShrink: 0,
@@ -115,13 +120,48 @@ export default function Slide08Competition() {
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 500,
                 color: "#64748B",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               No semantic intent tracing or agentic loop analysis
+            </div>
+          </div>
+
+          {/* Legacy item 3 */}
+          <div
+            style={{
+              backgroundColor: "#161E2E",
+              padding: "2.5vh 2.5vw",
+              borderLeft: "0.4vw solid #334155",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "1.5vw",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{
+                fontSize: "1.9vw",
+                fontWeight: 700,
+                color: "#475569",
+                flexShrink: 0,
+                lineHeight: 1.35,
+              }}
+            >
+              ✗
+            </div>
+            <div
+              style={{
+                fontSize: "1.9vw",
+                fontWeight: 500,
+                color: "#64748B",
+                lineHeight: 1.4,
+              }}
+            >
+              No graph-level multi-agent topology visibility
             </div>
           </div>
         </div>
@@ -141,17 +181,19 @@ export default function Slide08Competition() {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            gap: "2vh",
+            gap: "1.5vh",
+            minHeight: 0,
           }}
         >
           <div
             style={{
-              fontSize: "1.5vw",
+              fontSize: "1.4vw",
               fontWeight: 700,
               color: "#14B8A6",
               textTransform: "uppercase",
               letterSpacing: "0.15em",
-              marginBottom: "1vh",
+              marginBottom: "0.5vh",
+              flexShrink: 0,
             }}
           >
             Agent-Sentinel
@@ -161,33 +203,34 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#0D2320",
-              padding: "3vh 2.5vw",
+              padding: "2vh 2.5vw",
               borderLeft: "0.4vw solid #14B8A6",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#14B8A6",
                 flexShrink: 0,
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               ✓
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 600,
                 color: "#F8FAFC",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
-              Agent-Sentinel traces semantic intent and agentic loops
+              Traces semantic intent and agentic loops in real time
             </div>
           </div>
 
@@ -195,30 +238,31 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#0D2320",
-              padding: "3vh 2.5vw",
+              padding: "2vh 2.5vw",
               borderLeft: "0.4vw solid #14B8A6",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#14B8A6",
                 flexShrink: 0,
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               ✓
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 600,
                 color: "#F8FAFC",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               Immutable audit architecture creates high switching costs
@@ -229,33 +273,34 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#0D2320",
-              padding: "2.2vh 2.5vw",
+              padding: "2vh 2.5vw",
               borderLeft: "0.4vw solid #14B8A6",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#14B8A6",
                 flexShrink: 0,
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               ✓
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 600,
                 color: "#F8FAFC",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
-              Purpose-built for autonomous AI governance
+              Purpose-built for autonomous AI governance at enterprise scale
             </div>
           </div>
 
@@ -263,30 +308,31 @@ export default function Slide08Competition() {
           <div
             style={{
               backgroundColor: "#0D2320",
-              padding: "2.2vh 2.5vw",
+              padding: "2vh 2.5vw",
               borderLeft: "0.4vw solid #14B8A6",
               display: "flex",
               alignItems: "flex-start",
               gap: "1.5vw",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 700,
                 color: "#14B8A6",
                 flexShrink: 0,
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               ✓
             </div>
             <div
               style={{
-                fontSize: "2vw",
+                fontSize: "1.9vw",
                 fontWeight: 600,
                 color: "#F8FAFC",
-                lineHeight: 1.35,
+                lineHeight: 1.4,
               }}
             >
               Graph-Based Trace Topologies: Maps multi-agent interactions into visual dependencies to isolate and neutralize Patient Zero during cascading agent loop failures

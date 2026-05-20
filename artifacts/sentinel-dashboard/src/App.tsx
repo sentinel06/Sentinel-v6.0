@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -186,6 +186,32 @@ function HomeRoute() {
   );
 }
 
+// Checks whether the signed-in user already has a Sentinel key.
+// If not (404 from /me/key), redirect them to /onboarding so they go
+// through key provisioning before hitting the main dashboard.
+// If the check errors for any other reason we let them through rather
+// than blocking the UI.
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<"loading" | "has-key" | "no-key">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${basePath}/api/v1/me/key`, { credentials: "include" })
+      .then((r) => {
+        if (cancelled) return;
+        setStatus(r.status === 404 ? "no-key" : "has-key");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("has-key");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (status === "loading") return <RouteFallback />;
+  if (status === "no-key") return <Redirect to="/onboarding" />;
+  return <>{children}</>;
+}
+
 // Wraps every authenticated dashboard route. Signed-out visitors are bounced
 // to /sign-in; signed-in users get the normal Layout chrome.
 function Protected({ children }: { children: React.ReactNode }) {
@@ -242,7 +268,11 @@ function Router() {
             <ErrorBoundary>
               <Suspense fallback={<RouteFallback />}>
                 <Switch>
-                  <Route path="/dashboard" component={DashboardPage} />
+                  <Route path="/dashboard">
+                    <OnboardingGate>
+                      <DashboardPage />
+                    </OnboardingGate>
+                  </Route>
                   <Route path="/onboarding" component={OnboardingPage} />
                   <Route path="/settings" component={SettingsPage} />
                   <Route path="/traces" component={TracesPage} />
