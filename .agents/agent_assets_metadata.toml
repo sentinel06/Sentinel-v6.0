@@ -107,3 +107,33 @@ id = "XoKqTW7WUkxLgWMO23qLg"
 uri = "file://artifacts/sentinel-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "sentinel video background music"
+
+[[outputs]]
+id = "IyG1HTzl1R__yixBAg-BB"
+uri = "file://artifacts/sentinel-video/public/audio/vo_scene3.mp3"
+type = "audio"
+title = "scene3 voiceover"
+
+[[outputs]]
+id = "NWd9AhZ75bhyMc5sA6dr-"
+uri = "file://artifacts/sentinel-video/public/audio/vo_scene2.mp3"
+type = "audio"
+title = "scene2 voiceover"
+
+[[outputs]]
+id = "tyxjEF6x7OcU4visGN-wL"
+uri = "file://artifacts/sentinel-video/public/audio/vo_scene1.mp3"
+type = "audio"
+title = "scene1 voiceover"
+
+[[outputs]]
+id = "tpPKszONyxYw8JdpSNTfS"
+uri = "file://artifacts/sentinel-video/public/audio/vo_scene4.mp3"
+type = "audio"
+title = "scene4 voiceover"
+
+[[outputs]]
+id = "zxo1BQ7TOSfojMYe6D-bY"
+uri = "file://artifacts/sentinel-video/public/audio/vo_scene5.mp3"
+type = "audio"
+title = "scene5 voiceover"
