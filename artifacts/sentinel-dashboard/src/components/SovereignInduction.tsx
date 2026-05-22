@@ -617,7 +617,7 @@ function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps)
               fontFamily: "JetBrains Mono, monospace",
               color: "#F9FAFB", minWidth: 380, textAlign: "center",
               animation: "induction-cert-rise 0.9s cubic-bezier(.34,1.56,.64,1) both",
-              pointerEvents: "none",
+              pointerEvents: "auto",
             }}
           >
             {/* Concentric Sovereign Sigil */}
@@ -670,7 +670,7 @@ function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps)
               MISSION READY. Welcome to Neural Sovereignty.
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "center", pointerEvents: "auto" }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "center" }}>
               <button
                 onClick={handleCtaInit}
                 style={{
