@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/sentinel-video/"
+title = "Agent-Sentinel Explainer Video"
+version = "1.0.0"
+id = "artifacts/sentinel-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/sentinel-video/" ]
+localPort = 23680
+
+[services.development]
+run = "pnpm --filter @workspace/sentinel-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/sentinel-video", "run", "build" ]
+publicDir = "artifacts/sentinel-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23680"
+BASE_PATH = "/sentinel-video/"

@@ -101,3 +101,9 @@ id = "NJmtF3Cl8sdadQLJjC6Xj"
 uri = "file://attached_assets/logo_sentinel_transparent.png"
 type = "image"
 title = "Sentinel Logo (transparent PNG)"
+
+[[outputs]]
+id = "XoKqTW7WUkxLgWMO23qLg"
+uri = "file://artifacts/sentinel-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "sentinel video background music"
