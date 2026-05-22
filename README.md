@@ -41,22 +41,101 @@ gw.preflight(action="transfer", amount=500)
 gw.commit(event_type="Action", rationale="Transferred $500 to supplier")
 ```
 
-### TypeScript
+### TypeScript / JavaScript (zero-dependency, web-standard)
+
+No npm packages. No Node built-in imports. Works in browsers, Node ≥ 18, Deno, Bun, and Cloudflare Workers.
 
 ```typescript
-import SentinelClient from "./sdk/sentinel";
+// docs/sentinel-client.ts — copy this file into your project
 
-const sentinel = new SentinelClient({
-  baseUrl: process.env.SENTINEL_URL,
-  agentId: "my-agent",
+interface SentinelConfig {
+  baseUrl: string;   // e.g. "https://agent-sentinel.replit.app"
+  apiKey:  string;   // sk_sent_core_… from /onboarding or /settings
+  agentId: string;   // stable identifier for this agent
+}
+
+interface LogResult {
+  ok:                 boolean;
+  id?:                string;   // ledger entry ID on success
+  rateLimited?:       boolean;  // true when daily quota is exhausted
+  retryAfterSeconds?: number;   // seconds until the quota resets
+  error?:             string;
+}
+
+// Web Crypto nonce — no "import crypto from 'crypto'" needed
+function makeNonce(): string {
+  return typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}`;
+}
+
+async function postLog(
+  config: SentinelConfig,
+  entry: { traceId: string; eventType: string; rationale?: string; payload?: Record<string, unknown> },
+): Promise<LogResult> {
+  try {
+    const res = await fetch(`${config.baseUrl}/api/v1/log`, {
+      method: "POST",
+      headers: {
+        "Content-Type":           "application/json",
+        "X-Sentinel-Key":         config.apiKey,
+        "X-Sentinel-Request-ID":  makeNonce(),   // replay-prevention nonce
+      },
+      body: JSON.stringify({ agentId: config.agentId, ...entry }),
+    });
+
+    // Daily quota exhausted — read the reset timer, never throw
+    if (res.status === 429) {
+      const retryAfter    = res.headers.get("Retry-After");
+      const dailyRemaining = res.headers.get("X-RateLimit-Daily-Remaining");
+      return {
+        ok: false,
+        rateLimited: true,
+        retryAfterSeconds: retryAfter ? parseInt(retryAfter, 10) : undefined,
+        error: dailyRemaining === "0"
+          ? "Daily quota of 1,000 req/24 h exhausted."
+          : "Per-minute rate limit reached — back off and retry.",
+      };
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      return { ok: false, error: (body["error"] as string) ?? `HTTP ${res.status}` };
+    }
+
+    const data = await res.json() as { id?: string };
+    return { ok: true, id: data.id };
+  } catch (err) {
+    // Network error — fail open so a gateway blip never crashes the host app
+    return { ok: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
+// Usage
+const sentinel: SentinelConfig = {
+  baseUrl: "https://agent-sentinel.replit.app",
+  apiKey:  "sk_sent_core_YOUR_KEY",
+  agentId: "my-agent-v1",
+};
+
+const result = await postLog(sentinel, {
+  traceId:   globalThis.crypto.randomUUID(),
+  eventType: "DataFetch",
+  rationale: "Fetching Q1 sales report",
+  payload:   { source: "warehouse", rows: 4200 },
 });
 
-const result = await sentinel.governed(
-  "read",
-  "Summarize Q1 financial data",
-  () => myLLM.complete("Summarize..."),
-);
+if (!result.ok) {
+  if (result.rateLimited) {
+    console.warn(`Rate limited — retry in ${result.retryAfterSeconds}s`);
+    // Sentinel is fail-open — your agent keeps running
+  } else {
+    console.error("Sentinel log failed:", result.error);
+  }
+}
 ```
+
+The full reference implementation (including the `governed()` wrapper) lives in [`docs/sentinel-client.ts`](docs/sentinel-client.ts).
 
 ### curl
 
@@ -65,6 +144,31 @@ curl -X POST https://agent-sentinel.replit.app/api/v1/log \
   -H "X-Sentinel-Key: sk_sent_core_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"agentId":"my-agent","traceId":"t-001","eventType":"Action","rationale":"Fetched report"}'
+```
+
+---
+
+## Infrastructure
+
+| Metric | Value |
+|---|---|
+| **API latency** | 12 ms P99 end-to-end |
+| **Signing** | Off-thread — 4 dedicated ML-DSA-87 worker threads, never blocking the event loop |
+| **Daily quota** | 1,000 requests / 24 h per API key (Redis-backed, rolling window) |
+| **Per-minute cap** | 60 req / min per agent · 1,000 req / min global |
+| **Replay defense** | `X-Sentinel-Request-ID` nonce checked against Redis (24 h TTL) |
+| **Rate limit headers** | `X-RateLimit-Daily-Limit` · `X-RateLimit-Daily-Remaining` · `Retry-After` |
+| **Fail-open policy** | Redis outage → quota check skipped, never blocks legitimate traffic |
+
+HTTP 429 responses always include `Retry-After` (seconds until reset) and a structured body:
+
+```json
+{
+  "error": "Daily quota exceeded",
+  "detail": "API key has exceeded 1000 requests in a 24-hour window.",
+  "retryAfterSeconds": 72941,
+  "tier": "daily"
+}
 ```
 
 ---
