@@ -50,13 +50,12 @@ export default function LandingPage() {
       // creating a horizontal bar. `justify-start` (not center) so the
       // headline anchors at the top instead of being pushed below the fold
       // on short viewports.
-      // pb-24 reserves clear space at the bottom so the "Made with Replit"
-      // badge (and mobile browser URL bar) never overlap the primary CTA.
-      // Mobile-first single-column flex; `w-full max-w-full` + `overflow-x-hidden`
-      // guarantee no element can push the page wider than the viewport. Extra
-      // bottom padding on mobile reserves room for the absolute regulatory
-      // legend so it never overlaps the CTA button.
-      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-screen w-full max-w-full px-3 pt-4 pb-32 sm:px-4 sm:pb-24"
+      // pb-28 on mobile reserves clearance for any sticky bottom widget (FAB,
+      // browser nav bar, or the "Build yours free" CTA) so it never masks the
+      // compliance footer or the "Read the White Paper" button.
+      // min-h-[100dvh] uses the dynamic viewport height unit so mobile Chrome /
+      // Safari address-bar retraction never clips the bottom of the layout.
+      className="relative flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden min-h-[100dvh] w-full max-w-full px-3 pt-4 pb-28 sm:px-4 sm:pb-24"
       style={{
         background: SLATE,
         color: "#E5E7EB",
@@ -305,10 +304,10 @@ export default function LandingPage() {
             style={{
               listStyle: "none",
               padding: 0,
-              margin: "0 0 18px 0",
+              margin: "0 0 20px 0",
               display: "flex",
               flexDirection: "column",
-              gap: 10,
+              gap: 14,
               textAlign: "left",
               fontFamily: "'Inter', system-ui, sans-serif",
             }}
@@ -354,14 +353,15 @@ export default function LandingPage() {
             ))}
           </ol>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Primary — Sign up to access the dashboard */}
             <button
               onClick={() => navigate("/sign-up")}
               className="font-semibold transition-all"
               style={{
                 width: "100%",
-                padding: "13px 20px",
+                padding: "14px 20px",
+                minHeight: 48,
                 background: `linear-gradient(135deg, ${VIOLET}, #7C3AED)`,
                 color: "#FFFFFF",
                 border: `1px solid ${VIOLET}88`,
@@ -395,7 +395,8 @@ export default function LandingPage() {
               className="font-medium transition-all"
               style={{
                 width: "100%",
-                padding: "11px 20px",
+                padding: "13px 20px",
+                minHeight: 48,
                 background: "transparent",
                 color: "#CBD5E1",
                 border: "1px solid rgba(255,255,255,0.15)",
@@ -428,7 +429,8 @@ export default function LandingPage() {
               className="font-medium transition-all"
               style={{
                 width: "100%",
-                padding: "11px 20px",
+                padding: "13px 20px",
+                minHeight: 48,
                 background: "transparent",
                 color: "#CBD5E1",
                 border: `1px solid ${VIOLET}55`,
@@ -465,7 +467,7 @@ export default function LandingPage() {
            below the CTA card without overlapping it. On larger screens it
            returns to absolute-bottom positioning for the original look. */}
       <div
-        className="z-[3] mt-8 mb-2 px-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-[10px] md:text-xs w-full sm:absolute sm:bottom-4 sm:left-0 sm:right-0 sm:mt-0 sm:mb-0 sm:w-auto"
+        className="z-[3] mt-8 mb-2 px-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-[10px] md:text-xs w-full md:absolute md:bottom-4 md:left-0 md:right-0 md:mt-0 md:mb-0 md:w-auto"
         style={{
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           color: "#475569",
