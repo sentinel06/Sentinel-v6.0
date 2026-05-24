@@ -54,26 +54,34 @@ export function getViewerUserId(req: Request): string | null {
 }
 
 /**
- * Returns the Drizzle SQL condition that scopes audit_logs to the right slice
- * for the current viewer:
- *   - Signed-in viewer  → owner_user_id = viewer.userId  (their tenant)
- *   - Anonymous viewer  → owner_user_id IS NULL          (public demo slice)
+ * Returns the Drizzle SQL condition that scopes audit_logs to the correct
+ * tenant slice for the current viewer.  The return type is the non-optional
+ * `SQL` — never `undefined` — so TypeScript guarantees callers always pass a
+ * condition to the WHERE clause and can never accidentally omit it.
  *
- * Compose with `and(...)` alongside any other filters. This is intentionally
- * a single condition (never `undefined`) so callers can't forget to apply it
- * and accidentally leak cross-tenant rows.
+ * Decision table
+ * ──────────────
+ * │ Viewer identity          │ SQL produced                              │
+ * │──────────────────────────│───────────────────────────────────────────│
+ * │ Admin (allowlisted email)│ owner_user_id IS NOT NULL  (all tenants)  │
+ * │ Signed-in Clerk user     │ owner_user_id = '<viewerUserId>'          │
+ * │ Anonymous / no session   │ FALSE  (zero rows — fail-closed)          │
+ *
+ * The anonymous branch is a defensive last resort: every endpoint that calls
+ * this helper is already mounted behind `requireAuth` (lib/requireAuth.ts),
+ * which returns 401 before the route handler runs.  If the guard is ever
+ * accidentally removed the fallback still prevents a cross-tenant data leak.
  */
 export function viewerScopeCondition(req: Request): SQL {
   // Admins see all real-user data (every tenant), but NEVER the seeded
   // demo slice (owner_user_id IS NULL).
   if (isAdminViewer(req)) return isNotNull(auditLogsTable.ownerUserId);
 
-  // Signed-in users see only their own tenant.
+  // Signed-in users see only their own tenant — strict equality constraint.
   const viewerId = getViewerUserId(req);
   if (viewerId) return eq(auditLogsTable.ownerUserId, viewerId);
 
-  // Defensive fallback only — every caller of this function is mounted
-  // behind `requireAuth` (lib/requireAuth.ts), so anonymous requests are
-  // 401'd before reaching here. If somehow they do, return zero rows.
+  // Fail-closed: unauthenticated requests must never see any rows.
+  // requireAuth should have already rejected this request with 401.
   return sql`false`;
 }

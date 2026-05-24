@@ -15,6 +15,7 @@ import { streamManager } from "../services/streaming";
 import { BLOCK_SIZE } from "../lib/merkle";
 import { computeConsistencyScore } from "../lib/consistency";
 import { logRateLimiter, dailyKeyRateLimiter, getRateLimitStats } from "../lib/rateLimit";
+import { maskPayloadSecrets } from "../lib/maskPayloadSecrets";
 import { checkAndSealArchive } from "../lib/archiver";
 import {
   recordConsistencyScore,
@@ -76,7 +77,7 @@ router.post("/v1/simulate", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/v1/log", logRateLimiter(), dailyKeyRateLimiter(), async (req, res): Promise<void> => {
+router.post("/v1/log", logRateLimiter(), dailyKeyRateLimiter(), maskPayloadSecrets(), async (req, res): Promise<void> => {
   // Resolve the tenant owner from the API key first — this validates partner
   // keys (sk_sent_*) against the partner_keys table and returns the Clerk
   // userId, or null for the legacy SENTINEL_KEY admin path.

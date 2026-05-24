@@ -134,8 +134,10 @@ const HEADERS_429    = { "Content-Type": "application/json", "Retry-After": "60"
                          "X-RateLimit-Daily-Limit": DAILY_LIMIT_STR, "X-RateLimit-Daily-Remaining": "0" } as const;
 
 // ── Global banned-key Set ─────────────────────────────────────────────────────
-// Primitive Set<string> at file scope. Stores raw API tokens so the fast-path
-// check is a single Set.has() call — no hashing, no map traversal, no async.
+// Stores the SHA-256 *slug* of each blocked API token (never the plaintext).
+// keySlug() uses _keySlugCache, so the hash is computed at most once per unique
+// key per process lifetime — subsequent calls are an O(1) Map lookup.
+// The Set itself holds 40-char hex strings; raw key material never appears here.
 // Flushed entirely every 5 minutes; after a flush the next blocked request does
 // one Redis round-trip and re-enters the set.
 const BANNED_KEYS_CACHE = new Set<string>();
@@ -223,8 +225,8 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
     const ttl   = Math.max(result[1], 0);
 
     if (count > DAILY_LIMIT) {
-      // Stamp the banned set — subsequent requests never reach Redis
-      BANNED_KEYS_CACHE.add(apiKey);
+      // Stamp the banned set with the SHA-256 slug (not the raw key).
+      BANNED_KEYS_CACHE.add(keySlug(apiKey));
       return { allowed: false, count, remaining: 0, retryAfterSeconds: ttl };
     }
 
@@ -261,9 +263,11 @@ export function dailyKeyRateLimiter() {
     }
 
     // ── Zero-allocation fast path ──────────────────────────────────────────
-    // Set.has() is O(1). If the token is already banned we never touch Redis,
-    // never call JSON.stringify, and write directly to the socket.
-    if (BANNED_KEYS_CACHE.has(apiKey)) {
+    // Set.has() is O(1). The set stores SHA-256 slugs, never plaintext keys.
+    // keySlug() uses _keySlugCache so the hash is computed at most once per
+    // unique token per process lifetime — the call here is also O(1).
+    const slug = keySlug(apiKey);
+    if (BANNED_KEYS_CACHE.has(slug)) {
       res.writeHead(429, HEADERS_429);
       res.end(BODY_429);
       return;
