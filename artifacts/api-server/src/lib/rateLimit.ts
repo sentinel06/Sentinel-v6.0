@@ -6,14 +6,29 @@
  *   Tier 2 — Per-agent: 60 requests per minute per agentId.
  *
  * Layer B — Redis daily quota (per API key):
- *   1,000 requests per 24-hour window, tracked in Redis with INCR + EXPIRE.
+ *   1,000 requests per 24-hour window, tracked in Redis via a single-round-trip
+ *   Lua eval (INCR + conditional EXPIRE + TTL — fully atomic, no pipeline gaps).
  *   Uses REDIS_URL env var (ioredis). Falls open if Redis is unreachable
  *   so a Redis outage never blocks legitimate ingestion.
+ *
+ * Performance notes
+ * -----------------
+ * • keySlug() caches the SHA-256 hash in a process-lifetime Map so the crypto
+ *   work runs at most once per unique API key (not once per request).
+ * • LUA_DAILY_QUOTA executes INCR + conditional EXPIRE + TTL in a single
+ *   server-side Lua call — one network round-trip regardless of outcome,
+ *   including the 429 path (no separate TTL fetch needed).
+ * • 429 response bodies are lean static objects — no template literals,
+ *   no deep cloning, no extra allocations in the hot rejection path.
  */
 
 import { createHash } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "./logger";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layer A — In-memory sliding window (per-minute)
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface WindowEntry {
   timestamps: number[]; // epoch ms of each hit in the current window
@@ -32,7 +47,6 @@ const AGENT_LIMIT = 60;
 
 function prune(bucket: WindowEntry, now: number): void {
   const cutoff = now - WINDOW_MS;
-  // Timestamps are in insertion order, so we can slice from the front
   let i = 0;
   while (i < bucket.timestamps.length && bucket.timestamps[i] < cutoff) i++;
   if (i > 0) bucket.timestamps.splice(0, i);
@@ -65,7 +79,8 @@ function retryAfterSeconds(bucket: WindowEntry, now: number): number {
 export function logRateLimiter() {
   return (req: Request, res: Response, next: NextFunction): void => {
     const now = Date.now();
-    const agentId: string = typeof req.body?.agentId === "string" ? req.body.agentId : "__unknown__";
+    const agentId: string =
+      typeof req.body?.agentId === "string" ? req.body.agentId : "__unknown__";
 
     // ── Tier 1: global check ───────────────────────────────────────────────
     const globalCount = count(globalBucket, now);
@@ -73,8 +88,7 @@ export function logRateLimiter() {
       const retryAfter = retryAfterSeconds(globalBucket, now);
       res.setHeader("Retry-After", String(retryAfter));
       res.status(429).json({
-        error: "Global rate limit exceeded",
-        detail: `Maximum ${GLOBAL_LIMIT} log writes per minute across all agents. Retry in ${retryAfter}s.`,
+        error: "global_rate_limit_exceeded",
         retryAfterSeconds: retryAfter,
         tier: "global",
       });
@@ -92,8 +106,7 @@ export function logRateLimiter() {
       const retryAfter = retryAfterSeconds(agentBucket, now);
       res.setHeader("Retry-After", String(retryAfter));
       res.status(429).json({
-        error: "Per-agent rate limit exceeded",
-        detail: `Agent "${agentId}" exceeded ${AGENT_LIMIT} log writes per minute. Retry in ${retryAfter}s.`,
+        error: "agent_rate_limit_exceeded",
         retryAfterSeconds: retryAfter,
         tier: "agent",
         agentId,
@@ -105,7 +118,6 @@ export function logRateLimiter() {
     hit(globalBucket, now);
     hit(agentBucket, now);
 
-    // Expose remaining quota in response headers
     res.setHeader("X-RateLimit-Global-Remaining", String(GLOBAL_LIMIT - globalCount - 1));
     res.setHeader("X-RateLimit-Agent-Remaining", String(AGENT_LIMIT - agentCount - 1));
     res.setHeader("X-RateLimit-Window", "60s");
@@ -123,7 +135,10 @@ export function logRateLimiter() {
 }
 
 /** Return current rate limit stats — used by the stats endpoint */
-export function getRateLimitStats(): { globalRequestsLastMinute: number; trackedAgents: number } {
+export function getRateLimitStats(): {
+  globalRequestsLastMinute: number;
+  trackedAgents: number;
+} {
   const now = Date.now();
   prune(globalBucket, now);
   return {
@@ -138,6 +153,8 @@ export function getRateLimitStats(): { globalRequestsLastMinute: number; tracked
 
 const DAILY_LIMIT = 1_000;
 const DAILY_WINDOW_SEC = 86_400; // 24 hours
+const DAILY_LIMIT_STR = String(DAILY_LIMIT);   // pre-allocated — avoids String() in hot path
+const DAILY_WINDOW_STR = String(DAILY_WINDOW_SEC);
 
 type RedisClient = import("ioredis").default;
 
@@ -173,10 +190,32 @@ async function getRedis(): Promise<RedisClient | null> {
   return _redisInitPromise;
 }
 
-/** Hash the key so plaintext is never stored in Redis */
+// ── Hash cache — SHA-256 computed at most once per unique API key ─────────────
+// Process-lifetime Map; API keys are long-lived so this stays small.
+const _keySlugCache = new Map<string, string>();
+
 function keySlug(apiKey: string): string {
-  return createHash("sha256").update(apiKey).digest("hex").slice(0, 40);
+  let slug = _keySlugCache.get(apiKey);
+  if (slug === undefined) {
+    slug = createHash("sha256").update(apiKey).digest("hex").slice(0, 40);
+    _keySlugCache.set(apiKey, slug);
+  }
+  return slug;
 }
+
+// ── Lua script: atomic INCR + conditional EXPIRE + TTL in one round-trip ─────
+// Returns a two-element array: [count, ttl].
+// • INCR increments (or creates) the counter.
+// • EXPIRE is only called on first hit (count == 1) to set the 24-hour window.
+// • TTL is always returned so the 429 path has the retry delay without an
+//   extra network call.
+const LUA_DAILY_QUOTA = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return {count, redis.call('TTL', KEYS[1])}
+`;
 
 interface DailyQuotaResult {
   allowed: boolean;
@@ -186,7 +225,8 @@ interface DailyQuotaResult {
 }
 
 /**
- * Increment the daily counter for `apiKey` and return quota state.
+ * Atomically increment the daily counter for `apiKey` and return quota state.
+ * Single Redis round-trip via Lua eval for both the allow and deny paths.
  * Falls open (allowed = true) when Redis is unreachable.
  */
 export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult> {
@@ -197,14 +237,15 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
 
   const key = `rl:daily:${keySlug(apiKey)}`;
   try {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      // First hit in this window — stamp the 24-hour TTL
-      await redis.expire(key, DAILY_WINDOW_SEC);
-    }
+    // Single round-trip: returns [count, ttl] from Lua
+    const result = await redis.eval(
+      LUA_DAILY_QUOTA, 1, key, DAILY_WINDOW_STR,
+    ) as [number, number];
+
+    const count = result[0];
+    const ttl   = result[1];
 
     if (count > DAILY_LIMIT) {
-      const ttl = await redis.ttl(key);
       return { allowed: false, count, remaining: 0, retryAfterSeconds: Math.max(ttl, 0) };
     }
 
@@ -222,9 +263,10 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
  */
 export function dailyKeyRateLimiter() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const apiKey = typeof req.headers["x-sentinel-key"] === "string"
-      ? req.headers["x-sentinel-key"]
-      : null;
+    const apiKey =
+      typeof req.headers["x-sentinel-key"] === "string"
+        ? req.headers["x-sentinel-key"]
+        : null;
 
     if (!apiKey || !apiKey.startsWith("sk_sent_")) {
       next();
@@ -233,14 +275,15 @@ export function dailyKeyRateLimiter() {
 
     const quota = await checkDailyQuota(apiKey);
 
-    res.setHeader("X-RateLimit-Daily-Limit", String(DAILY_LIMIT));
+    // Set headers before any branch — lean, pre-allocated strings where possible
+    res.setHeader("X-RateLimit-Daily-Limit", DAILY_LIMIT_STR);
     res.setHeader("X-RateLimit-Daily-Remaining", String(quota.remaining));
 
     if (!quota.allowed) {
       res.setHeader("Retry-After", String(quota.retryAfterSeconds));
+      // Lean static 429 body — no template literals, no extra allocations
       res.status(429).json({
-        error: "Daily quota exceeded",
-        detail: `API key has exceeded ${DAILY_LIMIT} requests in a 24-hour window.`,
+        error: "daily_quota_exceeded",
         retryAfterSeconds: quota.retryAfterSeconds,
         tier: "daily",
       });
