@@ -73,7 +73,7 @@ const CREDENTIAL_PATTERNS: RegExp[] = [
   /\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g,
 ];
 
-const REDACTED = "[REDACTED]";
+const REDACTED = "[REDACTED_BY_SENTINEL]";
 
 /**
  * Recursively sanitise a value.
