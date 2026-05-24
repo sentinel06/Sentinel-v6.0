@@ -320,11 +320,12 @@ agent.log_action(
           <p className="text-sm text-[#9AA4B1]">
             Once your agent posts its first action, it will appear in real-time on the dashboard with a SHA-256 + ML-DSA-87 seal.
           </p>
-          <Link href="/dashboard">
-            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00F5FF] hover:bg-[#00d4dc] text-[#050505] font-semibold uppercase tracking-wider text-xs transition-colors">
-              Open dashboard
-              <ArrowRight className="w-4 h-4" />
-            </a>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00F5FF] hover:bg-[#00d4dc] text-[#050505] font-semibold uppercase tracking-wider text-xs transition-colors"
+          >
+            Open dashboard
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </section>
