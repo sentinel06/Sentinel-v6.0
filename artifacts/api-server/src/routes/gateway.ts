@@ -498,6 +498,10 @@ router.post("/v1/gateway/crispr_recode", async (req, res): Promise<void> => {
   // See note at the gateway POST hash chain entry above re: GENESIS sentinel.
   const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(ledgerPayload));
 
+  // ownerUserId is intentionally NULL here: CRISPR_RECODE is a platform-level
+  // system event that targets agents across potentially multiple tenants.
+  // A NULL owner means it is treated as a system/demo row and is invisible
+  // to every tenant-scoped read path (viewerScopeCondition excludes NULL rows).
   await db.insert(auditLogsTable).values({
     agentId:          rootId ?? "sentinel-system",
     traceId:          recodeId,

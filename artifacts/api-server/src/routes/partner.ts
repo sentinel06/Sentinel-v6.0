@@ -206,8 +206,11 @@ async function generate_executive_summary(
     activeAgentsCount = all.filter((a) => a.isActive).length;
   }
 
-  // Fetch logs in the time window
+  // Fetch logs in the time window.
+  // isNotNull(ownerUserId) explicitly excludes the NULL demo/system slice so
+  // compliance reports never surface seeded demo data regardless of agentScope.
   const logConditions: Parameters<typeof and>[0][] = [
+    isNotNull(auditLogsTable.ownerUserId),
     gte(auditLogsTable.timestamp, windowStart),
     lte(auditLogsTable.timestamp, now),
   ];
@@ -393,12 +396,15 @@ router.get("/v1/compliance/audit-report", requireAuth, async (req, res): Promise
 
   const agentIds = agents.map((a) => a.agentId);
 
-  // 2. Pull all audit logs for these agents in the time window
+  // 2. Pull all audit logs for these agents in the time window.
+  // isNotNull(ownerUserId) is a second-layer defence: even if an agentId
+  // somehow collided with a demo row (NULL owner), it is excluded here.
   const allLogs = await db
     .select()
     .from(auditLogsTable)
     .where(
       and(
+        isNotNull(auditLogsTable.ownerUserId),
         inArray(auditLogsTable.agentId, agentIds),
         gte(auditLogsTable.timestamp, windowStart),
         lte(auditLogsTable.timestamp, now),
