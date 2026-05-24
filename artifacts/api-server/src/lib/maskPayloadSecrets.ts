@@ -8,13 +8,16 @@
  *
  * Sanitisation strategy
  * ─────────────────────
- * 1. Sensitive-key replacement — any JSON key whose name matches the list below
- *    has its entire value replaced with the "[REDACTED]" sentinel string.
- *    Keys are matched case-insensitively.
+ * 1. Sensitive-key replacement — any JSON key whose normalised form *contains*
+ *    one of the trigger words below has its entire value replaced with the
+ *    "[REDACTED_BY_SENTINEL]" sentinel string.  Normalisation strips hyphens
+ *    and spaces then lowercases, so "secret-token", "SECRET_TOKEN", and
+ *    "system_password" all trigger the same rule as "secret" / "password".
  *
- * 2. Pattern scrubbing — for all other string values, a set of regexes strips
- *    sub-string credential patterns (Bearer tokens, sk_ and pk_ API keys, and
- *    common password-assignment literals). The surrounding text is preserved.
+ * 2. Pattern scrubbing — for all remaining string values, a set of regexes
+ *    strips sub-string credential patterns (Bearer tokens, bearer_<word>
+ *    variants, sk_ / pk_ API keys, JWTs, and password-assignment literals).
+ *    The surrounding text is preserved.
  *
  * The middleware is intentionally fail-open: if an unexpected error occurs
  * during sanitisation the request is allowed through unmodified and a warning
@@ -25,44 +28,48 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "./logger";
 
-// ── Sensitive key names (case-insensitive exact match) ────────────────────────
-const SENSITIVE_KEYS = new Set([
+// ── Sensitive key trigger words (substring containment, not exact match) ──────
+// A key is sensitive if its normalised form contains ANY of these words.
+// Normalisation: lowercase + replace hyphens/spaces with underscores.
+// This catches compound names like "secret_token", "system_password",
+// "jwt_auth_token", "my_api_key_value", etc.
+const SENSITIVE_KEY_TRIGGERS: readonly string[] = [
   "password",
   "passwd",
-  "pass",
   "secret",
-  "secret_key",
-  "secretkey",
-  "api_key",
-  "apikey",
-  "api_secret",
-  "apisecret",
   "token",
-  "access_token",
-  "accesstoken",
-  "refresh_token",
-  "refreshtoken",
-  "auth_token",
-  "authtoken",
+  "apikey",
+  "api_key",
   "authorization",
   "private_key",
   "privatekey",
-  "client_secret",
-  "clientsecret",
-  "bearer",
   "credential",
-  "credentials",
-  "x-sentinel-key",
-  "x-api-key",
-]);
+  "bearer",
+  "sentinel_key",
+  "api_secret",
+  "apisecret",
+];
+
+/**
+ * Returns true when a key name contains any sensitive trigger word.
+ * Normalises the key to lowercase with hyphens/spaces replaced by underscores
+ * before comparing so "secret-token", "SECRET_TOKEN", and "secretToken" all
+ * match the "secret" and "token" triggers.
+ */
+function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[-\s]/g, "_");
+  return SENSITIVE_KEY_TRIGGERS.some((trigger) => normalized.includes(trigger));
+}
 
 // ── Credential pattern regexes ────────────────────────────────────────────────
 // Each regex targets a well-known credential shape in free-form string values.
 // Compiled once at module load — never inside the request hot path.
 // NOTE: avoid any literal "*/" inside this array — it would close the JSDoc block.
 const CREDENTIAL_PATTERNS: RegExp[] = [
-  // "Bearer <token>" in header-value strings
+  // "Bearer <token>" with whitespace separator (header-value style)
   /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/gi,
+  // "bearer_<word>" or "bearer-<word>" — underscore/hyphen variant (no space)
+  /\bbearer[_\-][A-Za-z0-9_\-]{6,}/gi,
   // Sentinel / Stripe-style secret keys: sk_<tier>_<payload>
   /\bsk_[a-z]+_[A-Za-z0-9_\-]{16,}/g,
   // Public-key equivalents: pk_<tier>_<payload>
@@ -94,7 +101,7 @@ function sanitise(value: unknown, depth = 0): unknown {
   if (value !== null && typeof value === "object") {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      result[k] = SENSITIVE_KEYS.has(k.toLowerCase()) ? REDACTED : sanitise(v, depth + 1);
+      result[k] = isSensitiveKey(k) ? REDACTED : sanitise(v, depth + 1);
     }
     return result;
   }
