@@ -203,6 +203,24 @@ function keySlug(apiKey: string): string {
   return slug;
 }
 
+// ── In-memory blocked-key pool ────────────────────────────────────────────────
+// Maps key slug → expiry epoch-ms. Once a key exceeds its daily quota the
+// expiry is stored here. Subsequent requests for that key skip Redis entirely
+// and receive a 429 from memory — zero network overhead for blocked traffic.
+//
+// Keyed by slug (not raw API key) so plaintext never lives in process memory.
+const _localBlockedKeys = new Map<string, number>(); // slug → expiry ms
+
+// Periodic cleanup: prune expired entries every 60 s so the map never grows
+// without bound. unref() prevents this timer from keeping the process alive.
+const _blockedKeyCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [slug, expiry] of _localBlockedKeys) {
+    if (now >= expiry) _localBlockedKeys.delete(slug);
+  }
+}, 60_000);
+if (_blockedKeyCleanup.unref) _blockedKeyCleanup.unref();
+
 // ── Lua script: atomic INCR + conditional EXPIRE + TTL in one round-trip ─────
 // Returns a two-element array: [count, ttl].
 // • INCR increments (or creates) the counter.
@@ -227,6 +245,8 @@ interface DailyQuotaResult {
 /**
  * Atomically increment the daily counter for `apiKey` and return quota state.
  * Single Redis round-trip via Lua eval for both the allow and deny paths.
+ * Populates _localBlockedKeys on first Redis-detected block so all subsequent
+ * requests for the same key are served from memory with zero Redis I/O.
  * Falls open (allowed = true) when Redis is unreachable.
  */
 export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult> {
@@ -235,7 +255,8 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
     return { allowed: true, count: 0, remaining: DAILY_LIMIT, retryAfterSeconds: 0 };
   }
 
-  const key = `rl:daily:${keySlug(apiKey)}`;
+  const slug = keySlug(apiKey);
+  const key  = `rl:daily:${slug}`;
   try {
     // Single round-trip: returns [count, ttl] from Lua
     const result = await redis.eval(
@@ -243,10 +264,13 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
     ) as [number, number];
 
     const count = result[0];
-    const ttl   = result[1];
+    const ttl   = Math.max(result[1], 0);
 
     if (count > DAILY_LIMIT) {
-      return { allowed: false, count, remaining: 0, retryAfterSeconds: Math.max(ttl, 0) };
+      // Populate the in-memory blocked pool so future requests skip Redis
+      const expiryMs = Date.now() + ttl * 1_000;
+      _localBlockedKeys.set(slug, expiryMs);
+      return { allowed: false, count, remaining: 0, retryAfterSeconds: ttl };
     }
 
     return { allowed: true, count, remaining: DAILY_LIMIT - count, retryAfterSeconds: 0 };
@@ -260,6 +284,11 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
  * Express middleware — enforces the Redis daily quota on partner API keys.
  * Must run after express.json() (logRateLimiter already ensures this).
  * Only applies to `sk_sent_*` keys; other auth paths (admin key, dev mode) are skipped.
+ *
+ * Fast path: if the key slug is in _localBlockedKeys with a future expiry,
+ * the 429 is served entirely from memory — zero Redis I/O, zero async overhead.
+ * Slow path (first block detection): Redis Lua eval stamps the blocked pool,
+ * so all subsequent requests for that key take the fast path.
  */
 export function dailyKeyRateLimiter() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -273,15 +302,31 @@ export function dailyKeyRateLimiter() {
       return;
     }
 
+    // ── Fast path: in-memory blocked pool (no Redis I/O) ──────────────────
+    const slug = keySlug(apiKey);
+    const now  = Date.now();
+    const blockExpiry = _localBlockedKeys.get(slug);
+    if (blockExpiry !== undefined && now < blockExpiry) {
+      const retryAfterSeconds = Math.ceil((blockExpiry - now) / 1_000);
+      res.setHeader("X-RateLimit-Daily-Limit", DAILY_LIMIT_STR);
+      res.setHeader("X-RateLimit-Daily-Remaining", "0");
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      res.status(429).json({
+        error: "daily_quota_exceeded",
+        retryAfterSeconds,
+        tier: "daily",
+      });
+      return;
+    }
+
+    // ── Slow path: Redis Lua eval (one round-trip) ─────────────────────────
     const quota = await checkDailyQuota(apiKey);
 
-    // Set headers before any branch — lean, pre-allocated strings where possible
     res.setHeader("X-RateLimit-Daily-Limit", DAILY_LIMIT_STR);
     res.setHeader("X-RateLimit-Daily-Remaining", String(quota.remaining));
 
     if (!quota.allowed) {
       res.setHeader("Retry-After", String(quota.retryAfterSeconds));
-      // Lean static 429 body — no template literals, no extra allocations
       res.status(429).json({
         error: "daily_quota_exceeded",
         retryAfterSeconds: quota.retryAfterSeconds,
