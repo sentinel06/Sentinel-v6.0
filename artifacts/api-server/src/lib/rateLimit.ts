@@ -151,18 +151,13 @@ const BANNED_KEYS_CACHE = new Set<string>();
   if (t.unref) t.unref();
 })();
 
-// ── SHA-256 hash cache — used only for Redis key naming ───────────────────────
-// Plaintext API keys are never written to Redis; only a 40-char hex slug is.
-// The cache means the crypto work runs at most once per unique key per process.
-const _keySlugCache = new Map<string, string>();
-
-function keySlug(apiKey: string): string {
-  let slug = _keySlugCache.get(apiKey);
-  if (slug === undefined) {
-    slug = createHash("sha256").update(apiKey).digest("hex").slice(0, 40);
-    _keySlugCache.set(apiKey, slug);
-  }
-  return slug;
+// ── Inline SHA-256 token hash ─────────────────────────────────────────────────
+// Compute a 40-char hex digest from a raw API token.  Called exactly once per
+// request, immediately after extraction, so the raw token never reaches any
+// cache, Set, log, or downstream function argument.
+// SHA-256 on a ~50-char string is ~1-2 µs; no per-process caching is needed.
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex").slice(0, 40);
 }
 
 // ── Redis client (lazy singleton) ─────────────────────────────────────────────
@@ -210,23 +205,29 @@ interface DailyQuotaResult {
 }
 
 /**
- * Atomically increment the daily counter for `apiKey` and return quota state.
- * On first detected block, adds the raw `apiKey` to BANNED_KEYS_CACHE so all
+ * Atomically increment the daily counter and return quota state.
+ *
+ * Accepts a pre-hashed `tokenHash` (SHA-256 hex, 40 chars) rather than the raw
+ * API key.  The caller (`dailyKeyRateLimiter`) computes the hash inline
+ * immediately after extracting the header value so the raw token never reaches
+ * this function.
+ *
+ * On first detected block, `tokenHash` is added to BANNED_KEYS_CACHE so all
  * subsequent requests for that key take the zero-allocation fast path.
  */
-export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult> {
+export async function checkDailyQuota(tokenHash: string): Promise<DailyQuotaResult> {
   const redis = await getRedis();
   if (!redis) return { allowed: true, count: 0, remaining: DAILY_LIMIT, retryAfterSeconds: 0 };
 
-  const key = `rl:daily:${keySlug(apiKey)}`;
+  const key = `rl:daily:${tokenHash}`;
   try {
     const result = await redis.eval(LUA_DAILY_QUOTA, 1, key, DAILY_WINDOW_STR) as [number, number];
     const count = result[0];
     const ttl   = Math.max(result[1], 0);
 
     if (count > DAILY_LIMIT) {
-      // Stamp the banned set with the SHA-256 slug (not the raw key).
-      BANNED_KEYS_CACHE.add(keySlug(apiKey));
+      // Stamp the banned set — parameter is already the hash, never the raw key.
+      BANNED_KEYS_CACHE.add(tokenHash);
       return { allowed: false, count, remaining: 0, retryAfterSeconds: ttl };
     }
 
@@ -242,39 +243,50 @@ export async function checkDailyQuota(apiKey: string): Promise<DailyQuotaResult>
  * Reads from X-Sentinel-Key (NOT Authorization — that carries Clerk JWTs).
  * Only applies to sk_sent_* keys; other auth paths skip through immediately.
  *
- * Fast path  — BANNED_KEYS_CACHE.has(token): synchronous Set lookup, then
- *              res.writeHead + res.end with a pre-serialised body. Zero async
- *              operations, zero JSON serialisation, zero Redis I/O.
+ * Memory-safety contract
+ * ──────────────────────
+ * The raw token string is used solely for the prefix check (`startsWith`).
+ * Immediately after that check, `hashToken()` derives a 40-char SHA-256 hex
+ * digest.  Every subsequent operation — Set lookup, Set insert, Redis key,
+ * downstream function call — uses only that digest.  The raw token is never
+ * assigned to a second variable, never passed to any function, and never logged.
  *
- * Slow path  — checkDailyQuota via Lua eval (one Redis round-trip). On block,
- *              checkDailyQuota adds the token to BANNED_KEYS_CACHE so the next
- *              request takes the fast path.
+ * Fast path  — BANNED_KEYS_CACHE.has(tokenHash): synchronous Set probe with
+ *              pre-serialised res.writeHead + res.end.  Zero async ops, zero
+ *              JSON serialisation, zero Redis I/O.
+ *
+ * Slow path  — checkDailyQuota(tokenHash) via Lua eval (one Redis round-trip).
+ *              On block, the hash is added to BANNED_KEYS_CACHE so every
+ *              subsequent request for that key takes the fast path.
  */
 export function dailyKeyRateLimiter() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     // NOTE: partner keys travel in X-Sentinel-Key, not Authorization.
     // Authorization is reserved for Clerk JWTs on dashboard routes.
-    const raw    = req.headers["x-sentinel-key"];
-    const apiKey = typeof raw === "string" ? raw : null;
+    const rawToken = typeof req.headers["x-sentinel-key"] === "string"
+      ? req.headers["x-sentinel-key"]
+      : "";
 
-    if (!apiKey || !apiKey.startsWith("sk_sent_")) {
+    // Prefix check requires the raw string — this is its only use.
+    if (!rawToken.startsWith("sk_sent_")) {
       next();
       return;
     }
 
+    // ── Hash immediately — raw token never used again past this line ───────
+    // createHash is synchronous; no allocation beyond the 40-char hex string.
+    const tokenHash = hashToken(rawToken);
+
     // ── Zero-allocation fast path ──────────────────────────────────────────
-    // Set.has() is O(1). The set stores SHA-256 slugs, never plaintext keys.
-    // keySlug() uses _keySlugCache so the hash is computed at most once per
-    // unique token per process lifetime — the call here is also O(1).
-    const slug = keySlug(apiKey);
-    if (BANNED_KEYS_CACHE.has(slug)) {
+    if (BANNED_KEYS_CACHE.has(tokenHash)) {
       res.writeHead(429, HEADERS_429);
       res.end(BODY_429);
       return;
     }
 
     // ── Slow path: Redis Lua eval ──────────────────────────────────────────
-    const quota = await checkDailyQuota(apiKey);
+    // Pass the hash, not the raw token — checkDailyQuota never sees plaintext.
+    const quota = await checkDailyQuota(tokenHash);
 
     res.setHeader("X-RateLimit-Daily-Limit",     DAILY_LIMIT_STR);
     res.setHeader("X-RateLimit-Daily-Remaining", String(quota.remaining));
