@@ -37,7 +37,15 @@ function buildPoolConfig(connectionString: string): pg.PoolConfig {
   };
 }
 
-export const pool = new Pool(buildPoolConfig(process.env.DATABASE_URL));
+export const pool = new Pool({
+  ...buildPoolConfig(process.env.DATABASE_URL),
+  // Explicit pool limits for horizontal scaling across container instances.
+  // 20 concurrent clients per process keeps total connections predictable when
+  // Cloud Run scales to multiple instances; 30 s idle timeout reclaims sockets
+  // before Neon's 5-minute serverless suspension kicks in.
+  max: 20,
+  idleTimeoutMillis: 30_000,
+});
 
 // Surface unexpected errors on idle clients so a transient network blip
 // doesn't crash the process — pg's default behaviour is to throw uncaught.
