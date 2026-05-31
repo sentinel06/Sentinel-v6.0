@@ -64,3 +64,6 @@ packages = ["psmisc"]
 [userenv.shared]
 ALLOW_CHAIN_RECONSTRUCT = "true"
 REDIS_URL = "redis://default:qP2GJdjX4fSyPp3CMUTbIeiwXugK9oBD@redis-14686.c11.us-east-1-3.ec2.cloud.redislabs.com:14686"
+
+[metadata]
+video_path = "artifacts/sentinel-video/public/sentinel-explainer.mp4"
