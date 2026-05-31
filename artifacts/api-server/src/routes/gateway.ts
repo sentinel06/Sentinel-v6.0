@@ -26,8 +26,10 @@ import {
   getDriftLockInfo,
   lockAgentForDrift,
   recordConsistencyScore,
+  revokeAgent,
 } from "../lib/governance";
-import { broadcastGatewayEvent } from "../lib/ws";
+import { broadcastGatewayEvent, broadcastGovernanceEvent } from "../lib/ws";
+import { registerHoneyTokens, checkHoneyTokens, type HoneyToken } from "../lib/honeyToken";
 import { resolveOwnerFromKey } from "../lib/owner";
 
 const router: IRouter = Router();
@@ -137,6 +139,7 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
     driftThreshold  = 0.15,       // 15% — triggers Violet/Mutant on the Swarm Map
     interdictionMode = "shadow",  // "shadow" | "sovereign"
     apiKey,
+    honeyTokens,                  // optional: [{ id, token, action }] trap strings
   } = req.body ?? {};
 
   if (!agentId || typeof agentId !== "string") {
@@ -230,6 +233,11 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
     },
     ownerUserId,
   } as any);
+
+  // Register per-agent honey-tokens if supplied
+  if (Array.isArray(honeyTokens) && honeyTokens.length > 0) {
+    registerHoneyTokens(agentId, honeyTokens as HoneyToken[]);
+  }
 
   // Broadcast birth event → ZEN_GOLD_SPARK on Swarm Map
   broadcastGatewayEvent("GATEWAY_SPARK", {
@@ -339,6 +347,16 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
   const effectiveDriftThreshold = tok?.driftThreshold ?? 0.15;
   const interdictionMode        = tok?.interdictionMode ?? "shadow";
 
+  // ── Honey-Token V2 interception ─────────────────────────────────────────────
+  // Scan the incoming payload + rationale for any trap token registered at
+  // agent registration. Done BEFORE drift computation so the ledger entry can
+  // be flagged anomalous and the action can be dispatched post-commit.
+  const _honeyContent = JSON.stringify({ eventType, payload, rationale });
+  const honeyMatch = checkHoneyTokens(agentId, _honeyContent);
+  const honeyAnomalyReason = honeyMatch
+    ? `HONEY_TOKEN_BREACH: trap '${honeyMatch.tokenId}' detected in payload (action: ${honeyMatch.action})`
+    : null;
+
   // Compute consistency score + drift.
   // NOTE: computeConsistencyScore() takes (rationale, eventType, payload) and
   // is purely intent-vs-action; it does not yet incorporate prior-payload
@@ -350,12 +368,13 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
   const computedDrift = Math.round((1 - consistency.score) * 100);
   const effectiveDrift = typeof driftScore === "number" ? driftScore : computedDrift;
 
-  const isAnomalous   = consistency.isHighRisk || effectiveDrift > (effectiveDriftThreshold * 100);
-  const anomalyReason = consistency.isHighRisk
-    ? consistency.reasons.join("; ")
-    : effectiveDrift > (effectiveDriftThreshold * 100)
-      ? `Logic drift ${effectiveDrift.toFixed(1)}% exceeds Sovereign threshold (${(effectiveDriftThreshold * 100).toFixed(0)}%)`
-      : null;
+  const isAnomalous   = honeyMatch !== null || consistency.isHighRisk || effectiveDrift > (effectiveDriftThreshold * 100);
+  const anomalyReason = honeyAnomalyReason
+    ?? (consistency.isHighRisk
+      ? consistency.reasons.join("; ")
+      : effectiveDrift > (effectiveDriftThreshold * 100)
+        ? `Logic drift ${effectiveDrift.toFixed(1)}% exceeds Sovereign threshold (${(effectiveDriftThreshold * 100).toFixed(0)}%)`
+        : null);
 
   // Record for session health
   recordConsistencyScore(agentId, consistency.score);
@@ -404,6 +423,51 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
     },
     ownerUserId,
   } as any).returning({ id: auditLogsTable.id });
+
+  // ── Honey-Token action dispatch ───────────────────────────────────────────
+  // The ledger entry is already committed above (audit trail is immutable).
+  // Now take the action specified by the matching honey-token.
+  if (honeyMatch) {
+    if (honeyMatch.action === "terminate") {
+      // Permanently revoke the agent in-process, then broadcast the kill-switch
+      // frame to every container via Redis so all connected clients are notified.
+      revokeAgent(agentId);
+      broadcastGovernanceEvent("kill_switch", {
+        agentId,
+        reason:      "HONEY_TOKEN_BREACH",
+        tokenId:     honeyMatch.tokenId,
+        active:      true,
+        triggeredAt: new Date().toISOString(),
+      });
+      res.status(403).json({
+        ok:           false,
+        error:        "HONEY_TOKEN_BREACH",
+        message:      "Sovereign Interdiction: honey-token breach detected. Agent permanently terminated.",
+        agentId,
+        tokenId:      honeyMatch.tokenId,
+        action:       "terminate",
+        ledgerEntryId: inserted?.id ?? null,
+      });
+      return;
+    }
+
+    if (honeyMatch.action === "block") {
+      // Block execution; the ledger entry remains as evidence.
+      res.status(403).json({
+        ok:           false,
+        error:        "HONEY_TOKEN_BREACH",
+        message:      "Execution blocked: honey-token matched in telemetry payload.",
+        agentId,
+        tokenId:      honeyMatch.tokenId,
+        action:       "block",
+        ledgerEntryId: inserted?.id ?? null,
+      });
+      return;
+    }
+
+    // action === "log" — fall through; the ledger entry is already flagged
+    // isAnomalous=true. Normal 201 response includes the breach notice.
+  }
 
   // ── Swarm Map Animation Broadcasts ────────────────────────────────────────
   const baseEvent = { agentId, traceId, swarmId: swarmId ?? null, driftScore: effectiveDrift, consistencyScore: consistency.score };
