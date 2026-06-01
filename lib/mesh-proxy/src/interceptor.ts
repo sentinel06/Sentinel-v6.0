@@ -14,8 +14,9 @@ const SENTINEL_EVENTS_CHANNEL = "sentinel:events";
  * Maximum allowed agent-to-agent recursion depth before the circuit breaker
  * is tripped and the chain is forcibly unwound (Trust Decay prevention).
  * Configurable via MESH_MAX_DEPTH env var; hard default is 5.
+ * Exported for use in unit tests.
  */
-const MAX_RECURSION_DEPTH = parseInt(
+export const MAX_RECURSION_DEPTH = parseInt(
   process.env.MESH_MAX_DEPTH ?? "5",
   10,
 );
@@ -68,13 +69,14 @@ function classifyPath(urlPath: string | undefined): string {
 
 /**
  * Extract the root objective string from a parsed request body.
+ * Exported for unit testing.
  * Priority order:
  *   1. `rationale`         — Sentinel gateway / SDK payloads
  *   2. `system`            — Anthropic messages API
  *   3. `messages[0].content` (role=system) — OpenAI chat completions
  *   4. Full JSON stringification as fallback (still deterministic)
  */
-function extractRootObjective(parsedBody: unknown): string {
+export function extractRootObjective(parsedBody: unknown): string {
   if (typeof parsedBody === "object" && parsedBody !== null) {
     const body = parsedBody as Record<string, unknown>;
 
@@ -106,12 +108,13 @@ function extractRootObjective(parsedBody: unknown): string {
 
 /**
  * Resolve the recursive trace context for this request.
+ * Exported for unit testing.
  *
  * If `x-sentinel-trace` is already present, parse it and increment depth.
  * If `x-sentinel-root-intent` is present (but no trace yet), use it as seed.
  * Otherwise extract the root objective from the body and seed a new trace.
  */
-function resolveTraceContext(
+export function resolveTraceContext(
   headers: http.IncomingHttpHeaders,
   parsedBody: unknown,
 ): TraceContext {
