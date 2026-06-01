@@ -3,6 +3,7 @@ import { IncomingMessage } from "http";
 import { Server } from "http";
 import { logger } from "./logger";
 import { onGovernanceEvent } from "./governance";
+import { processIncomingFrame } from "./nodeIsolation";
 import Redis from "ioredis";
 
 let wss: WebSocketServer | null = null;
@@ -47,8 +48,20 @@ function initRedis(): void {
 
     redisSubscriber.on("message", (_channel: string, message: string) => {
       try {
-        const { type, data } = JSON.parse(message) as { type: string; data: object };
-        localBroadcast(type, data);
+        const parsed = JSON.parse(message) as { type?: string; data?: object };
+
+        // Fan-out to WebSocket clients (standard broadcast format only).
+        if (parsed.type && parsed.data) {
+          localBroadcast(parsed.type, parsed.data);
+        }
+
+        // Node isolation: write infraction frames to the blacklist.
+        // Uses redisPublisher (not subscriber — subscriber is in subscribe-only mode).
+        if (redisPublisher && parsed.type) {
+          void processIncomingFrame(redisPublisher as import("ioredis").Redis, message).catch(
+            (err: unknown) => logger.error({ err }, "node-isolation: processIncomingFrame failed"),
+          );
+        }
       } catch {
         // Ignore malformed frames
       }

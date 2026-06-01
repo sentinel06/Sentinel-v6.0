@@ -1,0 +1,3 @@
+- [Mesh-proxy blacklist architecture](mesh-proxy-blacklist.md) — node isolation split across two packages; fail-open on Redis error; use `redisPublisher` (not subscriber) for HSET calls in ws.ts.
+- [Per-tenant isolation pattern](per-tenant-isolation.md) — owner.ts + viewerScopeCondition is the canonical gate; all read endpoints use requireAuth + viewerScopeCondition; demo rows stay NULL-owner, invisible to signed-in users.
+- [Interceptor async refactor](interceptor-async.md) — interceptor.ts uses async handler via void wrapper; collectBody promisifies body collection; blacklist check is step 1.5 between circuit-breaker gate and trace resolution.

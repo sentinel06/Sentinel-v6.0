@@ -6,6 +6,7 @@
  *   2. resolveTraceContext   — seeding, parsing, incrementing, edge cases
  *   3. Trust Decay breaker   — HTTP integration: 508 response, breaker trip,
  *                              ledger mirror fired before block
+ *   4. Node Isolation        — blacklisted node ID → 403 hard block (3 tests)
  */
 
 import crypto from "crypto";
@@ -249,7 +250,8 @@ describe("Trust Decay circuit breaker — HTTP integration", () => {
     breaker.close();
 
     mockPublish = vi.fn().mockResolvedValue(1);
-    const mockRedis = { publish: mockPublish } as unknown as Redis;
+    // hget returns null by default — no node is blacklisted in trust-decay tests
+    const mockRedis = { publish: mockPublish, hget: vi.fn().mockResolvedValue(null) } as unknown as Redis;
 
     // Upstream URL doesn't matter for depth-exceeded tests — the server
     // returns 508 before attempting to forward.
@@ -369,5 +371,116 @@ describe("Trust Decay circuit breaker — HTTP integration", () => {
     );
 
     expect(typeof body.circuitState).toBe("string");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. Node Isolation — blacklist gate (step 1.5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Node Isolation blacklist gate — HTTP integration", () => {
+  let server: http.Server;
+  let port: number;
+  let breaker: CircuitBreaker;
+  let mockHget: ReturnType<typeof vi.fn>;
+  let mockPublish: ReturnType<typeof vi.fn>;
+
+  const BLACKLISTED_NODE = "agent-node-compromised-001";
+  const CLEAN_NODE       = "agent-node-clean-002";
+  const BLACKLIST_ENTRY  = JSON.stringify({
+    sourceNodeId: BLACKLISTED_NODE,
+    violation:    "TRUST_DECAY",
+    rootHash:     "a".repeat(64),
+    depth:        7,
+    ts:           "2026-01-01T00:00:00.000Z",
+    isolatedAt:   "2026-01-01T00:01:00.000Z",
+  });
+
+  beforeAll(async () => {
+    breaker = new CircuitBreaker();
+    breaker.close();
+
+    mockPublish = vi.fn().mockResolvedValue(1);
+    // hget: returns the blacklist entry when the blacklisted node is queried,
+    // null for all other node IDs.
+    mockHget = vi.fn().mockImplementation((_key: string, nodeId: string) =>
+      Promise.resolve(nodeId === BLACKLISTED_NODE ? BLACKLIST_ENTRY : null),
+    );
+
+    const mockRedis = {
+      publish: mockPublish,
+      hget:    mockHget,
+    } as unknown as Redis;
+
+    server = createInterceptorServer(
+      "http://127.0.0.1:19999",
+      mockRedis,
+      breaker,
+      "http://127.0.0.1:8080",
+    );
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    port = (server.address() as net.AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  beforeEach(() => {
+    mockPublish.mockClear();
+    mockHget.mockClear();
+    mockHget.mockImplementation((_key: string, nodeId: string) =>
+      Promise.resolve(nodeId === BLACKLISTED_NODE ? BLACKLIST_ENTRY : null),
+    );
+    breaker.close();
+  });
+
+  test("blacklisted node ID in header → 403 AGENT_NODE_ISOLATION_ENFORCED", async () => {
+    const { status, body } = await jsonPost(
+      port,
+      { "x-sentinel-node-id": BLACKLISTED_NODE },
+      { rationale: "Attempting call from isolated node" },
+    );
+
+    expect(status).toBe(403);
+    expect(body.error).toBe("AGENT_NODE_ISOLATION_ENFORCED");
+    expect(body.nodeId).toBe(BLACKLISTED_NODE);
+    expect(body.isolationMetadata).toBeDefined();
+    expect((body.isolationMetadata as Record<string, unknown>).violation).toBe("TRUST_DECAY");
+  });
+
+  test("non-blacklisted node ID in header → not 403 (proceeds to upstream, gets 502)", async () => {
+    const { status } = await jsonPost(
+      port,
+      { "x-sentinel-node-id": CLEAN_NODE },
+      { rationale: "Normal call from clean node" },
+    );
+
+    // The request passes the blacklist gate and attempts to forward;
+    // no upstream is listening on port 19999 so the response is 502.
+    expect(status).not.toBe(403);
+    expect(status).toBe(502);
+  });
+
+  test("missing x-sentinel-node-id header → no blacklist check, proceeds normally (502)", async () => {
+    const { status } = await jsonPost(
+      port,
+      {}, // no node-id header
+      { rationale: "Anonymous request, no node ID" },
+    );
+
+    // No node ID means no blacklist check at all — request flows through to
+    // the (absent) upstream and fails with 502 UPSTREAM_ERROR.
+    expect(status).not.toBe(403);
+    expect(status).toBe(502);
+
+    // Confirm hget was NOT called (no node to look up)
+    expect(mockHget).not.toHaveBeenCalled();
   });
 });
