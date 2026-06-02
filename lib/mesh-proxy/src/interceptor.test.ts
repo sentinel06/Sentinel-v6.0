@@ -484,3 +484,94 @@ describe("Node Isolation blacklist gate — HTTP integration", () => {
     expect(mockHget).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Token-Bucket Cost Firewall — Step 1.2 HTTP integration
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Token-Bucket Cost Firewall — HTTP integration (Step 1.2)", () => {
+  let server: http.Server;
+  let port:   number;
+  let breaker: CircuitBreaker;
+
+  // Each createInterceptorServer call gets a fresh TokenBucketLimiter instance,
+  // so this suite starts with a clean bucket state (CAPACITY = 100 tokens).
+  beforeAll(async () => {
+    breaker = new CircuitBreaker();
+    breaker.close();
+
+    const mockRedis = {
+      publish: vi.fn().mockResolvedValue(1),
+      hget:    vi.fn().mockResolvedValue(null), // no node blacklisted
+    } as unknown as Redis;
+
+    server = createInterceptorServer(
+      "http://127.0.0.1:19999",
+      mockRedis,
+      breaker,
+      "http://127.0.0.1:8080",
+    );
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    port = (server.address() as net.AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  beforeEach(() => {
+    breaker.close();
+  });
+
+  test("sequential burst exhausts bucket → returns 429 once capacity is drained", async () => {
+    // CAPACITY=100 tokens, 10 tokens/request → bucket drains after 10 requests.
+    // Sending 12 requests; the first must always pass (fresh bucket), and at least
+    // one of the later ones must be rejected with 429 RATE_LIMIT_EXCEEDED.
+    const nodeId   = "rate-limit-sequential-node-001";
+    const statuses: number[] = [];
+
+    for (let i = 0; i < 12; i++) {
+      const { status, body } = await jsonPost(
+        port,
+        { "x-sentinel-node-id": nodeId },
+        { rationale: "burst probe" },
+      );
+      statuses.push(status);
+
+      // Short-circuit early if we already have a 429 — no need to keep going.
+      if (status === 429) {
+        expect(body.error).toBe("RATE_LIMIT_EXCEEDED");
+        break;
+      }
+    }
+
+    // The fresh bucket allows the first request through.
+    expect(statuses[0]).not.toBe(429);
+    // At least one request in the sequence must have been rate-limited.
+    expect(statuses.some(s => s === 429)).toBe(true);
+  });
+
+  test("concurrent burst from single node returns 429 once bucket is fully exhausted", async () => {
+    // Fire 20 requests simultaneously from the same node.
+    // consume() runs synchronously (before any await), so all 20 calls land
+    // on the event loop in sequence.  With CAPACITY=100 and 10 tokens/request,
+    // exactly 10 will succeed; the remaining 10 must receive 429.
+    const nodeId = "rate-limit-concurrent-node-002";
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        jsonPost(port, { "x-sentinel-node-id": nodeId }, {}).then(r => r.status),
+      ),
+    );
+
+    const count429 = results.filter(s => s === 429).length;
+    // At least 10 of 20 must be rate-limited (20 × 10 tokens vs capacity 100).
+    expect(count429).toBeGreaterThanOrEqual(10);
+  });
+});

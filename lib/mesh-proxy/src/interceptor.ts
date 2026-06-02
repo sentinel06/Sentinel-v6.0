@@ -1,8 +1,9 @@
 /**
  * Sentinel Mesh Sidecar — HTTP Interceptor
  *
- * Four-step pipeline per request:
+ * Five-step pipeline per request:
  *   1.   Fail-closed gate       — block if circuit breaker is OPEN / HALF_OPEN
+ *   1.2  Cost firewall          — token-bucket rate limiter per node ID (429 on exhaustion)
  *   1.5  Node isolation gate    — block if the caller's node ID is blacklisted
  *   2.   Intent trace           — seed or continue the recursive trace context
  *   3.   Trust Decay gate       — block + trip breaker if depth > MAX_RECURSION_DEPTH
@@ -16,6 +17,7 @@ import { URL } from "url";
 import type Redis from "ioredis";
 import type { CircuitBreaker } from "./circuitBreaker.js";
 import { checkNodeBlacklist, publishInfractionFrame } from "./blacklist.js";
+import { TokenBucketLimiter } from "./rateLimiter.js";
 import { logger } from "./logger.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -203,7 +205,14 @@ async function handleRequest(
   redis: Redis,
   breaker: CircuitBreaker,
   sentinelCoreUrl: string,
+  limiter: TokenBucketLimiter,
 ): Promise<void> {
+
+  // Resolve the calling node ID once — used by Step 1.2 (cost firewall) and
+  // Step 1.5 (isolation gate).  Prefer the inbound header; fall back to the
+  // sidecar's own MESH_NODE_ID for self-isolation support.
+  const rawNodeId = req.headers[NODE_ID_HEADER];
+  const nodeId    = (Array.isArray(rawNodeId) ? rawNodeId[0] : rawNodeId) ?? MESH_NODE_ID;
 
   // ── Step 1: Fail-closed gate ─────────────────────────────────────────────────
   if (breaker.isBlocking()) {
@@ -217,12 +226,19 @@ async function handleRequest(
     return;
   }
 
-  // ── Step 1.5: Node isolation blacklist check ─────────────────────────────────
-  // Identify the calling node: prefer the inbound header, fall back to the
-  // sidecar's own configured MESH_NODE_ID (self-isolation support).
-  const rawNodeId = req.headers[NODE_ID_HEADER];
-  const nodeId    = (Array.isArray(rawNodeId) ? rawNodeId[0] : rawNodeId) ?? MESH_NODE_ID;
+  // ── Step 1.2: Cost firewall — token-bucket rate limiter ──────────────────────
+  if (nodeId && !limiter.consume(nodeId, 10)) {
+    logger.warn(
+      { nodeId },
+      "mesh-proxy: token bucket exhausted — RATE_LIMIT_EXCEEDED",
+    );
+    writeError(res, 429, "RATE_LIMIT_EXCEEDED",
+      "Node API spend velocity breached enterprise cost boundaries.",
+      { nodeId });
+    return;
+  }
 
+  // ── Step 1.5: Node isolation blacklist check ─────────────────────────────────
   if (nodeId) {
     try {
       const entry = await checkNodeBlacklist(redis, nodeId);
@@ -364,8 +380,10 @@ export function createInterceptorServer(
     ? parseInt(upstream.port, 10)
     : isHttps ? 443 : 80;
 
+  const limiter = new TokenBucketLimiter();
+
   const server = http.createServer((req, res) => {
-    void handleRequest(req, res, upstream, upstreamPort, forwardAgent, redis, breaker, sentinelCoreUrl);
+    void handleRequest(req, res, upstream, upstreamPort, forwardAgent, redis, breaker, sentinelCoreUrl, limiter);
   });
 
   server.on("error", (err: Error) => {
