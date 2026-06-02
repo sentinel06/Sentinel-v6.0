@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/sentinel-chaos",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "chaos": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "undici": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}
