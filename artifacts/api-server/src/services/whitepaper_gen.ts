@@ -426,6 +426,122 @@ Each snapshot is **self-signed** with the QL-2.0 Master Key (ML-DSA-87, SYSTEM s
 - Broadcasts a \`pulse_fault\` WebSocket event to the War Room dashboard
 - Triggers the "SYSTEM UNDER INVESTIGATION" lockout overlay on \`/status\`
 
+### 2.6 Sentinel Mesh Sidecar (\`@workspace/mesh-proxy\`)
+
+The Sentinel Mesh Sidecar is a lightweight Node.js HTTP proxy that runs as a **sidecar process** collocated with each AI agent. Every outbound LLM call or tool invocation is routed through the sidecar before reaching the target endpoint. This places the governance layer in the **data path** — not as an optional observer but as a mandatory enforcement point that intercepts and classifies all LLM traffic (OpenAI \`/v1/chat/completions\`, Anthropic \`/v1/messages\`, Gemini \`/v1beta/models\`, Ollama \`/api/v1/chat\`, and the Sentinel Gateway \`/api/v1/gateway\`).
+
+#### Stateless Intent Tracking Engine
+
+Each request carries an implicit or explicit **root objective** — the high-level goal that anchored the current agent chain. The sidecar extracts this objective deterministically from the inbound payload using the following priority cascade, with no centralised state lookups required:
+
+\`\`\`
+Priority  Source                              Condition
+─────────────────────────────────────────────────────────────────────────────
+1         body.rationale                      string, non-empty
+2         body.system                         string, non-empty (Anthropic)
+3         messages[role="system"].content     first system message in array
+4         messages[0].content                 first message of any role
+5         JSON.stringify(body)                full serialised body (fallback)
+\`\`\`
+
+The extracted string is passed through \`SHA-256\` to produce a stable 64-hex **root hash** — a compact, deterministic fingerprint of the agent's original intent. This hash is anchored at the first hop and propagated unchanged through every downstream agent call in the chain.
+
+#### Zero-I/O Header Propagation
+
+Multi-agent call chains are tracked across process boundaries using a single structured HTTP header — no database lookups, distributed locks, or external registries are required:
+
+\`\`\`
+X-Sentinel-Trace: root_hash=<64-hex>;depth=N
+\`\`\`
+
+- **First hop** (\`depth=0\`): the sidecar seeds the header with the computed SHA-256 root hash and depth \`0\`.
+- **Each subsequent hop**: the sidecar parses the incoming \`X-Sentinel-Trace\` header, increments \`depth\` by 1, and injects the updated value before forwarding. The root hash is **never modified** — it permanently reflects the original intent digest from hop 0.
+- A companion header \`X-Sentinel-Root-Intent\` can be sent by the caller to supply an explicit intent string, bypassing the priority-cascade extraction.
+- If a malformed \`X-Sentinel-Trace\` header is received (non-matching regex), the sidecar logs a warning and re-seeds from the body — preventing poisoned headers from corrupting downstream depth counts.
+
+The complete recursive call graph is reconstructable from the headers alone, making the tracking mechanism both stateless and tamper-evident.
+
+### 2.7 Zero-Trust Threat Mitigation Layer
+
+The interceptor pipeline enforces four ordered gates on every inbound request. The gates are evaluated in sequence; the first gate to fire returns immediately without executing subsequent steps.
+
+\`\`\`
+Step 1    Fail-closed circuit gate   — block if breaker is OPEN / HALF_OPEN (sync)
+Step 1.5  Node isolation gate        — HGET sentinel:blacklist:nodes (async Redis)
+Step 2    Collect request body       — promisified body stream
+Step 3    Trust Decay gate           — check depth > MESH_MAX_DEPTH
+Step 4    Mirror + Forward           — fire-and-forget ledger publish; proxy to upstream
+\`\`\`
+
+#### Trust Decay Circuit Breaker (Step 3 → 508)
+
+Unbounded agent-to-agent recursion is a primary attack vector in multi-agent systems. The Trust Decay Circuit Breaker enforces a hard recursion ceiling:
+
+- **Threshold**: \`MESH_MAX_DEPTH\` environment variable, hard default \`5\`. Fired when \`depth > MESH_MAX_DEPTH\`.
+- **Immediate response**: \`508 LOOP_DETECTED_TRUST_DECAY\` is returned to the caller — the chain is forcibly unwound.
+- **Circuit breaker trip**: \`breaker.trip()\` transitions the sidecar to \`OPEN\` state, blocking all subsequent traffic until the governance connection is re-established.
+- **Dual escalation**: the violation event is fire-and-forget mirrored to \`sentinel:events\` as a ledger governance record, and a \`NODE_INFRACTION\` frame is simultaneously published to trigger automated node isolation (§ 2.7.2).
+
+\`\`\`json
+{
+  "error":       "LOOP_DETECTED_TRUST_DECAY",
+  "message":     "Recursive intent depth 6 exceeds the Sovereign maximum of 5. ...",
+  "depth":        6,
+  "maxDepth":     5,
+  "rootHash":    "<64-hex>",
+  "circuitState": "OPEN"
+}
+\`\`\`
+
+#### Automated Zero-Trust Node Isolation
+
+When a node violates the trust boundary, isolation is enforced automatically through the existing Redis pub/sub fabric — no additional infrastructure is required:
+
+\`\`\`
+[Mesh Sidecar]
+  publishInfractionFrame → sentinel:events
+  {
+    type: "NODE_INFRACTION",
+    data: { source_node_id, violation, rootHash, depth, ts }
+  }
+
+[API Server — sentinel:events subscriber]
+  processIncomingFrame()
+    → addToBlacklist(redis, nodeId, metadata)
+        → HSET sentinel:blacklist:nodes <nodeId> <JSON metadata>
+        → EXPIRE sentinel:blacklist:nodes 3600
+\`\`\`
+
+The Redis hash \`sentinel:blacklist:nodes\` is the shared isolation manifest. Every \`HSET\` is immediately followed by \`EXPIRE 3600\` so the TTL is **refreshed on every new infraction** — the most actively violating nodes remain blocked the longest. The sidecar never writes to this hash directly; all writes are delegated to the API server subscriber to maintain a single authoritative writer per hash key.
+
+Kill-switch events (\`{ type: "kill_switch", data: { agentId, ... } }\`) published by the gateway route traverse the same \`processIncomingFrame\` pipeline with \`violation: "KILL_SWITCH"\`, so a manual governance action simultaneously blacklists the node at the transport layer with no additional code paths.
+
+#### Step 1.5 Interceptor Gate — Pre-Payload Isolation Enforcement
+
+The blacklist check executes at **Step 1.5** — after the fail-closed circuit gate but **before** the request body is collected from the socket. This ordering is deliberate: a blacklisted node receives \`403 AGENT_NODE_ISOLATION_ENFORCED\` before any payload bytes are read from the connection, preventing a compromised node from using large body uploads as a denial-of-service vector even while isolated.
+
+\`\`\`json
+{
+  "error":   "AGENT_NODE_ISOLATION_ENFORCED",
+  "message": "Node '<nodeId>' is currently under Sovereign isolation. Violation: TRUST_DECAY. All traffic from this node is suspended pending governance review.",
+  "nodeId":  "<nodeId>",
+  "isolationMetadata": {
+    "sourceNodeId": "<nodeId>",
+    "violation":    "TRUST_DECAY",
+    "rootHash":     "<hex>",
+    "depth":        6,
+    "ts":           "<ISO>",
+    "isolatedAt":   "<ISO>"
+  }
+}
+\`\`\`
+
+**Node ID resolution priority**: \`X-Sentinel-Node-Id\` request header → \`MESH_NODE_ID\` environment variable → no blacklist check. Anonymous requests without a node identity are not blocked at the transport layer; they remain subject to the upstream authentication layer.
+
+**Fail-open on Redis error**: if the Redis connection is unavailable at Step 1.5, the request is not blocked (error is logged, execution continues to Step 2). The fail-closed circuit breaker at Step 1 already governs complete Redis-loss scenarios — the blacklist check is not a secondary circuit breaker and must not cascade Redis unavailability into a self-inflicted outage.
+
+**Unparseable blacklist entries** (malformed JSON stored in the hash) are treated as **blocking** — malformed data in a security-critical structure is considered suspicious enough to err on the side of isolation.
+
 ---
 
 ## 3. Cryptographic Core — ML-DSA-87 (FIPS-204 SL5)
@@ -565,8 +681,28 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
                         │  Research Agent · Execution Agent    │
                         │  Analysis Agent · Oversight Agent    │
                         └──────────────┬───────────────────────┘
-                                       │ Every action: AuditLogEntry
+                                       │ Every outbound LLM / tool call
                                        ▼
+               ┌────────────────────────────────────────────────┐
+               │  @workspace/mesh-proxy  (Sentinel Mesh Sidecar) │
+               │                                                 │
+               │  Step 1    Fail-closed circuit gate             │
+               │  Step 1.5  Node isolation gate                  │
+               │            HGET sentinel:blacklist:nodes        │
+               │            → 403 AGENT_NODE_ISOLATION_ENFORCED  │
+               │  Step 2    Collect & parse request body         │
+               │  Step 3    Trust Decay circuit gate             │
+               │            depth > MESH_MAX_DEPTH               │
+               │            → 508 LOOP_DETECTED_TRUST_DECAY      │
+               │  Step 4a   Mirror: publish → sentinel:events    │
+               │  Step 4b   Forward with X-Sentinel-Trace header │
+               │            root_hash=<sha256>;depth=N           │
+               └────────────────┬───────────────────────────────┘
+                                │
+          ┌─────────────────────┼────────────────────────────────┐
+          │ Redis pub/sub       │ HTTP proxy                      │
+          │ sentinel:events     │ (with injected trace header)    │
+          ▼                     ▼                                 │
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  Agent-Sentinel API Server (Express · TypeScript · FIPS-204)                 │
 │                                                                              │
@@ -582,10 +718,12 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
 │  │  self-signed     │  │  100% QSig       │  │  Cross-agent causal graph  │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────────────────┘ │
 │                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │  PostgreSQL Audit Database (Drizzle ORM)                              │   │
-│  │  audit_logs · agent_sessions · system_pulses · partner_keys · …     │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────┐  ┌─────────────────────────────────────────┐  │
+│  │  Node Isolation Writer   │  │  PostgreSQL Audit Database (Drizzle ORM)│  │
+│  │  processIncomingFrame()  │  │  audit_logs · agent_sessions ·          │  │
+│  │  HSET blacklist:nodes    │  │  system_pulses · partner_keys · …      │  │
+│  │  EXPIRE 3600             │  └─────────────────────────────────────────┘  │
+│  └──────────────────────────┘                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
                                │
                   ┌────────────┴─────────────┐
