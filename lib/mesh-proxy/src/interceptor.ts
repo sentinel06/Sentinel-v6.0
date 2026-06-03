@@ -258,9 +258,10 @@ async function handleRequest(
         return;
       }
     } catch (err) {
-      // Fail-open on Redis error — the circuit breaker already handles Redis loss.
-      // Blacklist check failure should never cascade into a service outage.
-      logger.warn({ err, nodeId }, "mesh-proxy: blacklist check error — proceeding fail-open");
+      logger.error({ err, nodeId }, "mesh-proxy: blacklist Redis error — failing closed (SECURITY_DATA_PLANE_OFFLINE)");
+      writeError(res, 503, "SECURITY_DATA_PLANE_OFFLINE",
+        "Sentinel enforcement mechanism is unreachable. Integrity cannot be verified. Failing closed.");
+      return;
     }
   }
 

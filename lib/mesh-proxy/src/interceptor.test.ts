@@ -7,6 +7,8 @@
  *   3. Trust Decay breaker   — HTTP integration: 508 response, breaker trip,
  *                              ledger mirror fired before block
  *   4. Node Isolation        — blacklisted node ID → 403 hard block (3 tests)
+ *   5. Token-Bucket Cost Firewall — 429 on sequential and concurrent burst
+ *   6. Fail-Closed Compliance — Redis error during blacklist check → 503
  */
 
 import crypto from "crypto";
@@ -573,5 +575,88 @@ describe("Token-Bucket Cost Firewall — HTTP integration (Step 1.2)", () => {
     const count429 = results.filter(s => s === 429).length;
     // At least 10 of 20 must be rate-limited (20 × 10 tokens vs capacity 100).
     expect(count429).toBeGreaterThanOrEqual(10);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Fail-Closed Compliance — Redis error during blacklist check → 503
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Fail-Closed Compliance — Redis error during Step 1.5 blacklist check", () => {
+  let server: http.Server;
+  let port:   number;
+  let breaker: CircuitBreaker;
+
+  beforeAll(async () => {
+    breaker = new CircuitBreaker();
+    breaker.close();
+
+    // hget throws a connection error to simulate Redis being unreachable.
+    const mockRedis = {
+      publish: vi.fn().mockResolvedValue(1),
+      hget:    vi.fn().mockRejectedValue(new Error("Redis ECONNREFUSED 127.0.0.1:6379")),
+    } as unknown as Redis;
+
+    server = createInterceptorServer(
+      "http://127.0.0.1:19999",
+      mockRedis,
+      breaker,
+      "http://127.0.0.1:8080",
+    );
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    port = (server.address() as net.AddressInfo).port;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  beforeEach(() => {
+    breaker.close();
+  });
+
+  test("Redis connection error during blacklist check → 503 SECURITY_DATA_PLANE_OFFLINE", async () => {
+    const { status, body } = await jsonPost(
+      port,
+      { "x-sentinel-node-id": "agent-node-redis-down-001" },
+      { rationale: "Request when Redis is unreachable" },
+    );
+
+    expect(status).toBe(503);
+    expect(body.error).toBe("SECURITY_DATA_PLANE_OFFLINE");
+    expect(typeof body.message).toBe("string");
+    expect(body.message).toContain("Failing closed");
+  });
+
+  test("Redis timeout error during blacklist check → 503 (fail-closed, not pass-through)", async () => {
+    const { status, body } = await jsonPost(
+      port,
+      { "x-sentinel-node-id": "agent-node-redis-timeout-002" },
+      { rationale: "Request when Redis times out" },
+    );
+
+    expect(status).toBe(503);
+    expect(body.error).toBe("SECURITY_DATA_PLANE_OFFLINE");
+  });
+
+  test("request with no node-id header skips blacklist check → not 503 (no Redis call made)", async () => {
+    // When there is no x-sentinel-node-id header, the blacklist block is
+    // skipped entirely and the request flows through to the (absent) upstream.
+    const { status } = await jsonPost(
+      port,
+      {}, // no node-id header — blacklist gate never runs
+      { rationale: "Anonymous request, no node ID supplied" },
+    );
+
+    // The request bypasses the Redis check and reaches upstream; since
+    // no upstream is running on port 19999 it fails with 502, NOT 503.
+    expect(status).not.toBe(503);
+    expect(status).toBe(502);
   });
 });
