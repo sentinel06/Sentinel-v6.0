@@ -1,0 +1,78 @@
+# Agent-Sentinel
+
+> Immutable audit ledger, active governance, and EU AI Act compliance for production AI agents.
+
+Agent-Sentinel is a full-stack governance platform that wraps AI agents with cryptographic accountability. Every agent action is SHA-256 hash-chained into an append-only ledger sealed with ML-DSA-87 post-quantum signatures, giving operators a tamper-evident record compliant with EU AI Act Article 12 (traceability) and Article 14 (human oversight).
+
+## Core capabilities
+
+- **Immutable Audit Ledger** — append-only PostgreSQL table with trigger-enforced immutability; each row incorporates a SHA-256 hash of its data plus the previous row's hash forming a tamper-evident chain.
+- **Active Governance (Circuit Breaker)** — pre-flight checks block anomalous or high-risk agent actions before execution; operators approve or reject from the War Room dashboard.
+- **OCSF v1.1.0 Telemetry** — all events are schema-validated against the Open Cybersecurity Schema Framework before ingestion.
+- **Signal-to-Verdict (S2V) Latency** — median ingestion-to-seal cycle of 11.4 ms at the 99.9th percentile.
+- **Intent-Action Consistency Scoring** — ML-based hallucination detection that flags when an agent's stated rationale diverges from its actual action.
+- **Per-Tenant Data Isolation** — each Clerk user sees only audit events recorded against their own API key; demo data is physically invisible to signed-in accounts.
+- **Compliance Reporting** — one-click PDF export of a signed evidence package for regulatory submission (EU AI Act, SOC 2).
+- **Swarm Governance** — register, monitor, and revoke multi-agent swarms with topology visualization.
+
+## Integration (Python SDK)
+
+```python
+pip install sentinel-bridge
+
+from sentinel_bridge import Sentinel
+
+sentinel = Sentinel(
+    api_key="sk_sent_core_<your-key>",
+    base_url="https://agent-sentinel.net",
+)
+
+agent = sentinel.register(
+    name="my-agent",
+    capabilities=["read_email", "summarize"],
+)
+
+agent.log_action(
+    event_type="TASK_COMPLETE",
+    payload={"task": "summarized inbox"},
+    rationale="User requested daily summary",
+)
+```
+
+## Integration (curl / HTTP)
+
+```bash
+curl -X POST https://agent-sentinel.net/api/v1/log \
+  -H "Content-Type: application/json" \
+  -H "X-Sentinel-Key: sk_sent_core_<your-key>" \
+  -d '{
+    "agentId": "my-agent",
+    "traceId": "trace-001",
+    "eventType": "TASK_COMPLETE",
+    "payload": { "task": "hello world" },
+    "rationale": "Smoke test"
+  }'
+```
+
+## API key provisioning
+
+New users sign up at https://agent-sentinel.net/sign-up and are redirected to /onboarding where a personal `sk_sent_core_*` key is auto-provisioned. The key is shown once in plaintext; subsequent visits show a masked preview. Keys can be rotated at https://agent-sentinel.net/settings.
+
+## Authentication
+
+The dashboard requires a Clerk account. All agent telemetry endpoints accept the `X-Sentinel-Key` header and do not require a Clerk session. The SDK handshake endpoint (`POST /api/v1/auth/verify`) validates a key before starting a run.
+
+## Compliance
+
+- EU AI Act Article 12 — traceability via immutable hash-chained ledger
+- EU AI Act Article 14 — human-in-the-loop War Room approval flow
+- FIPS-204 — ML-DSA-87 post-quantum signature scheme
+- OCSF v1.1.0 — Open Cybersecurity Schema Framework telemetry validation
+- SLSA Level 4 integrity grade
+
+## Contact & links
+
+- Live platform: https://agent-sentinel.net
+- Sign up: https://agent-sentinel.net/sign-up
+- Onboarding: https://agent-sentinel.net/onboarding
+- Settings / key management: https://agent-sentinel.net/settings

@@ -145,7 +145,17 @@ const clerkAppearance = {
   },
 };
 
+const DEFAULT_TITLE = "Agent-Sentinel — Immutable Audit Ledger for AI Agents";
+
+function usePageTitle(title: string) {
+  useEffect(() => {
+    document.title = title;
+    return () => { document.title = DEFAULT_TITLE; };
+  }, [title]);
+}
+
 function SignInPage() {
+  usePageTitle("Sign In | Agent-Sentinel");
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
       <SignIn
@@ -159,6 +169,7 @@ function SignInPage() {
 }
 
 function SignUpPage() {
+  usePageTitle("Sign Up | Agent-Sentinel");
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
       <SignUp

@@ -3,13 +3,66 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+
     <title>Agent-Sentinel — Immutable Audit Ledger for AI Agents</title>
     <meta name="description" content="Agent-Sentinel provides an immutable, hash-chained audit ledger for AI agents — real-time monitoring, EU AI Act compliance, anomaly detection, and active governance in one platform." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Agent-Sentinel — Immutable Audit Ledger for AI Agents" />
-    <meta property="og:description" content="Real-time monitoring, EU AI Act compliance, anomaly detection, and active governance for production AI agents." />
+    <link rel="canonical" href="https://agent-sentinel.net" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/opengraph.jpg" />
+    <meta property="og:site_name" content="Agent-Sentinel" />
+    <meta property="og:url" content="https://agent-sentinel.net" />
+    <meta property="og:title" content="Agent-Sentinel — Immutable Audit Ledger for AI Agents" />
+    <meta property="og:description" content="Real-time monitoring, EU AI Act compliance (Art. 12/14), OCSF telemetry, and active governance for production AI agents. SLSA Level 4 integrity." />
+    <meta property="og:image" content="https://agent-sentinel.net/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Agent-Sentinel dashboard — immutable audit ledger for AI agents" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@agentsentinel" />
+    <meta name="twitter:title" content="Agent-Sentinel — Immutable Audit Ledger for AI Agents" />
+    <meta name="twitter:description" content="Seal every AI agent action in a tamper-evident, hash-chained ledger. EU AI Act Art. 12/14 compliance, OCSF v1.1.0 telemetry, 11.4 ms S2V latency." />
+    <meta name="twitter:image" content="https://agent-sentinel.net/og-image.png" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Agent-Sentinel",
+      "description": "Immutable audit ledger, active governance, and EU AI Act compliance for production AI agents. Every action is SHA-256 hash-chained and sealed with ML-DSA-87 post-quantum signatures.",
+      "applicationCategory": "SecurityApplication",
+      "applicationSubCategory": "AI Governance & Compliance",
+      "operatingSystem": "Web",
+      "url": "https://agent-sentinel.net",
+      "sameAs": "https://agent-sentinel.net",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free tier available — connect your first agent and start recording to the immutable ledger."
+      },
+      "featureList": [
+        "Immutable hash-chained audit ledger",
+        "EU AI Act Article 12 and 14 compliance",
+        "OCSF v1.1.0 telemetry schema validation",
+        "Signal-to-Verdict latency 11.4 ms at 99.9th percentile",
+        "ML-DSA-87 post-quantum cryptographic sealing",
+        "Real-time anomaly detection and hallucination scoring",
+        "Human-in-the-loop War Room approval flow",
+        "Per-tenant data isolation via Clerk authentication"
+      ],
+      "provider": {
+        "@type": "Organization",
+        "name": "Agent-Sentinel",
+        "url": "https://agent-sentinel.net"
+      }
+    }
+    </script>
+
     <!-- Anti-FOUC: apply saved theme before React renders -->
     <script>
       (function () {
@@ -20,6 +73,7 @@
         } catch (e) {}
       })();
     </script>
+
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
