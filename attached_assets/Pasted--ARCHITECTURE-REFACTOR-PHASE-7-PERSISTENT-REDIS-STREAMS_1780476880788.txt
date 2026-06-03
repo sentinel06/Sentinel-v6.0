@@ -1,0 +1,26 @@
+### ARCHITECTURE REFACTOR: PHASE 7 - PERSISTENT REDIS STREAMS MIGRATION
+
+Completely replace the fire-and-forget Redis Pub/Sub mechanism with a persistent Redis Streams consumer-group architecture to eliminate telemetry attrition during network partitions.
+
+1. DATA PRODUCER REFACTOR ('lib/mesh-proxy/src/interceptor.ts'):
+   - Locate the telemetry block where 'NODE_INFRACTION' events are currently dispatched via 'redis.publish()'.
+   - Refactor this execution path to use an append-only log command: Utilize 'redis.xadd()'.
+   - Stream Name: 'sentinel:stream:events'.
+   - Max length tracking: Use 'MAXLEN ~ 10000' to enforce an approximate storage ceiling.
+   - Payload structure: Push the complete JSON event metadata stringified under a deterministic field key 'payload'.
+
+2. CONSUMER GROUP INITIALIZATION ('api-server/src/infrastructure/redisStreamInit.ts'):
+   - Create an initialization utility to bootstrap the data stream stream at startup.
+   - Execute an idempotent consumer group creation command: 'XGROUP CREATE sentinel:stream:events sentinel:group:enforcers $ MKSTREAM'.
+   - Wrap this in a clean try/catch block to silently intercept and pass the execution path if the group 'BUSYGROUP' exception indicates it already exists.
+
+3. DATA CONSUMER IMPLEMENTATION ('api-server/src/workers/infractionConsumer.ts'):
+   - Build a long-polling background worker loop using 'XREADGROUP'.
+   - Configuration parameters: GROUP 'sentinel:group:enforcers', CONSUMER 'worker_node_01', BLOCK 2000, COUNT 10, targetting 'sentinel:stream:events' at the '>' symbol (new unread messages).
+   - Event Processing Loop:
+     - Pull the 'payload' field, parse the JSON contents, and execute the identical reactive blacklist state update: 'HSET sentinel:blacklist:nodes'.
+     - Critical Security Acknowledgment: Immediately upon a successful database write, issue a hard 'XACK sentinel:stream:events sentinel:group:enforcers [messageId]' to clear the message from the pending entries list (PEL).
+
+4. WORKSPACE VALIDATION:
+   - Verify that all modified services compile cleanly.
+   - Run the full project typecheck loop to guarantee that zero legacy Pub/Sub event references remain.

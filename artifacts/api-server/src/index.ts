@@ -1,4 +1,5 @@
 import http from "http";
+import Redis from "ioredis";
 import { warmupDb } from "@workspace/db";
 import app from "./app";
 import { logger } from "./lib/logger";
@@ -6,6 +7,8 @@ import { setupWebSocket } from "./lib/ws";
 import { startIntegrityScheduler } from "./lib/integrity";
 import { startPulseScheduler } from "./services/pulse";
 import { startSovereignPulseEngine } from "./services/pulse_engine";
+import { initRedisStream } from "./infrastructure/redisStreamInit";
+import { startInfractionConsumer } from "./workers/infractionConsumer";
 
 const rawPort = process.env["PORT"];
 
@@ -34,10 +37,31 @@ async function bootstrap(): Promise<void> {
   }
 
   const server = http.createServer(app);
+  // setupWebSocket creates its own Redis connections; it must run before any
+  // other Redis work so its subscribe handshake isn't disrupted by concurrent
+  // socket creation (ioredis with enableOfflineQueue:false is timing-sensitive
+  // during the initial connecting window).
   setupWebSocket(server);
   startIntegrityScheduler();
   startPulseScheduler();
   startSovereignPulseEngine();
+
+  // ── Phase 7: Persistent Redis Streams bootstrap ──────────────────────────
+  // Runs after setupWebSocket so ws.ts subscriber connections are established
+  // first. Uses lazyConnect:true + quit() so the setup socket is created and
+  // torn down gracefully without touching ws.ts's socket state.
+  const redisUrl = process.env["REDIS_URL"];
+  if (redisUrl) {
+    const setupRedis = new Redis(redisUrl, { maxRetriesPerRequest: 3, lazyConnect: true });
+    try {
+      await initRedisStream(setupRedis);
+    } finally {
+      void setupRedis.quit();
+    }
+    startInfractionConsumer();
+  } else {
+    logger.warn("REDIS_URL not set — Redis stream consumer disabled");
+  }
 
   server.listen(port, () => {
     logger.info({ port }, "Agent-Sentinel server listening");

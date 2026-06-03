@@ -4,13 +4,20 @@
  * Shared between the interceptor (read side) and the trust-decay gate (write side).
  * The API server's nodeIsolation module is the canonical writer; this module
  * provides the sidecar-local read path and the infraction-frame publisher.
+ *
+ * PHASE 7 — Persistent Redis Streams:
+ *   NODE_INFRACTION frames are written via XADD to `sentinel:stream:events`
+ *   (append-only, durable) instead of the fire-and-forget pub/sub channel.
+ *   The API server's infractionConsumer worker reads this stream and writes
+ *   to `sentinel:blacklist:nodes` with full at-least-once delivery semantics.
  */
 
 import type Redis from "ioredis";
 import { logger } from "./logger.js";
 
-export const BLACKLIST_KEY = "sentinel:blacklist:nodes";
-const SENTINEL_EVENTS_CHANNEL = "sentinel:events";
+export const BLACKLIST_KEY   = "sentinel:blacklist:nodes";
+const SENTINEL_STREAM        = "sentinel:stream:events";
+const STREAM_MAXLEN          = 10000;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -80,9 +87,17 @@ export async function publishInfractionFrame(
     },
   });
 
-  await redis.publish(SENTINEL_EVENTS_CHANNEL, frame);
+  // Phase 7: append to the persistent Redis stream instead of fire-and-forget
+  // pub/sub. The API server's infractionConsumer worker reads via XREADGROUP
+  // with XACK acknowledgement, giving at-least-once delivery semantics.
+  await redis.xadd(
+    SENTINEL_STREAM,
+    "MAXLEN", "~", String(STREAM_MAXLEN),
+    "*",
+    "payload", frame,
+  );
   logger.info(
-    { nodeId, violation: metadata.violation },
-    "mesh-proxy: infraction frame published — blacklist write delegated to API server",
+    { nodeId, violation: metadata.violation, stream: SENTINEL_STREAM },
+    "mesh-proxy: infraction frame appended to stream — blacklist write delegated to stream consumer",
   );
 }

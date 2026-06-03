@@ -55,9 +55,14 @@ function initRedis(): void {
           localBroadcast(parsed.type, parsed.data);
         }
 
-        // Node isolation: write infraction frames to the blacklist.
+        // Node isolation: write kill_switch frames to the blacklist.
+        // NODE_INFRACTION frames are no longer delivered here — since Phase 7
+        // they travel via the persistent Redis stream (sentinel:stream:events)
+        // and are processed exclusively by the infractionConsumer worker with
+        // XACK acknowledgement. Only kill_switch (published via governance
+        // broadcast on this pub/sub channel) still goes through this path.
         // Uses redisPublisher (not subscriber — subscriber is in subscribe-only mode).
-        if (redisPublisher && parsed.type) {
+        if (redisPublisher && parsed.type === "kill_switch") {
           void processIncomingFrame(redisPublisher as import("ioredis").Redis, message).catch(
             (err: unknown) => logger.error({ err }, "node-isolation: processIncomingFrame failed"),
           );
