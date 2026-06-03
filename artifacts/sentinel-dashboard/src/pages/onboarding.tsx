@@ -123,7 +123,7 @@ from sentinel_bridge import Sentinel
 
 sentinel = Sentinel(
     api_key="${apiKey || "<your-sentinel-key>"}",
-    base_url="${typeof window !== "undefined" ? window.location.origin : "https://agent-sentinel.replit.app"}",
+    base_url="${typeof window !== "undefined" ? window.location.origin : "https://agent-sentinel.net"}",
 )
 
 agent = sentinel.register(
@@ -142,7 +142,7 @@ agent.log_action(
 
   const curlSnippet = useMemo(
     () =>
-      `curl -X POST ${typeof window !== "undefined" ? window.location.origin : "https://agent-sentinel.replit.app"}/api/v1/log \\
+      `curl -X POST ${typeof window !== "undefined" ? window.location.origin : "https://agent-sentinel.net"}/api/v1/log \\
   -H "Content-Type: application/json" \\
   -H "X-Sentinel-Key: ${apiKey || "<your-sentinel-key>"}" \\
   -d '{

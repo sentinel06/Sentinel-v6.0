@@ -51,7 +51,7 @@ Core product knowledge you must use:
 pip install sentinel-bridge
 
 from sentinel_bridge import Sentinel
-sentinel = Sentinel(api_key="sk_sent_core_...", base_url="https://agent-sentinel.replit.app")
+sentinel = Sentinel(api_key="sk_sent_core_...", base_url="https://agent-sentinel.net")
 agent = sentinel.register(name="my-agent", capabilities=["read_email", "summarize"])
 agent.log_action(event_type="TASK_COMPLETE", payload={...}, rationale="why")
 \`\`\`

@@ -3,7 +3,7 @@
 ![sentinel-governed](https://your-sentinel.replit.app/api/v1/badge/my-governed-agent.svg)
 
 > **EU AI Act Art. 12/14 compliance in under 10 lines of code.**
-> Powered by [Agent-Sentinel](https://agent-sentinel.replit.app).
+> Powered by [Agent-Sentinel](https://agent-sentinel.net).
 
 ---
 

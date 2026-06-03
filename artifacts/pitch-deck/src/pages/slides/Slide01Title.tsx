@@ -129,7 +129,7 @@ export default function Slide01Title() {
               color: "#14B8A6",
             }}
           >
-            https://agent-sentinel.replit.app/
+            https://agent-sentinel.net/
           </span>
         </div>
       </div>

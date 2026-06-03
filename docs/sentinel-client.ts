@@ -16,7 +16,7 @@
  */
 
 export interface SentinelConfig {
-  /** Base URL of your Agent-Sentinel deployment — e.g. https://agent-sentinel.replit.app */
+  /** Base URL of your Agent-Sentinel deployment — e.g. https://agent-sentinel.net */
   baseUrl: string;
   /** Partner API key from the /onboarding or /settings page  (sk_sent_core_…) */
   apiKey: string;
@@ -162,7 +162,7 @@ export async function governed<T>(
 // ── Quick-start example (remove before committing to production) ───────────
 //
 // const sentinel: SentinelConfig = {
-//   baseUrl: "https://agent-sentinel.replit.app",
+//   baseUrl: "https://agent-sentinel.net",
 //   apiKey:  "sk_sent_core_YOUR_KEY_HERE",
 //   agentId: "my-agent-v1",
 // };

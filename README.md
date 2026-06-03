@@ -1,10 +1,10 @@
-![sentinel-governed](https://agent-sentinel.replit.app/api/v1/badge.svg)
+![sentinel-governed](https://agent-sentinel.net/api/v1/badge.svg)
 
 # Agent-Sentinel
 
 > Immutable audit ledger, active governance, and EU AI Act compliance for production AI agents.
 
-**Integrity Grade:** SLSA Level 4 &nbsp;|&nbsp; **Live Instance:** [agent-sentinel.replit.app](https://agent-sentinel.replit.app)
+**Integrity Grade:** SLSA Level 4 &nbsp;|&nbsp; **Live Instance:** [agent-sentinel.net](https://agent-sentinel.net)
 
 ---
 
@@ -30,7 +30,7 @@ Agent-Sentinel is a full-stack governance framework that wraps your AI agents wi
 from sentinel_bridge import SovereignGateway
 
 gw = SovereignGateway(
-    base_url="https://agent-sentinel.replit.app",
+    base_url="https://agent-sentinel.net",
     api_key="sk_sent_core_YOUR_KEY",
     agent_id="my-agent-v1",
 )
@@ -49,7 +49,7 @@ No npm packages. No Node built-in imports. Works in browsers, Node ≥ 18, Deno,
 // docs/sentinel-client.ts — copy this file into your project
 
 interface SentinelConfig {
-  baseUrl: string;   // e.g. "https://agent-sentinel.replit.app"
+  baseUrl: string;   // e.g. "https://agent-sentinel.net"
   apiKey:  string;   // sk_sent_core_… from /onboarding or /settings
   agentId: string;   // stable identifier for this agent
 }
@@ -113,7 +113,7 @@ async function postLog(
 
 // Usage
 const sentinel: SentinelConfig = {
-  baseUrl: "https://agent-sentinel.replit.app",
+  baseUrl: "https://agent-sentinel.net",
   apiKey:  "sk_sent_core_YOUR_KEY",
   agentId: "my-agent-v1",
 };
@@ -140,7 +140,7 @@ The full reference implementation (including the `governed()` wrapper) lives in 
 ### curl
 
 ```bash
-curl -X POST https://agent-sentinel.replit.app/api/v1/log \
+curl -X POST https://agent-sentinel.net/api/v1/log \
   -H "X-Sentinel-Key: sk_sent_core_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"agentId":"my-agent","traceId":"t-001","eventType":"Action","rationale":"Fetched report"}'

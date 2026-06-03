@@ -42,14 +42,17 @@ app.use(
 // authenticate without a CNAME. MUST be mounted before any body parser.
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-// In production, lock CORS to the Replit-published domain(s) only.
-// REPLIT_DOMAINS is a comma-separated list set automatically by the platform
-// (e.g. "agent-sentinel.replit.app"). In dev it is unset, so we mirror back
-// the requesting origin (same as origin: true) for convenience.
+// In production, lock CORS to the Replit-published domain(s) and the custom
+// production domain. REPLIT_DOMAINS is a comma-separated list set automatically
+// by the platform. In dev it is unset, so we mirror back the requesting origin
+// (same as origin: true) for convenience.
+const CUSTOM_DOMAINS = ["https://agent-sentinel.net"];
+
 const replitDomains = process.env["REPLIT_DOMAINS"]
-  ? process.env["REPLIT_DOMAINS"]
-      .split(",")
-      .map((d) => `https://${d.trim()}`)
+  ? [
+      ...process.env["REPLIT_DOMAINS"].split(",").map((d) => `https://${d.trim()}`),
+      ...CUSTOM_DOMAINS,
+    ]
   : null;
 
 app.use(
