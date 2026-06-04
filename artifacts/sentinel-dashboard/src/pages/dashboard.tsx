@@ -190,6 +190,27 @@ export default function DashboardPage() {
   const [liveLogs, setLiveLogs] = useState<AuditLogWithConsistency[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const wsRef = useRef<WebSocket | null>(null);
+  const [simStatus, setSimStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  async function triggerSimulation() {
+    if (simStatus === "running") return;
+    setSimStatus("running");
+    setIsSimulating(true);
+    try {
+      const res = await fetch(`${BASE}/api/v1/demo/trigger-simulation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSimStatus("running");
+    } catch {
+      setSimStatus("error");
+      setIsSimulating(false);
+    }
+  }
 
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
@@ -213,6 +234,43 @@ export default function DashboardPage() {
             const msg = JSON.parse(event.data);
             if (msg.type === "log" && msg.data) {
               setLiveLogs(prev => [msg.data, ...prev].slice(0, 50));
+            } else if (msg.type === "stream_batch" && Array.isArray(msg.data?.packets)) {
+              const packets = msg.data.packets as Array<{
+                t: string; a: string; e: string; d: number;
+                h: string; q: boolean; p: string | null;
+                x: boolean; r: boolean; s: string | null;
+                tid: string; lid: string;
+              }>;
+              setLiveLogs(prev => {
+                const existing = new Map(prev.map(l => [l.id, l]));
+                for (const pkt of packets) {
+                  if (!existing.has(pkt.lid)) {
+                    existing.set(pkt.lid, {
+                      id: pkt.lid,
+                      timestamp: pkt.t,
+                      agentId: pkt.a,
+                      eventType: pkt.e,
+                      traceId: pkt.tid,
+                      consistencyScore: 1 - pkt.d / 100,
+                      isAnomalous: pkt.x,
+                      payload: {},
+                      rationale: "",
+                      currentHash: pkt.h,
+                      previousHash: "",
+                      parentAgentId: pkt.p,
+                      swarmId: pkt.s,
+                    } as AuditLogWithConsistency);
+                  }
+                }
+                return Array.from(existing.values()).slice(0, 50);
+              });
+            } else if (msg.type === "sim_started") {
+              setSimStatus("running");
+              setIsSimulating(true);
+            } else if (msg.type === "sim_complete") {
+              setSimStatus("done");
+            } else if (msg.type === "circuit_breaker_tripped") {
+              setSimStatus("running");
             }
           } catch (e) {
             console.error("Failed to parse WS message", e);
@@ -258,9 +316,9 @@ export default function DashboardPage() {
   }, [stats]);
 
   // Empty-state: a brand-new signed-in user with zero owned events.
-  // We hide the demo widgets and point them at /onboarding instead.
+  // Bypass when simulation is running so the live stream stays visible.
   const totalLogs = stats?.totalLogs ?? 0;
-  const showEmptyState = !isLoading && totalLogs === 0;
+  const showEmptyState = !isLoading && totalLogs === 0 && !isSimulating;
 
   if (showEmptyState) {
     return (
@@ -273,6 +331,8 @@ export default function DashboardPage() {
           <p className="text-sm text-[#9AA4B1] mb-6">
             Your immutable data plane is live and failing closed. Awaiting telemetry streams to benchmark your Agentic Signal-to-Verdict latency.
           </p>
+
+          {/* Primary CTA */}
           <a
             href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/onboarding`}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00F5FF] hover:bg-[#00d4dc] text-[#050505] font-semibold uppercase tracking-wider text-xs transition-colors"
@@ -280,6 +340,43 @@ export default function DashboardPage() {
             Connect your first agent
             <ArrowRight className="w-4 h-4" />
           </a>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[11px] text-[#9AA4B1] uppercase tracking-widest">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* Simulation CTA */}
+          <button
+            onClick={() => { void triggerSimulation(); }}
+            disabled={simStatus === "running"}
+            className="inline-flex items-center gap-2 w-full justify-center px-5 py-3 rounded-lg border border-[#FF003C]/40 bg-[#FF003C]/10 hover:bg-[#FF003C]/20 text-[#FF003C] font-bold uppercase tracking-wider text-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {simStatus === "running" ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF003C] opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF003C]" />
+                </span>
+                Simulation running — watch the stream…
+              </>
+            ) : simStatus === "error" ? (
+              <>
+                <AlertTriangle className="w-4 h-4" />
+                Simulation failed — retry?
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4" />
+                Simulate Adversarial Agent Breakout
+              </>
+            )}
+          </button>
+          <p className="text-[11px] text-[#9AA4B1]/70 mt-2">
+            Fires a live 3-stage breach: cognitive drift → honey-token hit → causal chain break
+          </p>
         </div>
       </div>
     );

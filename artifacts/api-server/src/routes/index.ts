@@ -17,9 +17,11 @@ import gatewayRouter from "./gateway";
 import chainReconstructRouter from "./chain_reconstruct";
 import meRouter from "./me";
 import supportRouter from "./support";
+import demoRouter from "./demo";
 
 const router: IRouter = Router();
 
+router.use(demoRouter);
 router.use(badgeRouter);
 router.use(attestationRouter);
 router.use(gatekeeperRouter);
