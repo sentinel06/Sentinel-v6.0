@@ -240,13 +240,56 @@ if (process.env["NODE_ENV"] === "production") {
     }),
   );
 
-  // SPA fallback. Anything that isn't /api/* and isn't a real static asset
-  // gets index.html so React Router can resolve client-side. Use a middleware
-  // (not a RegExp route) because Express 5's path-to-regexp v8 changed
-  // RegExp route semantics — middleware ordering is the safe contract.
+  // SPA fallback. Serve index.html only for known application routes so that
+  // unknown paths return a real HTTP 404 instead of a 200 shell (soft-404).
+  // Crawlers that receive a 200 for every URL treat junk paths as live pages,
+  // wasting crawl budget and polluting search-console coverage.
+  //
+  // This set must stay in sync with the <Route> declarations in App.tsx.
+  // /sign-in and /sign-up are intentionally excluded — they are handled by
+  // the auth-shell middleware above and never reach this middleware.
+  const KNOWN_SPA_ROUTE_PREFIXES = new Set([
+    "/",
+    "/dashboard",
+    "/onboarding",
+    "/settings",
+    "/traces",
+    "/topology",
+    "/warroom",
+    "/agents",
+    "/registry",
+    "/compliance",
+    "/integrity",
+    "/badge",
+    "/swarmmap",
+    "/partner",
+    "/partner-onboarding",
+    "/eqa",
+    "/pulse",
+    "/status",
+    "/support",
+  ]);
+
+  function isKnownSpaRoute(reqPath: string): boolean {
+    // Exact match for "/" or prefix match for all others (handles nested
+    // paths such as /topology/some-trace-id).
+    if (reqPath === "/") return true;
+    for (const prefix of KNOWN_SPA_ROUTE_PREFIXES) {
+      if (prefix !== "/" && (reqPath === prefix || reqPath.startsWith(prefix + "/"))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   app.use((req, res, next) => {
     if (req.path.startsWith("/api")) {
       next();
+      return;
+    }
+    if (!isKnownSpaRoute(req.path)) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.status(404).sendFile(indexHtmlPath);
       return;
     }
     res.sendFile(indexHtmlPath);

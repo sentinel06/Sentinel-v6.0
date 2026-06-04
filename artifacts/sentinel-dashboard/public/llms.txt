@@ -54,10 +54,6 @@ curl -X POST https://agent-sentinel.net/api/v1/log \
   }'
 ```
 
-## API key provisioning
-
-New users sign up at https://agent-sentinel.net/sign-up and are redirected to /onboarding where a personal `sk_sent_core_*` key is auto-provisioned. The key is shown once in plaintext; subsequent visits show a masked preview. Keys can be rotated at https://agent-sentinel.net/settings.
-
 ## Authentication
 
 The dashboard requires a Clerk account. All agent telemetry endpoints accept the `X-Sentinel-Key` header and do not require a Clerk session. The SDK handshake endpoint (`POST /api/v1/auth/verify`) validates a key before starting a run.
@@ -73,6 +69,3 @@ The dashboard requires a Clerk account. All agent telemetry endpoints accept the
 ## Contact & links
 
 - Live platform: https://agent-sentinel.net
-- Sign up: https://agent-sentinel.net/sign-up
-- Onboarding: https://agent-sentinel.net/onboarding
-- Settings / key management: https://agent-sentinel.net/settings
