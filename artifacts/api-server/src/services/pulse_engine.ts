@@ -27,6 +27,7 @@ import { quantumSigner } from "../crypto/quantum_ledger.js";
 import { ML_DSA_87_PARAMS } from "../crypto/pqc.js";
 import { broadcastGovernanceEvent } from "../lib/ws.js";
 import { logger } from "../lib/logger.js";
+import { publishStatusUpdate } from "./statePublisher.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -204,6 +205,20 @@ export class PulseEngine {
       });
       logger.warn({ status, faultReason }, "Pulse Fault broadcast to War Room");
     }
+
+    // ── Push status update to all WS clients so /status page doesn't need to poll ──
+    publishStatusUpdate({
+      id:                    inserted!.id,
+      createdAt:             createdAt.toISOString(),
+      globalIntegrityIndex,
+      totalEvents,
+      verifiedEvents,
+      activeSwarms,
+      revokedSwarms,
+      quantumThroughputBits,
+      status,
+      faultReason,
+    });
 
     return {
       id:                   inserted!.id,

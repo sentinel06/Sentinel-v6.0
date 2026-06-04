@@ -22,6 +22,7 @@ import {
   ChevronRight, Fingerprint, Dna, Flame, Zap,
 } from "lucide-react";
 import { useForensic } from "@/contexts/ForensicContext";
+import { useWsEvent } from "@/contexts/WsContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -628,7 +629,11 @@ function SwarmMapPageInner() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchData(); const id = setInterval(fetchData, 2_500); return () => clearInterval(id); }, [fetchData]);
+  // Initial fetch — seeds the map immediately on mount.
+  useEffect(() => { void fetchData(); }, [fetchData]);
+  // WS push — backend broadcasts swarm_map after every log flush (300 ms debounce).
+  // Trigger a fresh fetch so existing position/physics state is preserved.
+  useWsEvent("swarm_map", useCallback(() => { void fetchData(); }, [fetchData]));
 
   // ── Pending TRACE consumer ────────────────────────────────────────────────
   // Agent Registry → "TRACE" hands off the agent id via sessionStorage so it

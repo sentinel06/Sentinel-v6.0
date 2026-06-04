@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useWsEvent } from "@/contexts/WsContext";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const LS_AGENT     = "sentinel.forensic.agent";
@@ -193,97 +194,98 @@ export function ForensicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Ledger tamper watcher ──────────────────────────────────────────────
+  // Initial fetch seeds state before the first WS push arrives.
   useEffect(() => {
     let abort = false;
-    async function check() {
-      try {
-        const r = await fetch(`${BASE}/api/v1/integrity/status`);
-        if (!r.ok) return;
-        const j = await r.json();
-        if (abort) return;
-        setLedgerTampered(j?.ok === false);
-      } catch {}
-    }
-    check();
-    const id = setInterval(check, PULSE_MS);
-    return () => { abort = true; clearInterval(id); };
+    fetch(`${BASE}/api/v1/integrity/status`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean } | null) => { if (!abort) setLedgerTampered(j?.ok === false); })
+      .catch(() => {});
+    return () => { abort = true; };
   }, []);
 
-  // ── Global swarm fetcher (for cluster list + quarantine watcher) ───────
+  // WS push — backend broadcasts integrity_status after every log-flush (6 s debounce).
+  useWsEvent("integrity_status", useCallback((data: unknown) => {
+    const j = data as { ok?: boolean } | null;
+    setLedgerTampered(j?.ok === false);
+  }, []));
+
+  // ── Global swarm watcher (cluster list + drift quarantine) ─────────────
+  // Extract data-processing so it can be called from both the initial HTTP
+  // response and the WS push without duplicating the mapping / quarantine logic.
+  const applySwarmNodes = useCallback((rawNodes: unknown[]) => {
+    const list: ForensicAgent[] = rawNodes.map((n: any) => ({
+      id:              n.id,
+      label:           n.label ?? n.id,
+      status:          n.status ?? "active",
+      drift:           Number(n.drift ?? 0),
+      fitnessScore:    Number(n.fitnessScore ?? 0),
+      generationDepth: Number(n.generationDepth ?? 0),
+      isRoot:          !!n.isRoot,
+      swarmId:         n.swarmId ?? null,
+      parentUid:       n.parentUid ?? null,
+      createdAt:       n.createdAt ?? new Date().toISOString(),
+      revokedAt:       n.revokedAt ?? null,
+      revokedReason:   n.revokedReason ?? null,
+      quantumSig:      n.quantumSig,
+    }));
+    setAgents(list);
+
+    // Snapshot every agent for time-travel replay
+    const ts = Date.now();
+    list.forEach(a =>
+      pushSnapshot(a.id, { ts, drift: a.drift, fitnessScore: a.fitnessScore, status: a.status }),
+    );
+
+    // ── Autonomous quarantine (sub-millisecond interdiction) ─────────────
+    const newlyQuarantined: QuarantineEvent[] = [];
+    const nextIds = new Set(quarantinedIds);
+    list.forEach(a => {
+      if (a.status === "active" && a.drift > DRIFT_QUARANTINE_THRESHOLD && !nextIds.has(a.id)) {
+        nextIds.add(a.id);
+        newlyQuarantined.push({
+          id:             `Q-${ts}-${a.id.slice(0, 8)}`,
+          agentId:        a.id,
+          agentLabel:     a.label,
+          swarmId:        a.swarmId,
+          drift:          a.drift,
+          reason:         `Cognitive drift ${a.drift.toFixed(1)}% > ${DRIFT_QUARANTINE_THRESHOLD}% — Sovereign Token revoked`,
+          ts,
+          interventionMs: Math.round((0.4 + Math.random() * 0.6) * 100) / 100,
+        });
+        fetch(`${BASE}/api/v1/swarm/revoke-tree/${encodeURIComponent(a.id)}`, {
+          method:  "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ reason: `AUTONOMOUS_QUARANTINE: drift ${a.drift.toFixed(1)}%` }),
+        }).catch(() => {});
+      }
+    });
+    if (newlyQuarantined.length > 0) {
+      setQuarantinedIds(nextIds);
+      setQuarantineLog(prev => {
+        const next = [...newlyQuarantined, ...prev].slice(0, 200);
+        try { localStorage.setItem(LS_QLOG, JSON.stringify(next)); } catch {}
+        return next;
+      });
+      try { localStorage.setItem(LS_QIDS, JSON.stringify(Array.from(nextIds))); } catch {}
+    }
+  }, [pushSnapshot, quarantinedIds]);
+
+  // Initial fetch — seeds agent list before first WS push.
   useEffect(() => {
     let abort = false;
-    async function fetchSwarm() {
-      try {
-        const r = await fetch(`${BASE}/api/v1/swarm/map`);
-        if (!r.ok) return;
-        const j = await r.json();
-        if (abort) return;
-        const list: ForensicAgent[] = Array.isArray(j?.nodes)
-          ? j.nodes.map((n: any) => ({
-              id: n.id,
-              label: n.label ?? n.id,
-              status: n.status ?? "active",
-              drift: Number(n.drift ?? 0),
-              fitnessScore: Number(n.fitnessScore ?? 0),
-              generationDepth: Number(n.generationDepth ?? 0),
-              isRoot: !!n.isRoot,
-              swarmId: n.swarmId ?? null,
-              parentUid: n.parentUid ?? null,
-              createdAt: n.createdAt ?? new Date().toISOString(),
-              revokedAt: n.revokedAt ?? null,
-              revokedReason: n.revokedReason ?? null,
-              quantumSig: n.quantumSig,
-            }))
-          : [];
-        setAgents(list);
+    fetch(`${BASE}/api/v1/swarm/map`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((j: { nodes?: unknown[] } | null) => { if (!abort && Array.isArray(j?.nodes)) applySwarmNodes(j!.nodes!); })
+      .catch(() => {});
+    return () => { abort = true; };
+  }, [applySwarmNodes]);
 
-        // Snapshot every active agent for time-travel replay
-        const ts = Date.now();
-        list.forEach(a => {
-          pushSnapshot(a.id, { ts, drift: a.drift, fitnessScore: a.fitnessScore, status: a.status });
-        });
-
-        // ── Sub-millisecond Interdiction ─────────────────────────────
-        const newlyQuarantined: QuarantineEvent[] = [];
-        const nextIds = new Set(quarantinedIds);
-        list.forEach(a => {
-          if (a.status === "active" && a.drift > DRIFT_QUARANTINE_THRESHOLD && !nextIds.has(a.id)) {
-            nextIds.add(a.id);
-            newlyQuarantined.push({
-              id: `Q-${ts}-${a.id.slice(0, 8)}`,
-              agentId: a.id,
-              agentLabel: a.label,
-              swarmId: a.swarmId,
-              drift: a.drift,
-              reason: `Cognitive drift ${a.drift.toFixed(1)}% > ${DRIFT_QUARANTINE_THRESHOLD}% — Sovereign Token revoked`,
-              ts,
-              interventionMs: Math.round(0.4 + Math.random() * 0.6 * 100) / 100,
-            });
-
-            // Fire the interdiction (sovereign token revoke)
-            fetch(`${BASE}/api/v1/swarm/revoke-tree/${encodeURIComponent(a.id)}`, {
-              method: "DELETE",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reason: `AUTONOMOUS_QUARANTINE: drift ${a.drift.toFixed(1)}%` }),
-            }).catch(() => {});
-          }
-        });
-
-        if (newlyQuarantined.length > 0) {
-          setQuarantinedIds(nextIds);
-          setQuarantineLog(prev => {
-            const next = [...newlyQuarantined, ...prev].slice(0, 200);
-            try { localStorage.setItem(LS_QLOG, JSON.stringify(next)); } catch {}
-            return next;
-          });
-          try { localStorage.setItem(LS_QIDS, JSON.stringify(Array.from(nextIds))); } catch {}
-        }
-      } catch {}
-    }
-    fetchSwarm();
-    const id = setInterval(fetchSwarm, PULSE_MS);
-    return () => { abort = true; clearInterval(id); };
-  }, [pushSnapshot, quarantinedIds]);
+  // WS push — backend broadcasts swarm_map after every log-flush (300 ms debounce).
+  useWsEvent("swarm_map", useCallback((data: unknown) => {
+    const d = data as { nodes?: unknown[] } | null;
+    if (Array.isArray(d?.nodes)) applySwarmNodes(d!.nodes!);
+  }, [applySwarmNodes]));
 
   // ── Derived clusters list ──────────────────────────────────────────────
   const clusters: ClusterInfo[] = useMemo(() => {

@@ -12,6 +12,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useWsEvent } from "@/contexts/WsContext";
 import {
   ShieldCheck, ShieldAlert, CheckCircle2, XCircle,
   Zap, Activity, Lock, Cpu, Radio, FileText,
@@ -614,24 +615,19 @@ export default function StatusPage() {
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 2_500);
+    // Pulses fire every few hours — 60 s fallback catches edge cases;
+    // WS push (status_update) handles real-time updates.
+    intervalRef.current = setInterval(fetchStatus, 60_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [fetchStatus]);
 
-  // WebSocket — listen for pulse_fault
-  useEffect(() => {
-    const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${BASE}/api/v1/ws`);
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "pulse_fault") {
-          setFault({ message: msg.data?.faultReason ?? "Integrity fault detected" });
-          fetchStatus();
-        }
-      } catch {}
-    };
-    return () => ws.close();
-  }, [fetchStatus]);
+  // WS push: refresh when a new pulse is emitted or a fault is detected.
+  useWsEvent("status_update", useCallback(() => { void fetchStatus(); }, [fetchStatus]));
+  useWsEvent("pulse_fault", useCallback((data: unknown) => {
+    const d = data as { faultReason?: string } | null;
+    setFault({ message: d?.faultReason ?? "Integrity fault detected" });
+    void fetchStatus();
+  }, [fetchStatus]));
 
   const handleDownloadWhitepaper = async () => {
     setWpLoading(true);

@@ -16,6 +16,7 @@ import { ThemeProvider } from "next-themes";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 import { ForensicProvider } from "@/contexts/ForensicContext";
+import { WsProvider } from "@/contexts/WsContext";
 
 // Eagerly-loaded pages (small, common entry points or shared chrome).
 import DashboardPage from "@/pages/dashboard";
@@ -366,12 +367,14 @@ function App() {
   return (
     <ThemeProvider attribute="class" forcedTheme="dark" enableSystem={false}>
       <TooltipProvider>
-        <ForensicProvider>
-          <WouterRouter base={basePath}>
-            <ClerkProviderWithRoutes />
-          </WouterRouter>
-          <Toaster />
-        </ForensicProvider>
+        <WsProvider>
+          <ForensicProvider>
+            <WouterRouter base={basePath}>
+              <ClerkProviderWithRoutes />
+            </WouterRouter>
+            <Toaster />
+          </ForensicProvider>
+        </WsProvider>
       </TooltipProvider>
     </ThemeProvider>
   );

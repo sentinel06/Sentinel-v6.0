@@ -21,6 +21,7 @@
  */
 
 import { broadcastStreamBatch } from "../lib/ws.js";
+import { scheduleSwarmMapPublish } from "./statePublisher.js";
 
 // ── Compact Stream Packet ──────────────────────────────────────────────────────
 export interface StreamPacket {
@@ -119,6 +120,8 @@ class StreamManager {
     if (this.buffer.length > 0) {
       broadcastStreamBatch([...this.buffer]);
       this.buffer = [];
+      // Push updated swarm state to all connected clients so they don't poll
+      scheduleSwarmMapPublish();
     }
     this.flushTimer = null;
   }

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { useWsEvent, useWsStatus } from "@/contexts/WsContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import LatticeStrengthGauge from "@/components/widgets/LatticeStrengthGauge";
@@ -188,8 +189,7 @@ export default function DashboardPage() {
     query: { queryKey: getGetStatsQueryKey(), refetchInterval: 10000 },
   });
   const [liveLogs, setLiveLogs] = useState<AuditLogWithConsistency[]>([]);
-  const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsStatus = useWsStatus();
   const [simStatus, setSimStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [isSimulating, setIsSimulating] = useState(false);
 
@@ -212,94 +212,57 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
-    let reconnectTimeout: NodeJS.Timeout;
+  // ── WebSocket event subscriptions (shared WsContext connection) ───────────
+  useWsEvent("log", useCallback((data: unknown) => {
+    if (!data) return;
+    setLiveLogs(prev => [data as AuditLogWithConsistency, ...prev].slice(0, 50));
+  }, []));
 
-    function connect() {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
-      
-      setWsStatus("connecting");
-      
-      try {
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          setWsStatus("connected");
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "log" && msg.data) {
-              setLiveLogs(prev => [msg.data, ...prev].slice(0, 50));
-            } else if (msg.type === "stream_batch" && Array.isArray(msg.data?.packets)) {
-              const packets = msg.data.packets as Array<{
-                t: string; a: string; e: string; d: number;
-                h: string; q: boolean; p: string | null;
-                x: boolean; r: boolean; s: string | null;
-                tid: string; lid: string;
-              }>;
-              setLiveLogs(prev => {
-                const existing = new Map(prev.map(l => [l.id, l]));
-                for (const pkt of packets) {
-                  if (!existing.has(pkt.lid)) {
-                    existing.set(pkt.lid, {
-                      id: pkt.lid,
-                      timestamp: pkt.t,
-                      agentId: pkt.a,
-                      eventType: pkt.e,
-                      traceId: pkt.tid,
-                      consistencyScore: 1 - pkt.d / 100,
-                      isAnomalous: pkt.x,
-                      payload: {},
-                      rationale: "",
-                      currentHash: pkt.h,
-                      previousHash: "",
-                      parentAgentId: pkt.p,
-                      swarmId: pkt.s,
-                    } as AuditLogWithConsistency);
-                  }
-                }
-                return Array.from(existing.values()).slice(0, 50);
-              });
-            } else if (msg.type === "sim_started") {
-              setSimStatus("running");
-              setIsSimulating(true);
-            } else if (msg.type === "sim_complete") {
-              setSimStatus("done");
-            } else if (msg.type === "circuit_breaker_tripped") {
-              setSimStatus("running");
-            }
-          } catch (e) {
-            console.error("Failed to parse WS message", e);
-          }
-        };
-
-        ws.onclose = () => {
-          setWsStatus("disconnected");
-          reconnectTimeout = setTimeout(connect, 3000);
-        };
-
-        ws.onerror = () => {
-          ws.close();
-        };
-      } catch (e) {
-        setWsStatus("disconnected");
-        reconnectTimeout = setTimeout(connect, 3000);
+  useWsEvent("stream_batch", useCallback((data: unknown) => {
+    const packets = (data as { packets?: Array<{
+      t: string; a: string; e: string; d: number;
+      h: string; q: boolean; p: string | null;
+      x: boolean; r: boolean; s: string | null;
+      tid: string; lid: string;
+    }> } | null)?.packets;
+    if (!Array.isArray(packets)) return;
+    setLiveLogs(prev => {
+      const existing = new Map(prev.map(l => [l.id, l]));
+      for (const pkt of packets) {
+        if (!existing.has(pkt.lid)) {
+          existing.set(pkt.lid, {
+            id: pkt.lid,
+            timestamp: pkt.t,
+            agentId: pkt.a,
+            eventType: pkt.e,
+            traceId: pkt.tid,
+            consistencyScore: 1 - pkt.d / 100,
+            isAnomalous: pkt.x,
+            payload: {},
+            rationale: "",
+            currentHash: pkt.h,
+            previousHash: "",
+            parentAgentId: pkt.p,
+            swarmId: pkt.s,
+          } as AuditLogWithConsistency);
+        }
       }
-    }
+      return Array.from(existing.values()).slice(0, 50);
+    });
+  }, []));
 
-    connect();
+  useWsEvent("sim_started", useCallback(() => {
+    setSimStatus("running");
+    setIsSimulating(true);
+  }, []));
 
-    return () => {
-      clearTimeout(reconnectTimeout);
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
+  useWsEvent("sim_complete", useCallback(() => {
+    setSimStatus("done");
+  }, []));
+
+  useWsEvent("circuit_breaker_tripped", useCallback(() => {
+    setSimStatus("running");
+  }, []));
 
   // Initialize liveLogs with recent activity when stats loads.
   // Deduplicate by ID so WebSocket messages and the initial fetch don't collide.

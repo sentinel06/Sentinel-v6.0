@@ -1,6 +1,7 @@
 import React, {
   useEffect, useRef, useState, useCallback, useMemo
 } from "react";
+import { useWsEvent } from "@/contexts/WsContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,15 +65,11 @@ function useAuthRequests() {
     setLoading(false);
   }, []);
   useEffect(() => { refresh(); const id = setInterval(refresh, 5000); return () => clearInterval(id); }, [refresh]);
-  useEffect(() => {
-    const protocol = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://${location.host}${BASE}/api/v1/ws`);
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (["auth_request","auth_resolved","pending_approval","honeypot_breach"].includes(msg.type)) refresh();
-    };
-    return () => ws.close();
-  }, [refresh]);
+  // Auth events are pushed over the shared WS — no separate connection needed.
+  useWsEvent("auth_request",      useCallback(() => { void refresh(); }, [refresh]));
+  useWsEvent("auth_resolved",     useCallback(() => { void refresh(); }, [refresh]));
+  useWsEvent("pending_approval",  useCallback(() => { void refresh(); }, [refresh]));
+  useWsEvent("honeypot_breach",   useCallback(() => { void refresh(); }, [refresh]));
   return { requests, loading, refresh, criticalBreaches };
 }
 
@@ -103,7 +100,14 @@ function useSwarmMap() {
     setNodes(d.nodes ?? []);
     setEdges(d.edges ?? []);
   }, []);
-  useEffect(() => { fetch_(); const id = setInterval(fetch_, 12000); return () => clearInterval(id); }, [fetch_]);
+  // Initial fetch — seeds data before first WS push.
+  useEffect(() => { void fetch_(); }, [fetch_]);
+  // WS push replaces the 12 s poll — backend emits swarm_map after every log flush.
+  useWsEvent("swarm_map", useCallback((data: unknown) => {
+    const d = data as { nodes?: SwarmNode[]; edges?: SwarmEdge[] } | null;
+    if (d?.nodes) setNodes(d.nodes);
+    if (d?.edges) setEdges(d.edges);
+  }, []));
   return { nodes, edges };
 }
 
@@ -113,20 +117,21 @@ function usePulseStats() {
     const r = await fetch(`${BASE}/api/v1/status`);
     if (r.ok) setStats(await r.json());
   }, []);
-  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  // Initial fetch — seeds data before first WS push.
+  useEffect(() => { void load(); }, [load]);
+  // WS push replaces the 15 s poll — backend emits status_update after each pulse.
+  useWsEvent("status_update", useCallback((data: unknown) => {
+    if (data) setStats(data as PulseStats);
+  }, []));
   return stats;
 }
 
 function usePulseFault() {
   const [fault, setFault] = useState<{ pulseId: string; globalIntegrityIndex: string; faultReason: string | null; createdAt: string } | null>(null);
-  useEffect(() => {
-    const protocol = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://${location.host}${BASE}/api/v1/ws`);
-    ws.onmessage = (e) => {
-      try { const msg = JSON.parse(e.data); if (msg.type === "pulse_fault") setFault(msg.data); } catch {}
-    };
-    return () => ws.close();
-  }, []);
+  // Consolidated into shared WS — no separate connection needed.
+  useWsEvent("pulse_fault", useCallback((data: unknown) => {
+    setFault(data as { pulseId: string; globalIntegrityIndex: string; faultReason: string | null; createdAt: string });
+  }, []));
   return { fault, dismiss: () => setFault(null) };
 }
 
