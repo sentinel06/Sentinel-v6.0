@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -142,13 +143,89 @@ if (process.env["NODE_ENV"] === "production") {
   );
   logger.info({ dashboardDist }, "Serving bundled dashboard from api-server");
 
-  // Auth routes must not be indexed — they inherit the homepage metadata
-  // because this is an SPA. Return an X-Robots-Tag header before the static
-  // file middleware so crawlers receive it on the very first response.
+  // Build auth-specific HTML shells at startup.
+  //
+  // Social crawlers and AI bots only read the initial HTML response — they
+  // never execute JavaScript. Serving the homepage index.html for /sign-in
+  // and /sign-up therefore gives every bot the wrong page identity: homepage
+  // title, canonical URL, OG/Twitter share cards, and Organization + Software
+  // Application JSON-LD schema all point at "/" instead of the auth page.
+  //
+  // To fix this we transform the built index.html at startup, producing two
+  // lightweight auth shells (one per route) that:
+  //   • set a route-matching <title>
+  //   • flip robots to noindex, follow
+  //   • drop the canonical link (auth URLs shouldn't claim a canonical)
+  //   • strip all OG/Twitter share-preview tags (no link-preview for login)
+  //   • strip all JSON-LD structured-data blocks (org/software schema is
+  //     wrong context for an auth page)
+  // The <body> — including Vite's hashed <script> and <link rel="modulepreload">
+  // tags — is untouched so React still bootstraps and Clerk renders correctly.
+  const indexHtmlPath = path.join(dashboardDist, "index.html");
+
+  function buildAuthHtml(baseHtml: string, variant: "sign-in" | "sign-up"): string {
+    const title =
+      variant === "sign-in" ? "Sign In — Agent-Sentinel" : "Sign Up — Agent-Sentinel";
+
+    let html = baseHtml;
+
+    // Replace page title
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+
+    // Replace meta description
+    html = html.replace(
+      /<meta name="description" content="[^"]*" \/>/,
+      `<meta name="description" content="Sign in to your Agent-Sentinel account to access your immutable audit ledger and AI governance dashboard." />`,
+    );
+
+    // Flip robots: index → noindex
+    html = html.replace(
+      /<meta name="robots" content="index, follow" \/>/,
+      `<meta name="robots" content="noindex, follow" />`,
+    );
+
+    // Remove canonical link (auth pages shouldn't claim a canonical URL)
+    html = html.replace(/\n[ \t]*<link rel="canonical" href="[^"]*" \/>/, "");
+
+    // Remove Open Graph block (comment through last og: meta, up to Twitter comment)
+    html = html.replace(/\n[ \t]*<!-- Open Graph -->[\s\S]*?(?=\n[ \t]*<!-- Twitter)/, "");
+
+    // Remove Twitter / X Card block (comment through last twitter: meta, up to JSON-LD comment)
+    html = html.replace(/\n[ \t]*<!-- Twitter \/ X Card -->[\s\S]*?(?=\n[ \t]*<!-- JSON-LD)/, "");
+
+    // Remove JSON-LD Structured Data block (comment + all ld+json script tags, up to Anti-FOUC comment)
+    html = html.replace(
+      /\n[ \t]*<!-- JSON-LD Structured Data -->[\s\S]*?(?=\n[ \t]*<!-- Anti-FOUC)/,
+      "",
+    );
+
+    return html;
+  }
+
+  let signInHtml: string | null = null;
+  let signUpHtml: string | null = null;
+  try {
+    const baseHtml = fs.readFileSync(indexHtmlPath, "utf-8");
+    signInHtml = buildAuthHtml(baseHtml, "sign-in");
+    signUpHtml = buildAuthHtml(baseHtml, "sign-up");
+    logger.info("Built auth-specific HTML shells for /sign-in and /sign-up");
+  } catch (err) {
+    logger.warn({ err }, "Could not build auth HTML shells — will fall back to index.html");
+  }
+
+  // Auth routes: serve the stripped auth shell (noindex, no OG/JSON-LD) and
+  // set X-Robots-Tag as a belt-and-suspenders signal for crawlers that read
+  // HTTP headers instead of (or in addition to) the robots meta tag.
   app.use((req, res, next) => {
     const p = req.path;
     if (p.startsWith("/sign-in") || p.startsWith("/sign-up")) {
       res.setHeader("X-Robots-Tag", "noindex, follow");
+      const html = p.startsWith("/sign-in") ? signInHtml : signUpHtml;
+      if (html !== null) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(html);
+        return;
+      }
     }
     next();
   });
@@ -172,7 +249,7 @@ if (process.env["NODE_ENV"] === "production") {
       next();
       return;
     }
-    res.sendFile(path.join(dashboardDist, "index.html"));
+    res.sendFile(indexHtmlPath);
   });
 }
 
