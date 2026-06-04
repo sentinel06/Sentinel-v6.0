@@ -13,7 +13,7 @@
  * WebSocket stream.
  */
 
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { randomBytes, createHash } from "crypto";
 import { db, auditLogsTable, agentSessionsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
@@ -277,20 +277,81 @@ async function runSimulation(simId: string): Promise<void> {
   logger.info({ simId, baseTrace: BASE_TRACE, execTrace: EXEC_TRACE }, "Demo simulation complete");
 }
 
+// ── Abuse guards ──────────────────────────────────────────────────────────────
+
+// Global concurrency flag — only one simulation may run at a time.
+let simRunning = false;
+
+// Per-IP cooldown: maps IP → timestamp of last allowed trigger (ms).
+// Entries expire after COOLDOWN_MS; the map is capped to prevent unbounded growth.
+const COOLDOWN_MS  = 120_000; // 2 minutes between triggers per IP
+const MAX_IP_SLOTS = 500;     // evict oldest when exceeded
+const ipCooldowns  = new Map<string, number>();
+
+function isOnCooldown(ip: string): boolean {
+  const last = ipCooldowns.get(ip);
+  if (!last) return false;
+  return Date.now() - last < COOLDOWN_MS;
+}
+
+function recordTrigger(ip: string): void {
+  if (ipCooldowns.size >= MAX_IP_SLOTS) {
+    // Evict the oldest entry to keep memory bounded.
+    const firstKey = ipCooldowns.keys().next().value;
+    if (firstKey !== undefined) ipCooldowns.delete(firstKey);
+  }
+  ipCooldowns.set(ip, Date.now());
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-router.post("/v1/demo/trigger-simulation", (_req, res) => {
-  const simId = randomBytes(6).toString("hex");
+router.post("/v1/demo/trigger-simulation", (req: Request, res: Response) => {
+  const ip = (
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+    req.socket.remoteAddress ??
+    "unknown"
+  );
 
-  void runSimulation(simId).catch((err: unknown) => {
-    logger.error({ err, simId }, "Demo simulation failed");
-  });
+  if (simRunning) {
+    res.status(429).json({
+      ok:      false,
+      code:    "SIM_IN_PROGRESS",
+      message: "A simulation is already running — watch the live stream or try again shortly",
+    });
+    return;
+  }
+
+  if (isOnCooldown(ip)) {
+    const retryAfterSec = Math.ceil(
+      (COOLDOWN_MS - (Date.now() - (ipCooldowns.get(ip) ?? 0))) / 1000,
+    );
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.status(429).json({
+      ok:         false,
+      code:       "RATE_LIMITED",
+      message:    `Too many simulation requests. Try again in ${retryAfterSec}s`,
+      retryAfterSec,
+    });
+    return;
+  }
+
+  const simId = randomBytes(6).toString("hex");
+  simRunning = true;
+  recordTrigger(ip);
+
+  void runSimulation(simId)
+    .catch((err: unknown) => {
+      logger.error({ err, simId }, "Demo simulation failed");
+    })
+    .finally(() => {
+      simRunning = false;
+    });
 
   res.json({
-    ok:      true,
+    ok:                  true,
     simId,
-    message: "Simulation started — watch the live stream",
-    stages:  ["COGNITIVE_DRIFT", "HONEY_TOKEN_BREACH", "CAUSAL_CHAIN_BREAK"],
+    message:             "Simulation started — watch the live stream",
+    stages:              ["COGNITIVE_DRIFT", "HONEY_TOKEN_BREACH", "CAUSAL_CHAIN_BREAK"],
     estimatedDurationMs: 12000,
   });
 });
