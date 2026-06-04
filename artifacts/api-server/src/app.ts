@@ -142,6 +142,17 @@ if (process.env["NODE_ENV"] === "production") {
   );
   logger.info({ dashboardDist }, "Serving bundled dashboard from api-server");
 
+  // Auth routes must not be indexed — they inherit the homepage metadata
+  // because this is an SPA. Return an X-Robots-Tag header before the static
+  // file middleware so crawlers receive it on the very first response.
+  app.use((req, res, next) => {
+    const p = req.path;
+    if (p.startsWith("/sign-in") || p.startsWith("/sign-up")) {
+      res.setHeader("X-Robots-Tag", "noindex, follow");
+    }
+    next();
+  });
+
   // Real assets (hashed JS/CSS, fonts, etc.) — long cache, no auto-index so
   // the SPA fallback below owns the `/` route exclusively.
   app.use(

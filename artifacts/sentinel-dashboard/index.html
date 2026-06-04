@@ -99,7 +99,58 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Pre-rendered landing page shell.
+      Visible to crawlers and AI bots (GPTBot, ClaudeBot, Googlebot) that
+      receive this document before JavaScript executes.
+      React's createRoot() replaces this content on mount — no hydration
+      mismatch because we never call hydrateRoot().
+    -->
+    <div id="root" style="background:#020617;min-height:100vh;font-family:'Inter',system-ui,sans-serif;color:#E5E7EB;">
+      <div style="max-width:980px;margin:0 auto;padding:80px 24px 48px;text-align:center;">
+        <p style="font-size:11px;letter-spacing:0.24em;color:#00F5FF;font-family:monospace;margin-bottom:32px;font-weight:700;">AGENT-SENTINEL · v6.0 · NEURAL SOVEREIGNTY</p>
+        <h1 style="font-size:clamp(28px,5vw,52px);font-weight:600;line-height:1.1;letter-spacing:-0.02em;margin:0 0 24px;background:linear-gradient(135deg,#00F5FF 0%,#8B5CF6 60%,#C4B5FD 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+          Govern your AI agents<br>with confidence.
+        </h1>
+        <p style="font-size:clamp(14px,2vw,18px);line-height:1.7;color:#CBD5E1;max-width:720px;margin:0 auto 48px;">
+          Real-time interdiction, post-quantum provenance, and audit-ready proof
+          for autonomous agent swarms — built for the EU AI Act era.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-bottom:48px;">
+          <div style="flex:1;min-width:260px;max-width:320px;background:rgba(15,23,42,0.55);border:1px solid rgba(0,245,255,0.2);border-radius:12px;padding:20px;text-align:left;">
+            <p style="color:#00F5FF;font-weight:600;font-size:13px;margin:0 0 8px;">See drift the moment it happens</p>
+            <p style="color:#94A3B8;font-size:13px;line-height:1.6;margin:0;">Real-time anomaly detection with sub-1ms interdiction latency.</p>
+          </div>
+          <div style="flex:1;min-width:260px;max-width:320px;background:rgba(15,23,42,0.55);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:20px;text-align:left;">
+            <p style="color:#8B5CF6;font-weight:600;font-size:13px;margin:0 0 8px;">Every action, cryptographically signed</p>
+            <p style="color:#94A3B8;font-size:13px;line-height:1.6;margin:0;">Post-quantum FIPS 204 (ML-DSA-87) signatures on every agent event.</p>
+          </div>
+          <div style="flex:1;min-width:260px;max-width:320px;background:rgba(15,23,42,0.55);border:1px solid rgba(255,184,0,0.2);border-radius:12px;padding:20px;text-align:left;">
+            <p style="color:#FFB800;font-weight:600;font-size:13px;margin:0 0 8px;">Audit-ready in one click</p>
+            <p style="color:#94A3B8;font-size:13px;line-height:1.6;margin:0;">Instant Sovereign Data Room export for regulators, M&amp;A, and review boards.</p>
+          </div>
+        </div>
+        <div style="max-width:540px;margin:0 auto;background:rgba(2,6,23,0.65);border:1px solid rgba(139,92,246,0.27);border-radius:14px;padding:28px;">
+          <h2 style="font-size:13px;font-weight:600;color:#E5E7EB;margin:0 0 20px;">Get started in 3 steps</h2>
+          <ol style="list-style:none;padding:0;margin:0 0 24px;text-align:left;display:flex;flex-direction:column;gap:14px;">
+            <li style="display:flex;gap:12px;align-items:flex-start;">
+              <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.13);border:1px solid rgba(139,92,246,0.4);color:#00F5FF;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:monospace;">1</span>
+              <span><strong style="color:#E5E7EB;font-size:13px;display:block;">Create your account</strong><span style="color:#94A3B8;font-size:12px;">Email or one-click social login.</span></span>
+            </li>
+            <li style="display:flex;gap:12px;align-items:flex-start;">
+              <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.13);border:1px solid rgba(139,92,246,0.4);color:#00F5FF;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:monospace;">2</span>
+              <span><strong style="color:#E5E7EB;font-size:13px;display:block;">Connect your AI agent</strong><span style="color:#94A3B8;font-size:12px;">Drop in the Sentinel-Bridge SDK or call the gateway API.</span></span>
+            </li>
+            <li style="display:flex;gap:12px;align-items:flex-start;">
+              <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.13);border:1px solid rgba(139,92,246,0.4);color:#00F5FF;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:monospace;">3</span>
+              <span><strong style="color:#E5E7EB;font-size:13px;display:block;">Watch your ledger fill up</strong><span style="color:#94A3B8;font-size:12px;">Every agent action signed, sealed, and audit-ready.</span></span>
+            </li>
+          </ol>
+          <a href="/sign-up" style="display:block;width:100%;padding:14px 20px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:#fff;border-radius:10px;font-size:14px;font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box;">Create your account →</a>
+        </div>
+        <p style="margin-top:40px;font-size:10px;letter-spacing:0.18em;color:#475569;font-family:monospace;">EU AI ACT · SOC 2 · NIST AI RMF · ISO/IEC 42001</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
