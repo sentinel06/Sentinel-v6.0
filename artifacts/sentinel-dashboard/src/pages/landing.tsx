@@ -209,13 +209,13 @@ export default function LandingPage() {
         </span>
       </div>
 
-      {/* ── Layer 4: top-right status pill ── */}
+      {/* ── Layer 4: top-right status pill (hidden on small phones — too cramped) ── */}
       <div
+        className="hidden sm:flex"
         style={{
           position: "absolute",
           top: 24,
           right: 32,
-          display: "flex",
           alignItems: "center",
           gap: 8,
           zIndex: 5,
