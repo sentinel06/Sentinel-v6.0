@@ -19,6 +19,7 @@ import { db, auditLogsTable } from "@workspace/db";
 import { viewerScopeCondition, getViewerUserId } from "../lib/owner";
 import { requireAuth } from "../lib/requireAuth";
 import { computeHash, getLastHash } from "../lib/hash.js";
+import { withChainLock } from "../lib/chainLock.js";
 import { quantumSigner } from "../crypto/quantum_ledger.js";
 import { signWithMLDSA } from "../crypto/pqc.js";
 
@@ -73,7 +74,6 @@ router.post("/v1/forensic/override", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const timestamp = new Date();
   const agentId   = original.agentId;
   const traceId   = original.traceId;
 
@@ -91,44 +91,53 @@ router.post("/v1/forensic/override", requireAuth, async (req, res): Promise<void
     },
   };
 
-  // 3. Compute hash — chained to current ledger tail
-  const previousHash = await getLastHash();
-  const currentHash  = computeHash(
-    timestamp.toISOString(),
-    agentId,
-    correctedPayload,
-    previousHash,
-  );
-
-  // 4. QL-2.0 dual-signature: SHA-512 + ML-DSA-87
-  //    Signed under context HUMAN_IN_THE_LOOP_OVERRIDE for full domain separation
-  const pqEnvelope = quantumSigner.sign(
-    currentHash,
-    "HUMAN_IN_THE_LOOP_OVERRIDE",
-    agentId,
-  );
-  const pqcSig = signWithMLDSA(currentHash);
-
-  // 5. Insert the override event into the immutable ledger
-  const [inserted] = await db
-    .insert(auditLogsTable)
-    .values({
-      timestamp,
+  // 3. Serialized ledger append. The getLastHash()→insert critical section runs
+  //    under the in-process chain mutex so a concurrent writer cannot insert
+  //    between this entry's tail read and its commit (which would fork the
+  //    chain). The timestamp is captured inside the lock so commit order always
+  //    matches timestamp order (getLastHash/verifyHashChain sort by timestamp).
+  const { inserted, pqEnvelope } = await withChainLock(async () => {
+    const timestamp    = new Date();
+    const previousHash = await getLastHash();
+    const currentHash  = computeHash(
+      timestamp.toISOString(),
       agentId,
-      traceId,
-      eventType: "HUMAN_IN_THE_LOOP_OVERRIDE",
-      payload: correctedPayload,
-      rationale: newRationale,
-      currentHash,
+      correctedPayload,
       previousHash,
-      isAnomalous: false,
-      anomalyReason: null,
-      consistencyScore: 1.0,        // human-verified — score set to 1.0
-      consistencyReasons: [],
-      quantumSig: pqcSig.signature.substring(0, 88),
-      pqSignature: pqEnvelope,
-    } as any)
-    .returning();
+    );
+
+    // QL-2.0 dual-signature: SHA-512 + ML-DSA-87
+    // Signed under context HUMAN_IN_THE_LOOP_OVERRIDE for full domain separation
+    const pqEnvelope = quantumSigner.sign(
+      currentHash,
+      "HUMAN_IN_THE_LOOP_OVERRIDE",
+      agentId,
+    );
+    const pqcSig = signWithMLDSA(currentHash);
+
+    // Insert the override event into the immutable ledger
+    const [inserted] = await db
+      .insert(auditLogsTable)
+      .values({
+        timestamp,
+        agentId,
+        traceId,
+        eventType: "HUMAN_IN_THE_LOOP_OVERRIDE",
+        payload: correctedPayload,
+        rationale: newRationale,
+        currentHash,
+        previousHash,
+        isAnomalous: false,
+        anomalyReason: null,
+        consistencyScore: 1.0,        // human-verified — score set to 1.0
+        consistencyReasons: [],
+        quantumSig: pqcSig.signature.substring(0, 88),
+        pqSignature: pqEnvelope,
+      } as any)
+      .returning();
+
+    return { inserted, pqEnvelope };
+  });
 
   res.json({
     forensicAuditId:      inserted.id,
@@ -278,56 +287,65 @@ router.post("/v1/governance/confirm-fix", requireAuth, async (req, res): Promise
     },
   };
 
-  // ── LEDGER ENTRY 1: HUMAN_IN_THE_LOOP_OVERRIDE ─────────────────────────
-  const ts1 = new Date();
-  const prev1 = await getLastHash();
-  const h1    = computeHash(ts1.toISOString(), agentId, correctedPayload, prev1);
-  const pqe1  = quantumSigner.sign(h1, "HUMAN_IN_THE_LOOP_OVERRIDE", agentId);
-  const pqc1  = signWithMLDSA(h1);
+  // ── Serialized dual-entry ledger append ─────────────────────────────────
+  // Both entries commit under a SINGLE chain-lock acquisition so they form a
+  // contiguous, fork-free 2-entry segment (entry 2 chains onto entry 1's hash).
+  // Timestamps are captured inside the lock so commit order matches timestamp
+  // order.
+  const { override, fixVerified, ts1, pqe1 } = await withChainLock(async () => {
+    // ── LEDGER ENTRY 1: HUMAN_IN_THE_LOOP_OVERRIDE ─────────────────────────
+    const ts1   = new Date();
+    const prev1 = await getLastHash();
+    const h1    = computeHash(ts1.toISOString(), agentId, correctedPayload, prev1);
+    const pqe1  = quantumSigner.sign(h1, "HUMAN_IN_THE_LOOP_OVERRIDE", agentId);
+    const pqc1  = signWithMLDSA(h1);
 
-  const [override] = await db.insert(auditLogsTable).values({
-    timestamp: ts1,
-    agentId, traceId,
-    eventType: "HUMAN_IN_THE_LOOP_OVERRIDE",
-    payload: correctedPayload,
-    rationale: newRationale,
-    currentHash: h1, previousHash: prev1,
-    isAnomalous: false, anomalyReason: null,
-    consistencyScore: 1.0, consistencyReasons: [],
-    quantumSig: pqc1.signature.substring(0, 88),
-    pqSignature: pqe1,
-    ownerUserId,
-  } as any).returning();
+    const [override] = await db.insert(auditLogsTable).values({
+      timestamp: ts1,
+      agentId, traceId,
+      eventType: "HUMAN_IN_THE_LOOP_OVERRIDE",
+      payload: correctedPayload,
+      rationale: newRationale,
+      currentHash: h1, previousHash: prev1,
+      isAnomalous: false, anomalyReason: null,
+      consistencyScore: 1.0, consistencyReasons: [],
+      quantumSig: pqc1.signature.substring(0, 88),
+      pqSignature: pqe1,
+      ownerUserId,
+    } as any).returning();
 
-  // ── LEDGER ENTRY 2: RECURSIVE_FIX_VERIFIED ──────────────────────────────
-  const ts2 = new Date();
-  const prev2 = override.currentHash;
-  const fixPayload = {
-    overrideEventId: override.id,
-    fixedLogId: logId,
-    agentId,
-    traceId,
-    challengeId,
-    sovereignApprovalMode: sovereignOverrideDev ? "DEV_OVERRIDE" : "QR_SCAN",
-    fixMonitorEventsRemaining: 100,
-  };
-  const h2   = computeHash(ts2.toISOString(), agentId, fixPayload, prev2);
-  const pqe2 = quantumSigner.sign(h2, "RECURSIVE_FIX_VERIFIED", agentId);
-  const pqc2 = signWithMLDSA(h2);
+    // ── LEDGER ENTRY 2: RECURSIVE_FIX_VERIFIED ──────────────────────────────
+    const ts2   = new Date();
+    const prev2 = override.currentHash;
+    const fixPayload = {
+      overrideEventId: override.id,
+      fixedLogId: logId,
+      agentId,
+      traceId,
+      challengeId,
+      sovereignApprovalMode: sovereignOverrideDev ? "DEV_OVERRIDE" : "QR_SCAN",
+      fixMonitorEventsRemaining: 100,
+    };
+    const h2   = computeHash(ts2.toISOString(), agentId, fixPayload, prev2);
+    const pqe2 = quantumSigner.sign(h2, "RECURSIVE_FIX_VERIFIED", agentId);
+    const pqc2 = signWithMLDSA(h2);
 
-  const [fixVerified] = await db.insert(auditLogsTable).values({
-    timestamp: ts2,
-    agentId, traceId,
-    eventType: "RECURSIVE_FIX_VERIFIED",
-    payload: fixPayload,
-    rationale: `Sovereign dual-sig fix verified. FIX_MONITOR_ACTIVE for next 100 events. ChallengeID: ${challengeId}`,
-    currentHash: h2, previousHash: prev2,
-    isAnomalous: false, anomalyReason: null,
-    consistencyScore: 1.0, consistencyReasons: [],
-    quantumSig: pqc2.signature.substring(0, 88),
-    pqSignature: pqe2,
-    ownerUserId,
-  } as any).returning();
+    const [fixVerified] = await db.insert(auditLogsTable).values({
+      timestamp: ts2,
+      agentId, traceId,
+      eventType: "RECURSIVE_FIX_VERIFIED",
+      payload: fixPayload,
+      rationale: `Sovereign dual-sig fix verified. FIX_MONITOR_ACTIVE for next 100 events. ChallengeID: ${challengeId}`,
+      currentHash: h2, previousHash: prev2,
+      isAnomalous: false, anomalyReason: null,
+      consistencyScore: 1.0, consistencyReasons: [],
+      quantumSig: pqc2.signature.substring(0, 88),
+      pqSignature: pqe2,
+      ownerUserId,
+    } as any).returning();
+
+    return { override, fixVerified, ts1, pqe1 };
+  });
 
   // ── Activate Fix Monitor (100-event elevated sampling window) ────────────
   setFixMonitorActive(agentId, traceId);
@@ -407,31 +425,38 @@ router.post("/v1/forensic/kill-switch-log", requireAuth, async (req, res): Promi
   }
   const ownerUserId = getViewerUserId(req);
 
-  const ts = new Date();
   const payload = {
     operatorId: operatorId ?? "unknown-operator",
     reason: reason ?? "Emergency Kill Switch activated from Trace Interdiction Panel",
     note: "BYPASSES_SOVEREIGN_MULTI_SIG — Single-operator emergency action. No second signature required.",
   };
-  const prev = await getLastHash();
-  const hash = computeHash(ts.toISOString(), agentId, payload, prev);
-  const pqe  = quantumSigner.sign(hash, "EMERGENCY_SOLO_REVOKE", agentId);
-  const pqc  = signWithMLDSA(hash);
 
-  const [inserted] = await db.insert(auditLogsTable).values({
-    timestamp: ts,
-    agentId, traceId: traceId ?? `emergency-${Date.now()}`,
-    eventType: "EMERGENCY_SOLO_REVOKE",
-    payload,
-    rationale: `EMERGENCY: Kill Switch activated. Single-operator revocation. No sovereign co-signature.`,
-    currentHash: hash, previousHash: prev,
-    isAnomalous: true,
-    anomalyReason: "EMERGENCY_SOLO_REVOKE — bypasses dual-sig governance",
-    consistencyScore: 1.0, consistencyReasons: [],
-    quantumSig: pqc.signature.substring(0, 88),
-    pqSignature: pqe,
-    ownerUserId,
-  } as any).returning();
+  // Serialized ledger append (chain mutex). Timestamp captured inside the lock
+  // so commit order always matches timestamp order.
+  const { inserted, ts } = await withChainLock(async () => {
+    const ts   = new Date();
+    const prev = await getLastHash();
+    const hash = computeHash(ts.toISOString(), agentId, payload, prev);
+    const pqe  = quantumSigner.sign(hash, "EMERGENCY_SOLO_REVOKE", agentId);
+    const pqc  = signWithMLDSA(hash);
+
+    const [inserted] = await db.insert(auditLogsTable).values({
+      timestamp: ts,
+      agentId, traceId: traceId ?? `emergency-${Date.now()}`,
+      eventType: "EMERGENCY_SOLO_REVOKE",
+      payload,
+      rationale: `EMERGENCY: Kill Switch activated. Single-operator revocation. No sovereign co-signature.`,
+      currentHash: hash, previousHash: prev,
+      isAnomalous: true,
+      anomalyReason: "EMERGENCY_SOLO_REVOKE — bypasses dual-sig governance",
+      consistencyScore: 1.0, consistencyReasons: [],
+      quantumSig: pqc.signature.substring(0, 88),
+      pqSignature: pqe,
+      ownerUserId,
+    } as any).returning();
+
+    return { inserted, ts };
+  });
 
   res.json({
     status: "EMERGENCY_SOLO_REVOKE_LOGGED",

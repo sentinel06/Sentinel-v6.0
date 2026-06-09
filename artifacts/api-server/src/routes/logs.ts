@@ -8,7 +8,8 @@ import {
   GetTraceParams,
   ExportComplianceReportQueryParams,
 } from "@workspace/api-zod";
-import { getLastHash, computeHash, detectAnomaly } from "../lib/hash";
+import { getLastHash, computeHash, detectAnomaly, CANONICAL_HASH_VERSION } from "../lib/hash";
+import { withChainLock } from "../lib/chainLock";
 import { verifyHashChain, sealMerkleBlock } from "../lib/integrity";
 import { broadcastLog } from "../lib/ws";
 import { streamManager } from "../services/streaming";
@@ -171,56 +172,76 @@ router.post("/v1/log", logRateLimiter(), dailyKeyRateLimiter(), maskPayloadSecre
   const computeOriginRegion: string =
     typeof req.body.computeOriginRegion === "string" ? req.body.computeOriginRegion : "unspecified";
 
-  const timestamp = new Date();
-
-  // Count rows before insert to determine block position (append-only table)
-  const [{ totalRows }] = await db.select({ totalRows: count() }).from(auditLogsTable);
-  const currentCount = Number(totalRows);
-
-  const previousHash = await getLastHash();
-  const currentHash = computeHash(
-    timestamp.toISOString(),
-    agentId,
-    payload as object,
-    previousHash,
-  );
-
-  // Consistency score: intent (rationale) vs action (eventType + payload)
+  // Consistency score: intent (rationale) vs action (eventType + payload).
+  // Independent of chain state, so computed outside the serialization lock.
   const consistency = computeConsistencyScore(rationale, eventType, payload as object);
 
   // Anomaly detection now incorporates consistency score — low score → High-Risk flag
   const anomaly = detectAnomaly(eventType, rationale, consistency.score, consistency.reasons);
 
-  // QL-2.0: produce hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
-  const pqEnvelope = quantumSigner.sign(currentHash);
-  // Legacy single-field for backward-compat with older dashboard queries
-  const pqcSig = signWithMLDSA(currentHash);
+  // ── Serialized ledger append ───────────────────────────────────────────────
+  // The full getLastHash() → insert path runs under an in-process mutex so
+  // concurrent agent streams cannot read the same chain tail and fork it: each
+  // writer fully commits and finalizes its hash before the next queued writer
+  // can query getLastHash().
+  const { inserted, currentCount, pqcSig } = await withChainLock(async () => {
+    // Capture the commit timestamp INSIDE the lock so insert order always
+    // matches timestamp order. getLastHash() and verifyHashChain() both sort by
+    // timestamp; a lock-order/timestamp-order inversion would otherwise surface
+    // as a false TAMPER flag on freshly written v2 rows.
+    const timestamp = new Date();
 
-  const [inserted] = await db
-    .insert(auditLogsTable)
-    .values({
-      timestamp,
+    // Count rows before insert to determine block position (append-only table)
+    const [{ totalRows }] = await db.select({ totalRows: count() }).from(auditLogsTable);
+    const currentCount = Number(totalRows);
+
+    const previousHash = await getLastHash();
+    // New chains use canonical (sorted-key) serialization. The per-row
+    // hashVersion stamped below lets verifyHashChain() recompute each entry
+    // with the exact scheme it was written under, so legacy/demo rows still
+    // verify byte-for-byte.
+    const currentHash = computeHash(
+      timestamp.toISOString(),
       agentId,
-      traceId,
-      eventType,
-      payload,
-      rationale: rationale ?? null,
-      currentHash,
+      payload as object,
       previousHash,
-      isAnomalous: anomaly.isAnomalous,
-      anomalyReason: anomaly.anomalyReason,
-      consistencyScore: consistency.score,
-      consistencyReasons: consistency.reasons,
-      parentTraceId: parentTraceId,
-      dependencyChain: dependencyChain,
-      ...(parentAgentId ? { parentAgentId } : {}),
-      ...(swarmId ? { swarmId } : {}),
-      computeOriginRegion,
-      quantumSig: pqcSig.signature.substring(0, 88),
-      pqSignature: pqEnvelope,
-      ownerUserId,
-    } as any)
-    .returning();
+      CANONICAL_HASH_VERSION,
+    );
+
+    // QL-2.0: produce hybrid dual-signature envelope (SHA-512 + ML-DSA-87)
+    const pqEnvelope = quantumSigner.sign(currentHash);
+    // Legacy single-field for backward-compat with older dashboard queries
+    const pqcSig = signWithMLDSA(currentHash);
+
+    const [inserted] = await db
+      .insert(auditLogsTable)
+      .values({
+        timestamp,
+        agentId,
+        traceId,
+        eventType,
+        payload,
+        rationale: rationale ?? null,
+        currentHash,
+        previousHash,
+        hashVersion: CANONICAL_HASH_VERSION,
+        isAnomalous: anomaly.isAnomalous,
+        anomalyReason: anomaly.anomalyReason,
+        consistencyScore: consistency.score,
+        consistencyReasons: consistency.reasons,
+        parentTraceId: parentTraceId,
+        dependencyChain: dependencyChain,
+        ...(parentAgentId ? { parentAgentId } : {}),
+        ...(swarmId ? { swarmId } : {}),
+        computeOriginRegion,
+        quantumSig: pqcSig.signature.substring(0, 88),
+        pqSignature: pqEnvelope,
+        ownerUserId,
+      } as any)
+      .returning();
+
+    return { inserted, currentCount, pqcSig };
+  });
 
   // Record this score in the in-memory session health cache for the circuit breaker
   recordConsistencyScore(agentId, consistency.score);

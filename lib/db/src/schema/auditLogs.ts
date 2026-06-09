@@ -36,6 +36,12 @@ export const auditLogsTable = pgTable(
     // this entry. Null = legacy/system/admin (demo seed) — never shown to a
     // signed-in dashboard user, only to the SENTINEL_KEY admin path.
     ownerUserId: text("owner_user_id"),
+    // Hash-scheme version for this row (see api-server lib/hash.ts). NULL/1 =
+    // legacy JSON.stringify payload serialization; 2 = canonical (recursively
+    // sorted keys). verifyHashChain() recomputes each row under its own version
+    // so adopting canonical hashing for new chains never invalidates historical
+    // (demo / simulation / gateway) entries.
+    hashVersion: integer("hash_version"),
   },
   (table) => [
     index("audit_logs_agent_id_idx").on(table.agentId),

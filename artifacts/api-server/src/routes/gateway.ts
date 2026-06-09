@@ -19,6 +19,7 @@ import { db, auditLogsTable, agentRegistryTable, agentSessionsTable } from "@wor
 import { eq } from "drizzle-orm";
 import { signWithMLDSA, PQC_ALGORITHM_ID, DOMAIN_SEPARATOR } from "../crypto/pqc";
 import { getLastHash } from "../lib/hash";
+import { withChainLock } from "../lib/chainLock";
 import { computeConsistencyScore } from "../lib/consistency";
 import {
   isAgentRevoked,
@@ -206,33 +207,37 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
     driftThreshold as number, interdictionMode as "shadow" | "sovereign",
   );
 
-  // Immutable ledger: record GATEWAY_REGISTRATION event
-  const prevHash = await getLastHash();
+  // Immutable ledger: record GATEWAY_REGISTRATION event.
+  // Serialized append (see withChainLock): getLastHash()→insert must not
+  // interleave with other writers, or concurrent registrations fork the chain.
   const qs       = makeFakeQuantumSig();
   const payload  = { event: "GATEWAY_REGISTRATION", agentId, name, capabilities, swarmId, parentId, tokenId: token.tokenId };
-  const hash     = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(payload));
   const ownerUserId = await resolveOwnerFromKey(req);
-  await db.insert(auditLogsTable).values({
-    agentId,
-    traceId:          `gw-reg-${token.tokenId}`,
-    eventType:        "GATEWAY_REGISTRATION",
-    payload,
-    rationale:        `Agent '${name}' registered via Sentinel-Bridge SDK. Interdiction mode: ${interdictionMode}.`,
-    currentHash:      hash,
-    previousHash:     prevHash,
-    isAnomalous:      false,
-    consistencyScore: 1.0,
-    swarmId:          swarmId ?? null,
-    quantumSig:       qs,
-    pqSignature: {
-      algorithm:  PQC_ALGORITHM_ID,
-      fipsLevel:  5,
-      domainSep:  DOMAIN_SEPARATOR,
-      sigHex:     token.signature.substring(0, 48),
-      verified:   true,
-    },
-    ownerUserId,
-  } as any);
+  await withChainLock(async () => {
+    const prevHash = await getLastHash();
+    const hash     = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(payload));
+    await db.insert(auditLogsTable).values({
+      agentId,
+      traceId:          `gw-reg-${token.tokenId}`,
+      eventType:        "GATEWAY_REGISTRATION",
+      payload,
+      rationale:        `Agent '${name}' registered via Sentinel-Bridge SDK. Interdiction mode: ${interdictionMode}.`,
+      currentHash:      hash,
+      previousHash:     prevHash,
+      isAnomalous:      false,
+      consistencyScore: 1.0,
+      swarmId:          swarmId ?? null,
+      quantumSig:       qs,
+      pqSignature: {
+        algorithm:  PQC_ALGORITHM_ID,
+        fipsLevel:  5,
+        domainSep:  DOMAIN_SEPARATOR,
+        sigHex:     token.signature.substring(0, 48),
+        verified:   true,
+      },
+      ownerUserId,
+    } as any);
+  });
 
   // Register per-agent honey-tokens if supplied
   if (Array.isArray(honeyTokens) && honeyTokens.length > 0) {
@@ -385,7 +390,6 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
   }
 
   // ── Ledger commit ─────────────────────────────────────────────────────────
-  const prevHash = await getLastHash();
   const qs       = makeFakeQuantumSig();
   const fullPayload = {
     ...(payload as object),
@@ -395,34 +399,40 @@ router.post("/v1/gateway/telemetry", async (req, res): Promise<void> => {
     sdk:          "sentinel-bridge",
     interdictionMode,
   };
-  // prevHash is null when the ledger is empty (genesis). Fall back to the
-  // sentinel string used by computeHash() in lib/hash.ts so the chain
-  // anchor stays consistent across both helpers.
-  const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(fullPayload));
-
   const ownerUserId = await resolveOwnerFromKey(req);
-  const [inserted] = await db.insert(auditLogsTable).values({
-    agentId,
-    traceId,
-    eventType:        eventType as string,
-    payload:          fullPayload,
-    rationale:        (rationale as string | undefined) ?? `Gateway telemetry: ${eventType}`,
-    currentHash:      hash,
-    previousHash:     prevHash,
-    isAnomalous,
-    anomalyReason,
-    consistencyScore: consistency.score,
-    swarmId:          (swarmId as string | undefined) ?? null,
-    quantumSig:       qs,
-    pqSignature: {
-      algorithm:  PQC_ALGORITHM_ID,
-      fipsLevel:  5,
-      domainSep:  DOMAIN_SEPARATOR,
-      sigHex:     qs.substring(0, 48),
-      verified:   true,
-    },
-    ownerUserId,
-  } as any).returning({ id: auditLogsTable.id });
+
+  // Serialized append (see withChainLock): the full getLastHash()→insert path
+  // commits before the next concurrent telemetry packet can read the tail.
+  const { inserted, hash } = await withChainLock(async () => {
+    // prevHash is null when the ledger is empty (genesis). Fall back to the
+    // sentinel string used by computeHash() in lib/hash.ts so the chain
+    // anchor stays consistent across both helpers.
+    const prevHash = await getLastHash();
+    const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(fullPayload));
+    const [inserted] = await db.insert(auditLogsTable).values({
+      agentId,
+      traceId,
+      eventType:        eventType as string,
+      payload:          fullPayload,
+      rationale:        (rationale as string | undefined) ?? `Gateway telemetry: ${eventType}`,
+      currentHash:      hash,
+      previousHash:     prevHash,
+      isAnomalous,
+      anomalyReason,
+      consistencyScore: consistency.score,
+      swarmId:          (swarmId as string | undefined) ?? null,
+      quantumSig:       qs,
+      pqSignature: {
+        algorithm:  PQC_ALGORITHM_ID,
+        fipsLevel:  5,
+        domainSep:  DOMAIN_SEPARATOR,
+        sigHex:     qs.substring(0, 48),
+        verified:   true,
+      },
+      ownerUserId,
+    } as any).returning({ id: auditLogsTable.id });
+    return { inserted, hash };
+  });
 
   // ── Honey-Token action dispatch ───────────────────────────────────────────
   // The ledger entry is already committed above (audit trail is immutable).
@@ -555,36 +565,39 @@ router.post("/v1/gateway/crispr_recode", async (req, res): Promise<void> => {
   const recodeId  = `crispr-${randomBytes(8).toString("hex")}`;
   const timestamp = healedAt ?? new Date().toISOString();
 
-  // Commit to ledger
-  const prevHash = await getLastHash();
-  const qs       = makeFakeQuantumSig();
-  const ledgerPayload = { event: "CRISPR_RECODE", rootId, targets, source, recodeId, timestamp };
-  // See note at the gateway POST hash chain entry above re: GENESIS sentinel.
-  const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(ledgerPayload));
-
+  // Commit to ledger.
+  // Serialized append (see withChainLock). The ledger write is best-effort: a
+  // failure must not block the WS broadcast below, so it stays caught.
   // ownerUserId is intentionally NULL here: CRISPR_RECODE is a platform-level
   // system event that targets agents across potentially multiple tenants.
   // A NULL owner means it is treated as a system/demo row and is invisible
   // to every tenant-scoped read path (viewerScopeCondition excludes NULL rows).
-  await db.insert(auditLogsTable).values({
-    agentId:          rootId ?? "sentinel-system",
-    traceId:          recodeId,
-    eventType:        "CRISPR_RECODE",
-    payload:          ledgerPayload,
-    rationale:        `CRISPR Genetic Recoding Surge: ${(targets as string[]).length} nodes healed. Source: ${source}.`,
-    currentHash:      hash,
-    previousHash:     prevHash,
-    isAnomalous:      false,
-    consistencyScore: 1.0,
-    quantumSig:       qs,
-    pqSignature: {
-      algorithm:  PQC_ALGORITHM_ID,
-      fipsLevel:  5,
-      domainSep:  DOMAIN_SEPARATOR,
-      sigHex:     qs.substring(0, 48),
-      verified:   true,
-    },
-  }).catch(() => {}); // Non-blocking; ledger write failure shouldn't block WS broadcast
+  const qs       = makeFakeQuantumSig();
+  const ledgerPayload = { event: "CRISPR_RECODE", rootId, targets, source, recodeId, timestamp };
+  await withChainLock(async () => {
+    // See note at the gateway POST hash chain entry above re: GENESIS sentinel.
+    const prevHash = await getLastHash();
+    const hash = hashChainEntry(prevHash ?? "GENESIS", JSON.stringify(ledgerPayload));
+    await db.insert(auditLogsTable).values({
+      agentId:          rootId ?? "sentinel-system",
+      traceId:          recodeId,
+      eventType:        "CRISPR_RECODE",
+      payload:          ledgerPayload,
+      rationale:        `CRISPR Genetic Recoding Surge: ${(targets as string[]).length} nodes healed. Source: ${source}.`,
+      currentHash:      hash,
+      previousHash:     prevHash,
+      isAnomalous:      false,
+      consistencyScore: 1.0,
+      quantumSig:       qs,
+      pqSignature: {
+        algorithm:  PQC_ALGORITHM_ID,
+        fipsLevel:  5,
+        domainSep:  DOMAIN_SEPARATOR,
+        sigHex:     qs.substring(0, 48),
+        verified:   true,
+      },
+    }).catch(() => {}); // Non-blocking; ledger write failure shouldn't block WS broadcast
+  });
 
   // Broadcast CRISPR_RECODE to all connected WS clients (SDK listeners)
   broadcastGatewayEvent("CRISPR_RECODE", {

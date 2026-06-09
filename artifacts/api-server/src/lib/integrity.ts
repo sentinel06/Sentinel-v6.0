@@ -1,7 +1,7 @@
 import { db } from "@workspace/db";
 import { auditLogsTable, integrityCheckTable, merkleCheckpointsTable } from "@workspace/db";
 import { asc } from "drizzle-orm";
-import { computeHash } from "./hash";
+import { computeHash, LEGACY_HASH_VERSION } from "./hash";
 import { buildMerkleRoot, BLOCK_SIZE } from "./merkle";
 import { logger } from "./logger";
 
@@ -142,11 +142,15 @@ export async function verifyHashChain(): Promise<{
     // Always walk to maintain the inter-block previousHash cursor,
     // but only collect tampered entries for blocks that need it.
     for (const log of block) {
+      // Recompute under the row's own hash scheme: legacy (v1/NULL) demo and
+      // simulation rows verify with JSON.stringify, while new canonical (v2)
+      // chains verify with sorted-key serialization.
       const expectedHash = computeHash(
         log.timestamp.toISOString(),
         log.agentId,
         log.payload as object,
         previousHash,
+        log.hashVersion ?? LEGACY_HASH_VERSION,
       );
 
       if (blockNeedsDetailedScan) {

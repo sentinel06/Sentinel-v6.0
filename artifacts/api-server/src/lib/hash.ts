@@ -13,13 +13,58 @@ export async function getLastHash(): Promise<string | null> {
   return last?.currentHash ?? null;
 }
 
+/**
+ * Hash-scheme versions stamped on each ledger row (audit_logs.hash_version).
+ *
+ *   1 (or NULL) — LEGACY: payload serialized with raw JSON.stringify. Every
+ *                 historical demo / simulation / gateway row was written this
+ *                 way.
+ *   2           — CANONICAL: payload serialized with recursively sorted keys
+ *                 (canonicalStringify) so structurally-equal payloads always
+ *                 hash identically regardless of key insertion order.
+ *
+ * computeHash() defaults to LEGACY so existing call sites stay byte-for-byte
+ * unchanged; only the live ingest path opts into CANONICAL for new chains.
+ */
+export const LEGACY_HASH_VERSION = 1;
+export const CANONICAL_HASH_VERSION = 2;
+
+/**
+ * Deterministic JSON serialization with recursively sorted object keys.
+ * Used only by canonical (v2+) chains. Array order is preserved (it is
+ * semantically significant); object keys are sorted. Primitives defer to
+ * JSON.stringify for correct escaping. JSONB payloads never contain
+ * `undefined`, so that JSON.stringify edge case cannot occur in practice.
+ */
+function canonicalStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(obj[k])}`).join(",")}}`;
+}
+
+/**
+ * Compute the SHA-256 chain hash for a ledger entry.
+ *
+ * `version` selects the payload serialization scheme (see the LEGACY/CANONICAL
+ * constants above) and MUST equal the value stored in audit_logs.hash_version
+ * for the row, so verifyHashChain() can recompute it exactly.
+ */
 export function computeHash(
   timestamp: string,
   agentId: string,
   payload: object,
   previousHash: string | null,
+  version: number = LEGACY_HASH_VERSION,
 ): string {
-  const data = `${timestamp}|${agentId}|${JSON.stringify(payload)}|${previousHash ?? "GENESIS"}`;
+  const serializedPayload =
+    version >= CANONICAL_HASH_VERSION ? canonicalStringify(payload) : JSON.stringify(payload);
+  const data = `${timestamp}|${agentId}|${serializedPayload}|${previousHash ?? "GENESIS"}`;
   return createHash("sha256").update(data).digest("hex");
 }
 
