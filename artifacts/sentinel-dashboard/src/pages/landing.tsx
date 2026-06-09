@@ -46,7 +46,7 @@ const FAQ_ITEMS = [
 ];
 
 function FaqList() {
-  const [open, setOpen] = React.useState<number | null>(null);
+  const [open, setOpen] = React.useState<number | null>(0);
   return (
     <div className="flex flex-col gap-2">
       {FAQ_ITEMS.map((item, i) => (
@@ -794,6 +794,10 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <a href="#" className="mobile-primary-cta">
+          Contact Enterprise Relations
+        </a>
+
         {/* ── Integration Options / SDK ── */}
         <section aria-labelledby="integration-heading">
           <h2
@@ -883,6 +887,10 @@ gw.log_event(agent_id="my-agent-v1", event_type="tool_call", payload={...})`}
           </h2>
           <FaqList />
         </section>
+
+        <a href="#" className="mobile-primary-cta">
+          Contact Enterprise Relations
+        </a>
 
       </div>
 
