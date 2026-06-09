@@ -889,3 +889,24 @@ h1, h2, h3, h4, h5, h6 {
                 inset 0 0 22px rgba(185, 28, 28, 0.08);
   }
 }
+
+/* Sticky-ready responsive primary action callouts */
+.mobile-primary-cta {
+    display: block;
+    width: calc(100% - 2rem);
+    max-width: 480px;
+    text-align: center;
+    background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+    color: #ffffff !important;
+    font-weight: 600;
+    padding: 0.95rem 1.5rem;
+    border-radius: 0.5rem;
+    text-decoration: none !important;
+    margin: 2.5rem auto;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mobile-primary-cta:active {
+    transform: scale(0.98);
+}
