@@ -189,7 +189,7 @@ export default function Slide02Problem() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>02</span>
       </div>
     </div>

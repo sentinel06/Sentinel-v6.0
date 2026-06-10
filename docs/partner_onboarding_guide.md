@@ -1,4 +1,4 @@
-# Agent-Sentinel v6.0 — Partner Onboarding Guide
+# MaroShield v6.0 — Partner Onboarding Guide
 
 **Compliance Framework:** EU AI Act Art. 12/14 · NIST AI RMF · FIPS-204 (QL-2.0)  
 **Last Updated:** 2026-05-07
@@ -21,7 +21,7 @@
 
 ## 1. Overview
 
-Agent-Sentinel v6.0 is a full-stack AI governance framework built for high-risk AI deployments under the EU AI Act 2026 obligations. This guide covers the complete onboarding procedure for authorized partners, including:
+MaroShield v6.0 is a full-stack AI governance framework built for high-risk AI deployments under the EU AI Act 2026 obligations. This guide covers the complete onboarding procedure for authorized partners, including:
 
 - Authentication via the partner Golden Key
 - Dynamic EU AI Act Art. 12/14 compliance readiness assessment
@@ -35,7 +35,7 @@ Your Agent Swarm
         │
         ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  Agent-Sentinel Governance Layer                               │
+│  MaroShield Governance Layer                               │
 │                                                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
 │  │ Audit Ledger │  │  Drift Det.  │  │   Two-Man Rule Gate │ │
@@ -55,7 +55,7 @@ Your Agent Swarm
 
 ## 2. Alpha Access — Golden Key Authentication
 
-The Partner Onboarding Suite is restricted to authorized Golden Key holders. Contact your Sentinel account manager to receive your key.
+The Partner Onboarding Suite is restricted to authorized Golden Key holders. Contact your MaroShield account manager to receive your key.
 
 ### Using the Dashboard
 
@@ -123,7 +123,7 @@ The compliance readiness API dynamically computes the following nine controls fr
 
 ### Purpose
 
-The Two-Man Rule (Art. 14 §3) requires that all critical AI corrections be co-signed by two distinct human operators. Sentinel enforces this via dual ML-DSA-87 quantum signatures:
+The Two-Man Rule (Art. 14 §3) requires that all critical AI corrections be co-signed by two distinct human operators. MaroShield enforces this via dual ML-DSA-87 quantum signatures:
 
 1. **Operator Key** — The primary key used for all standard governance actions
 2. **Secondary Sovereign Key** — A separate key held by a different authorized individual (the "Sovereign")
@@ -144,7 +144,7 @@ These keys must never be held by the same person.
 
 **Step 1: Generate the key pair**
 
-Using the Sentinel CLI:
+Using the MaroShield CLI:
 ```bash
 sentinel keygen \
   --algo ml-dsa-87 \
@@ -154,7 +154,7 @@ sentinel keygen \
 ```
 
 This produces:
-- `sovereign.pub` — the public key (submit to Sentinel)
+- `sovereign.pub` — the public key (submit to MaroShield)
 - `sovereign.priv` — the private key (**never share; store in HSM or air-gapped vault**)
 
 **Step 2: Export the public key as base64url DER**
@@ -204,13 +204,13 @@ Expected response:
 2. Select any event, open the Interdiction Panel
 3. Edit the rationale and click **Apply Fix (Two-Man Rule)**
 4. The Sovereign Multi-Sig Modal opens — it will send a challenge to the enrolled Sovereign key holder's registered device
-5. The Sovereign scans the QR code with the Sentinel Sovereign App and approves
+5. The Sovereign scans the QR code with the MaroShield Sovereign App and approves
 6. On success, a `RECURSIVE_FIX_VERIFIED` event is written to the ledger with both signatures
 
 ### Key Security Requirements
 
 - The Sovereign private key must be stored in an HSM or a FIPS-140-3 validated key vault
-- The key holder must complete Sentinel identity verification before the key is accepted
+- The key holder must complete MaroShield identity verification before the key is accepted
 - Key rotation is required annually or upon any suspected compromise
 - The Sovereign key holder must be reachable within **4 hours** per the post-interdiction SLA
 
@@ -429,8 +429,8 @@ After running the simulation:
 | `GET` | `/api/v1/partner/onboarding` | Golden Key | EU AI Act compliance checklist + SLA |
 | `POST` | `/api/v1/partner/demo/seed` | None (demo) | Seed demo environment |
 | `GET` | `/api/v1/partner/demo/golden-key` | None | Golden Key metadata |
-| `GET` | `/api/v1/me/key` | Clerk session | Retrieve your Sentinel API key |
-| `POST` | `/api/v1/me/key` | Clerk session | Provision your Sentinel API key |
+| `GET` | `/api/v1/me/key` | Clerk session | Retrieve your MaroShield API key |
+| `POST` | `/api/v1/me/key` | Clerk session | Provision your MaroShield API key |
 
 ### Governance & Multi-Sig
 
@@ -470,4 +470,4 @@ After running the simulation:
 
 ---
 
-*This document is CONFIDENTIAL and intended solely for authorized Agent-Sentinel partners. All governance actions taken via this portal are logged to an immutable, quantum-secured audit ledger in accordance with EU AI Act Art. 12/14 and NIST FIPS-204.*
+*This document is CONFIDENTIAL and intended solely for authorized MaroShield partners. All governance actions taken via this portal are logged to an immutable, quantum-secured audit ledger in accordance with EU AI Act Art. 12/14 and NIST FIPS-204.*

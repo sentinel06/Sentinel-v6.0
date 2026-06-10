@@ -1,8 +1,8 @@
-# Agent-Sentinel
+# MaroShield
 
 > Immutable audit ledger, active governance, and EU AI Act compliance for production AI agents.
 
-Agent-Sentinel is a full-stack governance platform that wraps AI agents with cryptographic accountability. Every agent action is SHA-256 hash-chained into an append-only ledger sealed with ML-DSA-87 post-quantum signatures, giving operators a tamper-evident record compliant with EU AI Act Article 12 (traceability) and Article 14 (human oversight).
+MaroShield is a full-stack governance platform that wraps AI agents with cryptographic accountability. Every agent action is SHA-256 hash-chained into an append-only ledger sealed with ML-DSA-87 post-quantum signatures, giving operators a tamper-evident record compliant with EU AI Act Article 12 (traceability) and Article 14 (human oversight).
 
 ## Core capabilities
 

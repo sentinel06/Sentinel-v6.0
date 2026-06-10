@@ -35,7 +35,7 @@ if (!MESH_UPSTREAM_URL) {
 
 logger.info(
   { port: MESH_PROXY_PORT, upstream: MESH_UPSTREAM_URL, sentinel: SENTINEL_CORE_URL },
-  "Sentinel mesh-proxy starting — circuit breaker initialised OPEN (fail-closed until Redis ready)",
+  "MaroShield mesh-proxy starting — circuit breaker initialised OPEN (fail-closed until Redis ready)",
 );
 
 // Breaker starts CLOSED; createRedisPublisher will trip() it immediately if
@@ -64,7 +64,7 @@ breaker.on("closed",    () => logger.info("✓  Sidecar operational: agent calls
 server.listen(MESH_PROXY_PORT, () => {
   logger.info(
     { port: MESH_PROXY_PORT },
-    "Sentinel mesh-proxy listening",
+    "MaroShield mesh-proxy listening",
   );
 });
 

@@ -48,7 +48,7 @@ export const logger = isProduction
 // Only relevant for the async destination; pretty transport handles its own.
 if (isProduction) {
   const flushAndExit = (signal: NodeJS.Signals) => {
-    logger.info({ signal }, "Sentinel API shutting down — flushing logs");
+    logger.info({ signal }, "MaroShield API shutting down — flushing logs");
     productionDestination.flushSync();
     process.exit(0);
   };

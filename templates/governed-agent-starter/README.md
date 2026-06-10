@@ -3,7 +3,7 @@
 ![sentinel-governed](https://your-sentinel.replit.app/api/v1/badge/my-governed-agent.svg)
 
 > **EU AI Act Art. 12/14 compliance in under 10 lines of code.**
-> Powered by [Agent-Sentinel](https://agent-sentinel.net).
+> Powered by [MaroShield](https://agent-sentinel.net).
 
 ---
 
@@ -73,10 +73,10 @@ const draft = await writer.governed( "write", "...", writeFn);
 
 ---
 
-## The Sentinel-Governed Certification Program
+## The MaroShield-Governed Certification Program
 
 Keep your cluster health above 80% and earn the right to display the
-**Sentinel-Governed** badge in your project README — a live SVG that reflects
+**MaroShield-Governed** badge in your project README — a live SVG that reflects
 your agent's real-time governance posture.
 
 ```markdown
@@ -125,7 +125,7 @@ Or link it to your War Room dashboard for full transparency:
 [![sentinel-governed](https://YOUR_SENTINEL_URL/api/v1/badge/YOUR_AGENT_ID.svg)](https://YOUR_SENTINEL_URL)
 ```
 
-You can generate the exact embed snippet from the **Sentinel Badge** page in
+You can generate the exact embed snippet from the **MaroShield Badge** page in
 your dashboard — it auto-fills the URL and provides Markdown, HTML, and direct
 link formats.
 
@@ -172,4 +172,4 @@ instruction chain.
 
 ---
 
-*Built with Agent-Sentinel — the immutable audit ledger for production AI agents.*
+*Built with MaroShield — the immutable audit ledger for production AI agents.*

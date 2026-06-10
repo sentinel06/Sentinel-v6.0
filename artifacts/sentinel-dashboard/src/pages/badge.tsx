@@ -97,7 +97,7 @@ function CertBadgePreview({ agentId }: { agentId?: string }) {
   return (
     <img
       src={src}
-      alt="Sentinel badge preview"
+      alt="MaroShield badge preview"
       className="h-5"
       key={src + Date.now()}
     />
@@ -125,7 +125,7 @@ export default function BadgePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <Award className="w-6 h-6 text-yellow-400" />
-            Sentinel-Certified Badge
+            MaroShield-Certified Badge
           </h1>
           <p className="text-sm text-muted-foreground font-mono mt-1">
             Earn and embed your governance badge · Share it in your README
@@ -176,8 +176,8 @@ export default function BadgePage() {
             </div>
             <p className="text-sm text-muted-foreground font-mono mt-2 leading-relaxed max-w-xl">
               {certified
-                ? `Your cluster is operating at ${pct}% health — above the 80% threshold. You may display the Sentinel-Governed badge in your project READMEs.`
-                : `Your cluster health is ${pct}%. Maintain above 80% to earn the Sentinel-Governed badge. Keep rationales consistent, avoid honey-tokens, and handle approvals promptly.`}
+                ? `Your cluster is operating at ${pct}% health — above the 80% threshold. You may display the MaroShield-Governed badge in your project READMEs.`
+                : `Your cluster health is ${pct}%. Maintain above 80% to earn the MaroShield-Governed badge. Keep rationales consistent, avoid honey-tokens, and handle approvals promptly.`}
             </p>
             <div className="mt-4 flex flex-wrap gap-3 items-center">
               <span className="text-xs font-mono text-muted-foreground">
@@ -323,7 +323,7 @@ export default function BadgePage() {
         <div className="p-4 space-y-3">
           <p className="text-sm text-muted-foreground font-mono leading-relaxed">
             Projects that keep their cluster health above 80% may display the{" "}
-            <span className="text-primary font-bold">Sentinel-Governed</span> badge. The
+            <span className="text-primary font-bold">MaroShield-Governed</span> badge. The
             badge is a live SVG — it reflects your real-time health score, so visitors
             always see your current governance posture.
           </p>
@@ -356,7 +356,7 @@ export default function BadgePage() {
             ))}
           </div>
           <p className="text-xs text-muted-foreground font-mono pt-1">
-            To use Agent-Sentinel and earn your badge, start from the{" "}
+            To use MaroShield and earn your badge, start from the{" "}
             <span className="text-primary">Governed Agent Starter Kit</span> — a
             Replit template with the SDK pre-installed. One import, full governance.
           </p>

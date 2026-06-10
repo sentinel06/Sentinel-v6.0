@@ -736,7 +736,7 @@ export default function PartnerPortalPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Enterprise governance infrastructure for AI agent swarms — powered by Agent-Sentinel
+            Enterprise governance infrastructure for AI agent swarms — powered by MaroShield
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -789,7 +789,7 @@ export default function PartnerPortalPage() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-mono font-bold text-foreground">
-            WHITE PAPER: Agent-Sentinel v6.0
+            WHITE PAPER: MaroShield v6.0
           </div>
           <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
             The Sovereign Infrastructure for Agentic Governance (2026–2030) — full technical specification including quantum roadmap, swarm ancestry, and EU AI Act compliance framework
@@ -797,7 +797,7 @@ export default function PartnerPortalPage() {
         </div>
         <a
           href={`${BASE}/api/v1/partner/whitepaper`}
-          download="Agent-Sentinel-White-Paper.md"
+          download="MaroShield-White-Paper.md"
           className="shrink-0"
         >
           <Button

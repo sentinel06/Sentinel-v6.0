@@ -1,11 +1,11 @@
 {
-  "name": "sentinel-sovereign-core",
+  "name": "maroshield-sovereign-core",
   "version": "6.1.0",
   "type": "module",
   "scripts": {
     "start": "node --loader ts-node/esm src/attestation.ts",
     "dashboard": "node --loader ts-node/esm src/dashboard.ts",
-    "chaos": "pnpm --filter @workspace/sentinel-chaos run chaos"
+    "chaos": "pnpm --filter @workspace/maroshield-chaos run chaos"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

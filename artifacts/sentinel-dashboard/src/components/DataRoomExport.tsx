@@ -4,7 +4,7 @@
  * Gated to Certified Operators (sentinel_operator_hex must be present).
  * Produces a single timestamped ZIP:
  *
- *   SENTINEL_V6_DATA_ROOM_YYYY-MM-DD_HHMM.zip
+ *   MAROSHIELD_V6_DATA_ROOM_YYYY-MM-DD_HHMM.zip
  *     ├── README_EXECUTIVE.md
  *     ├── 01_Governance_Reports/
  *     │     ├── EQA_Report_*.pdf      (last 5 EQA v6.0 PDFs)
@@ -75,7 +75,7 @@ function buildBrandedPdf(title: string, subtitle: string, sections: { heading: s
   doc.setTextColor(139, 92, 246);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("AGENT-SENTINEL  ·  SOVEREIGN DATA ROOM  ·  v6.0 NEURAL SOVEREIGNTY", 40, 32);
+  doc.text("MAROSHIELD  ·  SOVEREIGN DATA ROOM  ·  v6.0 NEURAL SOVEREIGNTY", 40, 32);
   doc.setTextColor(249, 250, 251);
   doc.setFontSize(18);
   doc.text(title, 40, 58);
@@ -129,7 +129,7 @@ function buildEqaReportPdf(idx: number, evt: { id: string; agentId: string; agen
       { heading: "Cognitive Drift",      body: `Reason: ${evt.reason}\nIntervention Latency: ${evt.interventionMs.toFixed(2)} ms (sub-millisecond, autonomous)` },
       { heading: "Adjudication",         body: `The agent breached the 25% Cognitive Drift (Policy Violation) threshold. The Sovereign Watcher executed Token Revocation autonomously within ${evt.interventionMs.toFixed(2)} ms and committed the quarantine block to the EQA hash chain. No human intervention was required.` },
       { heading: "Hash-Chain Integrity", body: `This event is sealed in block sha256(prev || event) and verified against the Merkle root broadcast every 60 seconds. SLSA L4 build provenance: VERIFIED. ML-DSA-87 signature: VALID.` },
-      { heading: "Board-Ready Statement",body: `In the period covered by this report, Agent-Sentinel maintained autonomous policy enforcement at sub-millisecond latency with zero false-positives recorded under chaos-mode soak testing.` },
+      { heading: "Board-Ready Statement",body: `In the period covered by this report, MaroShield maintained autonomous policy enforcement at sub-millisecond latency with zero false-positives recorded under chaos-mode soak testing.` },
     ],
   );
 }
@@ -140,7 +140,7 @@ function buildWhitePaperPdf(version: string, title: string): Blob {
     title,
     [
       { heading: "Abstract",
-        body: `Agent-Sentinel ${version} introduces autonomous sub-millisecond quarantine of cognitively drifted AI agents within multi-tenant swarms. This paper details the architecture, formal threat model, and SLSA L4 cryptographic supply-chain verification underpinning the Sovereign Watcher.` },
+        body: `MaroShield ${version} introduces autonomous sub-millisecond quarantine of cognitively drifted AI agents within multi-tenant swarms. This paper details the architecture, formal threat model, and SLSA L4 cryptographic supply-chain verification underpinning the Sovereign Watcher.` },
       { heading: "1. Architecture",
         body: `Per-cluster cryptographic isolation, ML-DSA-87 weight verification, hash-chained EQA Quarantine Log, Neural Replay scrubber, and post-quantum signature envelope.` },
       { heading: "2. Sub-Millisecond Interdiction",
@@ -160,7 +160,7 @@ function buildComplianceMatrixPdf(): Blob {
   doc.setFillColor(139, 92, 246); doc.rect(0, 88, W, 2, "F");
   doc.setTextColor(139, 92, 246);
   doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-  doc.text("AGENT-SENTINEL  ·  COMPLIANCE MATRIX  ·  v6.0", 40, 32);
+  doc.text("MAROSHIELD  ·  COMPLIANCE MATRIX  ·  v6.0", 40, 32);
   doc.setTextColor(249, 250, 251); doc.setFontSize(18);
   doc.text("EU AI Act / SLSA L4 — Alignment Status", 40, 58);
   doc.setTextColor(154, 164, 177); doc.setFont("helvetica", "normal"); doc.setFontSize(10);
@@ -469,7 +469,7 @@ export function DataRoomExport() {
       if (await checkpoint(7)) return;
       const interdictionTotal = fullEvents.length;
       const avgLatency = fullEvents.reduce((s, e) => s + e.interventionMs, 0) / Math.max(1, fullEvents.length);
-      const readme = `# Agent-Sentinel v6.0 — Neural Sovereignty
+      const readme = `# MaroShield v6.0 — Neural Sovereignty
 ## Sovereign Data Room · Executive Summary
 
 **Operator:** \`${hex}\`
@@ -495,7 +495,7 @@ export function DataRoomExport() {
 ### Data Room Contents
 
 \`\`\`
-SENTINEL_V6_DATA_ROOM_${timestampFilename()}.zip
+MAROSHIELD_V6_DATA_ROOM_${timestampFilename()}.zip
 ├── README_EXECUTIVE.md                         (this file)
 ├── 01_Governance_Reports/
 │     ├── EQA_Report_01_…pdf  through  EQA_Report_05_…pdf
@@ -527,7 +527,7 @@ SENTINEL_V6_DATA_ROOM_${timestampFilename()}.zip
 5. SLSA L4 build provenance attestations are referenced in the Compliance
    Matrix and stored in a tamper-evident hash chain on the running cluster.
 
-— Generated autonomously by Agent-Sentinel v6.0 / Sovereign Operator ${hex}
+— Generated autonomously by MaroShield v6.0 / Sovereign Operator ${hex}
 `;
       zip.file("README_EXECUTIVE.md", readme);
 
@@ -543,7 +543,7 @@ SENTINEL_V6_DATA_ROOM_${timestampFilename()}.zip
         if (mountedRef.current) { setStatus("idle"); setStageIdx(0); }
         return;
       }
-      const filename = `SENTINEL_V6_DATA_ROOM_${timestampFilename()}.zip`;
+      const filename = `MAROSHIELD_V6_DATA_ROOM_${timestampFilename()}.zip`;
       const url = URL.createObjectURL(blob);
       blobUrlsRef.current.add(url);
       const a = document.createElement("a");

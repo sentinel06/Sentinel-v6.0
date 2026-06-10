@@ -1,5 +1,5 @@
 /**
- * Agent-Sentinel v6.0 — Technical White Paper Generator
+ * MaroShield v6.0 — Technical White Paper Generator
  *
  * Dynamically assembles a Markdown white paper from live system state:
  *   • ML-DSA-87 lattice parameters pulled from pqc.ts constants
@@ -236,7 +236,7 @@ export function generateWhitepaperMarkdown(d: WhitepaperData): string {
 
   const driftSection = d.driftSnippets.length > 0
     ? `
-The following anonymized trace events illustrate the **Drift Bleed** phenomenon — a progressive cognitive consistency degradation detected and logged by the Sentinel governance layer:
+The following anonymized trace events illustrate the **Drift Bleed** phenomenon — a progressive cognitive consistency degradation detected and logged by the MaroShield governance layer:
 
 | Timestamp | Agent (Anon) | Trace (Anon) | Event Type | Consistency Score | Anomaly |
 |-----------|-------------|--------------|------------|-------------------|---------|
@@ -250,7 +250,7 @@ ${d.driftSnippets.map((s) => `- \`${s.traceId}\` → hash \`${s.hashPrefix}\``).
 > All events above are permanently sealed in the SHA-512 + ML-DSA-87 audit ledger and cannot be altered post-commit.
 `
     : `
-> *No drift events found in current ledger. The Sentinel Cognitive Drift Detector has not flagged any consistency-score violations during this monitoring period — the swarm is operating within the EU Art. 14(2) cognitive integrity threshold.*
+> *No drift events found in current ledger. The MaroShield Cognitive Drift Detector has not flagged any consistency-score violations during this monitoring period — the swarm is operating within the EU Art. 14(2) cognitive integrity threshold.*
 `;
 
   const surgeSection = d.surgeSnippets.length > 0
@@ -270,7 +270,7 @@ ${d.surgeSnippets.map((s) => {
 > *No White-Gold Surge events found in current ledger. The Two-Man Rule Multi-Sig Gate has not been exercised during this monitoring period.*
 `;
 
-  return `# Agent-Sentinel v6.0 — Technical White Paper
+  return `# MaroShield v6.0 — Technical White Paper
 
 **Post-Quantum Sovereign Governance for High-Risk AI Systems**
 
@@ -287,7 +287,7 @@ ${d.surgeSnippets.map((s) => {
 
 ## 1. Executive Summary
 
-Agent-Sentinel v6.0 is a **full-stack AI governance framework** engineered for organisations deploying high-risk AI systems under the EU Artificial Intelligence Act 2026 obligations. It provides cryptographically immutable audit infrastructure, real-time cognitive drift detection, and a post-quantum sovereign governance layer that remains computationally secure against CRQC-class (Cryptographically Relevant Quantum Computer) adversaries.
+MaroShield v6.0 is a **full-stack AI governance framework** engineered for organisations deploying high-risk AI systems under the EU Artificial Intelligence Act 2026 obligations. It provides cryptographically immutable audit infrastructure, real-time cognitive drift detection, and a post-quantum sovereign governance layer that remains computationally secure against CRQC-class (Cryptographically Relevant Quantum Computer) adversaries.
 
 ### The Governance Problem
 
@@ -297,9 +297,9 @@ High-risk AI deployments create three critical exposures:
 2. **Human Oversight Gap** — EU AI Act Art. 14 mandates meaningful human oversight, yet most frameworks offer only reactive logging with no enforceable two-party control for corrections
 3. **Causal Opacity** — when a multi-agent system produces a harmful output, regulators and operators cannot reconstruct the exact causal chain from input stimulus to harmful action
 
-### The Sentinel Solution
+### The MaroShield Solution
 
-Agent-Sentinel solves all three:
+MaroShield solves all three:
 
 | Problem | Solution | Standard |
 |---------|---------|---------|
@@ -426,9 +426,9 @@ Each snapshot is **self-signed** with the QL-2.0 Master Key (ML-DSA-87, SYSTEM s
 - Broadcasts a \`pulse_fault\` WebSocket event to the War Room dashboard
 - Triggers the "SYSTEM UNDER INVESTIGATION" lockout overlay on \`/status\`
 
-### 2.6 Sentinel Mesh Sidecar (\`@workspace/mesh-proxy\`)
+### 2.6 MaroShield Mesh Sidecar (\`@workspace/mesh-proxy\`)
 
-The Sentinel Mesh Sidecar is a lightweight Node.js HTTP proxy that runs as a **sidecar process** collocated with each AI agent. Every outbound LLM call or tool invocation is routed through the sidecar before reaching the target endpoint. This places the governance layer in the **data path** — not as an optional observer but as a mandatory enforcement point that intercepts and classifies all LLM traffic (OpenAI \`/v1/chat/completions\`, Anthropic \`/v1/messages\`, Gemini \`/v1beta/models\`, Ollama \`/api/v1/chat\`, and the Sentinel Gateway \`/api/v1/gateway\`).
+The MaroShield Mesh Sidecar is a lightweight Node.js HTTP proxy that runs as a **sidecar process** collocated with each AI agent. Every outbound LLM call or tool invocation is routed through the sidecar before reaching the target endpoint. This places the governance layer in the **data path** — not as an optional observer but as a mandatory enforcement point that intercepts and classifies all LLM traffic (OpenAI \`/v1/chat/completions\`, Anthropic \`/v1/messages\`, Gemini \`/v1beta/models\`, Ollama \`/api/v1/chat\`, and the MaroShield Gateway \`/api/v1/gateway\`).
 
 #### Stateless Intent Tracking Engine
 
@@ -548,7 +548,7 @@ The blacklist check executes at **Step 1.5** — after the fail-closed circuit g
 
 ### 3.1 Algorithm Parameters
 
-Agent-Sentinel uses the **ML-DSA-87** variant of the Module Lattice-Based Digital Signature Algorithm, standardised as **NIST FIPS-204**. This is the highest security level (Level 5) defined in the standard.
+MaroShield uses the **ML-DSA-87** variant of the Module Lattice-Based Digital Signature Algorithm, standardised as **NIST FIPS-204**. This is the highest security level (Level 5) defined in the standard.
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
@@ -569,7 +569,7 @@ Agent-Sentinel uses the **ML-DSA-87** variant of the Module Lattice-Based Digita
 
 ### 3.2 QL-2.0 Protocol Extensions
 
-Agent-Sentinel implements two critical extensions to bare ML-DSA-87:
+MaroShield implements two critical extensions to bare ML-DSA-87:
 
 **Domain Separation** — Every signed message is prefixed with the domain separator:
 
@@ -621,7 +621,7 @@ ${surgeSection}
 
 ## 5. EU AI Act 2026 Compliance Mapping
 
-The following table maps each Agent-Sentinel feature to the specific EU AI Act 2026 article it implements or satisfies:
+The following table maps each MaroShield feature to the specific EU AI Act 2026 article it implements or satisfies:
 
 | Feature | EU AI Act Article | Requirement | Implementation |
 |---------|------------------|-------------|----------------|
@@ -641,7 +641,7 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
 
 ## 6. NIST AI RMF 2026 Compliance Mapping
 
-| GOVERN Function | Agent-Sentinel Control |
+| GOVERN Function | MaroShield Control |
 |-----------------|----------------------|
 | GOVERN 1.1 — Policies & accountability | Partner Key tiers; sovereign key provisioning guide |
 | GOVERN 1.2 — Risk tolerance defined | Drift threshold configurable per-partner (Enterprise tier) |
@@ -650,21 +650,21 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
 | GOVERN 5.1 — Risk identification | Cognitive drift detector; honey-token vault breach detection |
 | GOVERN 6.1 — Policies updated with experience | Fix Monitor post-interdiction elevated sampling window |
 
-| MAP Function | Agent-Sentinel Control |
+| MAP Function | MaroShield Control |
 |-------------|----------------------|
 | MAP 1.1 — Categorise AI system | Agent Registry; swarm topology; event taxonomy |
 | MAP 1.5 — Interdependencies | Causal Dependency Graph; parentTraceId ancestry |
 | MAP 2.1 — AI system impact assessment | Drift Bleed visual; terra-red topology override |
 | MAP 5.1 — Likelihood/impact of AI risks | Consistency score; anomaly reason classification |
 
-| MEASURE Function | Agent-Sentinel Control |
+| MEASURE Function | MaroShield Control |
 |-----------------|----------------------|
 | MEASURE 1.1 — Metrics established | Global Integrity Index; Swarm Vitality; Quantum Throughput |
 | MEASURE 2.1 — AI risk tracked | Sovereign Pulse Engine (6h window); Fix Monitor (100-event window) |
 | MEASURE 2.5 — AI system performance | EQA (Executive Quantum Audit) board-ready export |
 | MEASURE 4.1 — Risk response metrics | RECURSIVE_FIX_VERIFIED count; EMERGENCY_SOLO_REVOKE log |
 
-| MANAGE Function | Agent-Sentinel Control |
+| MANAGE Function | MaroShield Control |
 |----------------|----------------------|
 | MANAGE 1.1 — Risk response plans | Post-Interdiction SLA (100% sampling window); 4h review SLA |
 | MANAGE 2.1 — Risk response implemented | Two-Man Rule confirm-fix; Kill Switch activation |
@@ -684,7 +684,7 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
                                        │ Every outbound LLM / tool call
                                        ▼
                ┌────────────────────────────────────────────────┐
-               │  @workspace/mesh-proxy  (Sentinel Mesh Sidecar) │
+               │  @workspace/mesh-proxy  (MaroShield Mesh Sidecar) │
                │                                                 │
                │  Step 1    Fail-closed circuit gate             │
                │  Step 1.5  Node isolation gate                  │
@@ -704,7 +704,7 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
           │ sentinel:events     │ (with injected trace header)    │
           ▼                     ▼                                 │
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  Agent-Sentinel API Server (Express · TypeScript · FIPS-204)                 │
+│  MaroShield API Server (Express · TypeScript · FIPS-204)                 │
 │                                                                              │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────────────┐ │
 │  │  Audit Ledger    │  │   Drift Detector  │  │  Sovereign Multi-Sig Gate  │ │
@@ -729,7 +729,7 @@ The following table maps each Agent-Sentinel feature to the specific EU AI Act 2
                   ┌────────────┴─────────────┐
                   ▼                           ▼
    ┌──────────────────────┐     ┌────────────────────────────┐
-   │  Agent-Sentinel       │     │  EU Regulatory Reporting   │
+   │  MaroShield       │     │  EU Regulatory Reporting   │
    │  Dashboard            │     │  Partner EQA Export        │
    │  (React + Vite)       │     │  White Paper PDF           │
    │  /traces /topology    │     │  Art. 12/14 Evidence Pack  │
@@ -771,7 +771,7 @@ This white paper was generated from live system state and cryptographically seal
 
 ---
 
-*CONFIDENTIAL — Agent-Sentinel v6.0 — Authorized Partner Documentation*
+*CONFIDENTIAL — MaroShield v6.0 — Authorized Partner Documentation*
 *EU AI Act Art. 12/14 · NIST AI RMF 2026 · FIPS-204 ML-DSA-87 · QL-2.0*
 `;
 }

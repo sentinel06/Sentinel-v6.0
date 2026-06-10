@@ -191,7 +191,7 @@ export default function Slide04Product() {
           <img
             src={landingScreenshot}
             crossOrigin="anonymous"
-            alt="Agent-Sentinel product"
+            alt="MaroShield product"
             style={{
               width: "100%",
               height: "100%",
@@ -219,7 +219,7 @@ export default function Slide04Product() {
           zIndex: 3,
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>04</span>
       </div>
     </div>

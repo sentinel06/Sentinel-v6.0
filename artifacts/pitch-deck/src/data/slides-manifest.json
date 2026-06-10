@@ -3,7 +3,7 @@
     "id": "a1b2c3d4-0001-0000-0000-sentinel0001",
     "position": 1,
     "filepath": "src/pages/slides/Slide01Title.tsx",
-    "title": "Agent-Sentinel",
+    "title": "MaroShield",
     "description": "Cover — Immutable Compliance Ledger for Autonomous AI Agents",
     "speakerNotes": ""
   },
@@ -20,7 +20,7 @@
     "position": 3,
     "filepath": "src/pages/slides/Slide03Solution.tsx",
     "title": "Enterprise Guardrails",
-    "description": "Agent-Sentinel's core solution capabilities",
+    "description": "MaroShield's core solution capabilities",
     "speakerNotes": ""
   },
   {

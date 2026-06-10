@@ -5,7 +5,7 @@
 ████████████████████████████████████████████████████████████████████████
 
 The Sentinel-Bridge SDK connects any Multi-Agent System (LangGraph,
-CrewAI, AutoGen, custom agents) to Agent-Sentinel v5.0 via the
+CrewAI, AutoGen, custom agents) to MaroShield v5.0 via the
 Sovereign Proxy architecture.  Every LLM call is intercepted for
 Pre-Flight Clearance before execution and Committed to the Immutable
 Audit Ledger after — with ML-DSA-87 (FIPS-204) quantum signatures.
@@ -219,7 +219,7 @@ class SovereignGateway:
     Parameters
     ----------
     api_key   : Your Sentinel Partner API key (or demo: SENTINEL_GOLD_2026)
-    endpoint  : Base URL of your Agent-Sentinel instance (no trailing slash)
+    endpoint  : Base URL of your MaroShield instance (no trailing slash)
     timeout   : HTTP timeout in seconds (default 30)
     """
 

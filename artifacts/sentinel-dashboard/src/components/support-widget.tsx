@@ -1,5 +1,5 @@
 /**
- * Floating Sentinel Assistant chat widget.
+ * Floating MaroShield Assistant chat widget.
  *
  * Mounted globally inside <Layout/>. Streams responses from
  * POST /api/v1/support/chat (SSE). Stateless on the server — full history
@@ -24,7 +24,7 @@ const SUGGESTIONS = [
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi — I'm Sentinel Assistant. I can help you connect an agent, debug integrations, understand your dashboard, or route urgent issues to the right support team. What's on your mind?",
+    "Hi — I'm MaroShield Assistant. I can help you connect an agent, debug integrations, understand your dashboard, or route urgent issues to the right support team. What's on your mind?",
 };
 
 export default function SupportWidget() {
@@ -167,7 +167,7 @@ export default function SupportWidget() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Open Sentinel Assistant"
+          aria-label="Open MaroShield Assistant"
           className="fixed bottom-5 right-5 z-50 group"
           style={{
             width: 52,
@@ -252,7 +252,7 @@ export default function SupportWidget() {
                   letterSpacing: 0.2,
                 }}
               >
-                Sentinel Assistant
+                MaroShield Assistant
               </div>
               <div
                 style={{
@@ -382,7 +382,7 @@ export default function SupportWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Ask anything about Agent-Sentinel…"
+              placeholder="Ask anything about MaroShield…"
               rows={1}
               disabled={streaming}
               style={{

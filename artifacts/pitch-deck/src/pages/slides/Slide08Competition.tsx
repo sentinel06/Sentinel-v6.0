@@ -175,7 +175,7 @@ export default function Slide08Competition() {
           }}
         />
 
-        {/* Right: Agent-Sentinel */}
+        {/* Right: MaroShield */}
         <div
           style={{
             flex: 1,
@@ -196,7 +196,7 @@ export default function Slide08Competition() {
               flexShrink: 0,
             }}
           >
-            Agent-Sentinel
+            MaroShield
           </div>
 
           {/* Sentinel item 1 */}
@@ -356,7 +356,7 @@ export default function Slide08Competition() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>08</span>
       </div>
     </div>

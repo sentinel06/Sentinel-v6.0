@@ -1,14 +1,14 @@
 /**
  * ╔══════════════════════════════════════════════════════╗
  * ║   THE GOVERNED AGENT STARTER KIT  ·  TypeScript     ║
- * ║   Powered by Agent-Sentinel  ·  EU AI Act Art. 12   ║
+ * ║   Powered by MaroShield  ·  EU AI Act Art. 12   ║
  * ╚══════════════════════════════════════════════════════╝
  *
  * This template wraps any LLM call (OpenAI, Anthropic, Gemini, etc.)
  * with full audit logging, authorization gating, and anomaly detection.
  *
  * Every action is:
- *   ✓ Pre-authorized by the Sentinel circuit breaker
+ *   ✓ Pre-authorized by the MaroShield circuit breaker
  *   ✓ Logged to an immutable SHA-256 hash-chained ledger
  *   ✓ Scored for hallucination/logic poisoning detection
  *   ✓ Compliant with EU AI Act Art. 12 (traceability) & Art. 14 (oversight)
@@ -29,7 +29,7 @@ import SentinelClient, { SentinelBlockedError } from "../../sdk/sentinel";
 const SENTINEL_URL = process.env.SENTINEL_URL ?? "http://localhost:8080/api/v1";
 const AGENT_ID     = process.env.AGENT_ID     ?? "my-governed-agent";
 
-// ── Initialise the Sentinel client ────────────────────────────────────────
+// ── Initialise the MaroShield client ────────────────────────────────────────
 
 const sentinel = new SentinelClient({
   baseUrl:  SENTINEL_URL,
@@ -56,7 +56,7 @@ async function callLLM(prompt: string): Promise<string> {
 // ── Main agent loop ───────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\nAgent-Sentinel Governed Agent  ·  ${AGENT_ID}`);
+  console.log(`\nMaroShield Governed Agent  ·  ${AGENT_ID}`);
   console.log(`Sentinel endpoint: ${SENTINEL_URL}\n`);
 
   // Example 1 — Low-risk query, auto-authorized

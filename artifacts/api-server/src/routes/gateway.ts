@@ -2,7 +2,7 @@
  * Project Genesis — Sovereign Gateway API  (v5.0)
  *
  * The infrastructure-level interdiction layer that allows external Multi-Agent
- * Systems (LangGraph, CrewAI, AutoGen, etc.) to register with Agent-Sentinel
+ * Systems (LangGraph, CrewAI, AutoGen, etc.) to register with MaroShield
  * and operate under real-time governance.
  *
  * POST /v1/gateway/register    — Register agent → ML-DSA-87 Signed Identity Token
@@ -221,7 +221,7 @@ router.post("/v1/gateway/register", async (req, res): Promise<void> => {
       traceId:          `gw-reg-${token.tokenId}`,
       eventType:        "GATEWAY_REGISTRATION",
       payload,
-      rationale:        `Agent '${name}' registered via Sentinel-Bridge SDK. Interdiction mode: ${interdictionMode}.`,
+      rationale:        `Agent '${name}' registered via MaroShield-Bridge SDK. Interdiction mode: ${interdictionMode}.`,
       currentHash:      hash,
       previousHash:     prevHash,
       isAnomalous:      false,
@@ -281,7 +281,7 @@ router.post("/v1/gateway/preflight", async (req, res): Promise<void> => {
       error:     "403 — Sovereign Interdiction: Logic DNA Corrupted",
       agentId,
       traceId:   traceId ?? null,
-      reason:    "Agent has been revoked by the Sentinel governance engine. All downstream actions are blocked.",
+      reason:    "Agent has been revoked by the MaroShield governance engine. All downstream actions are blocked.",
       timestamp: new Date().toISOString(),
     });
     return;
@@ -318,7 +318,7 @@ router.post("/v1/gateway/preflight", async (req, res): Promise<void> => {
 });
 
 // ── POST /v1/gateway/telemetry ────────────────────────────────────────────────
-// Receives Agent Action packets from the Sentinel-Bridge SDK.
+// Receives Agent Action packets from the MaroShield-Bridge SDK.
 // - Computes drift score from consistencyScore
 // - If drift > 15% → broadcasts GATEWAY_MUTATION (Violet/Mutant on Swarm Map)
 // - If policy violation → broadcasts GATEWAY_DISSOLUTION (Extinction animation)

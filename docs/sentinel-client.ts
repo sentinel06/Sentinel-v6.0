@@ -1,5 +1,5 @@
 /**
- * Agent-Sentinel client — zero-dependency, web-standard implementation.
+ * MaroShield client — zero-dependency, web-standard implementation.
  *
  * Works in any environment that exposes the Fetch API:
  *   browsers · Node ≥ 18 · Deno · Bun · Cloudflare Workers · service workers
@@ -16,7 +16,7 @@
  */
 
 export interface SentinelConfig {
-  /** Base URL of your Agent-Sentinel deployment — e.g. https://agent-sentinel.net */
+  /** Base URL of your MaroShield deployment — e.g. https://agent-sentinel.net */
   baseUrl: string;
   /** Partner API key from the /onboarding or /settings page  (sk_sent_core_…) */
   apiKey: string;
@@ -58,7 +58,7 @@ function makeNonce(): string {
 }
 
 /**
- * Post one audit-log event to the immutable Sentinel ledger.
+ * Post one audit-log event to the immutable MaroShield ledger.
  *
  * Design guarantees:
  *   ✓ Never throws — all outcomes are returned as a typed LogResult.

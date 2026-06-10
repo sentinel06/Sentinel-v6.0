@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Sentinel Chaos Engineering Suite — @workspace/sentinel-chaos
+ * MaroShield Chaos Engineering Suite — @workspace/maroshield-chaos
  *
  * Attack and stress-testing harness for the Sentinel Mesh Sidecar interceptor.
  *
@@ -41,8 +41,8 @@ function banner(mode: string, target: string): void {
   console.log();
   console.log(rule("━"));
   console.log(
-    `  ${C.bold}${C.cyan}SENTINEL CHAOS ENGINE${C.reset}` +
-    `  ${C.dim}·${C.reset}  ${C.dim}@workspace/sentinel-chaos${C.reset}`,
+    `  ${C.bold}${C.cyan}MAROSHIELD CHAOS ENGINE${C.reset}` +
+    `  ${C.dim}·${C.reset}  ${C.dim}@workspace/maroshield-chaos${C.reset}`,
   );
   console.log(
     `  ${C.amber}${C.bold}Mode: ${mode.toUpperCase()}${C.reset}` +

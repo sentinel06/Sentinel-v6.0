@@ -163,7 +163,7 @@ function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps)
       badge: "STEP 02 · MULTI-CLUSTER ISOLATION",
       title: "Enterprise-Grade Tenant Isolation",
       body: (p) => p === "business"
-        ? `Every business unit — Legal, Finance, Ops — operates in a cryptographically isolated swarm. A breach in one cannot contaminate another. This proves Sentinel scales from a single agent to a global enterprise.`
+        ? `Every business unit — Legal, Finance, Ops — operates in a cryptographically isolated swarm. A breach in one cannot contaminate another. This proves MaroShield scales from a single agent to a global enterprise.`
         : `Each cluster is a sealed neural domain. Cross-tenant signal propagation is mathematically impossible. Watch as we toggle between Legal and Finance — note the hard cluster filter on the canvas.`,
       tour: "cluster-switcher",
       action: () => {
@@ -257,7 +257,7 @@ function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps)
       id: "certify",
       badge: "OPERATOR CERTIFICATION",
       title: "OPERATOR STATUS · CERTIFIED [v6.0]",
-      body: () => `Sovereign Token issued. You are now certified to operate Agent-Sentinel v6.0 ${lex.domain} fleet. The Neural Hive is yours. Welcome to Neural Sovereignty.`,
+      body: () => `Sovereign Token issued. You are now certified to operate MaroShield v6.0 ${lex.domain} fleet. The Neural Hive is yours. Welcome to Neural Sovereignty.`,
       cta: "ASSUME COMMAND",
     },
   ], [persona, lex, induceRogueQuarantine, setAgent, clusters, setCurrentCluster]);
@@ -457,7 +457,7 @@ function SovereignInductionInner({ forceOpen = false, onClose }: InductionProps)
             {stepIdx === -1 && (
               <>
                 <div style={{ fontSize: 10, letterSpacing: "0.16em", color: VIOLET_BRIGHT, fontWeight: 600, marginBottom: 6, fontFamily: "Inter, system-ui, sans-serif" }}>
-                  Welcome to Agent-Sentinel
+                  Welcome to MaroShield
                 </div>
                 <div id="induction-title" style={{ fontSize: 19, fontWeight: 600, color: "#F9FAFB", marginBottom: 10, letterSpacing: "-0.01em", fontFamily: "Inter, system-ui, sans-serif" }}>
                   Let's give you a quick tour.

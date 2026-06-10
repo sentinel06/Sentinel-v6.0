@@ -134,7 +134,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
     try {
       await unlockWithKey(DEMO_KEY);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Demo key unavailable — contact Sentinel support.");
+      setError(err instanceof Error ? err.message : "Demo key unavailable — contact MaroShield support.");
     } finally {
       setGuestLoading(false);
     }
@@ -154,7 +154,7 @@ function LockScreen({ onUnlock }: { onUnlock: (key: string, data: OnboardingData
           </div>
           <h1 className="text-2xl font-semibold text-white mb-1 tracking-tight">Welcome, partner.</h1>
           <p className="text-sm" style={{ color: P.dim }}>
-            Sign in to your Sentinel partner workspace.
+            Sign in to your MaroShield partner workspace.
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono"
             style={{ background: `${P.gold}12`, border: `1px solid ${P.gold}33`, color: P.gold }}>
@@ -649,7 +649,7 @@ function OnboardingDashboard({ data, partnerKey }: { data: OnboardingData; partn
         style={{ borderColor: P.border, color: P.dim }}>
         <div className="flex items-center gap-2">
           <Shield className="w-3 h-3" style={{ color: P.sage }} />
-          Agent-Sentinel v6.0 · QL-2.0 FIPS-204 · EU AI Act Art. 12/14
+          MaroShield v6.0 · QL-2.0 FIPS-204 · EU AI Act Art. 12/14
         </div>
         <div>
           Key: {partnerKey.substring(0, 12)}••••

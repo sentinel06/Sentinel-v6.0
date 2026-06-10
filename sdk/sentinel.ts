@@ -1,6 +1,6 @@
 /**
  * ████████████████████████████████████████████████████
- *   AGENT-SENTINEL SDK  ·  TypeScript / Node.js
+ *   MAROSHIELD SDK  ·  TypeScript / Node.js
  *   EU AI Act Art. 12/14 Traceability Wrapper
  * ████████████████████████████████████████████████████
  *

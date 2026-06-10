@@ -64,7 +64,7 @@ async function bootstrap(): Promise<void> {
   }
 
   server.listen(port, () => {
-    logger.info({ port }, "Agent-Sentinel server listening");
+    logger.info({ port }, "MaroShield server listening");
   });
 }
 

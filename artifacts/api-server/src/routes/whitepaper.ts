@@ -1,7 +1,7 @@
 /**
  * GET /v1/whitepaper
  *
- * Generates and returns the Agent-Sentinel v6.0 Technical White Paper
+ * Generates and returns the MaroShield v6.0 Technical White Paper
  * dynamically from live system state. Accepts an optional ?format=markdown
  * query parameter (default) or ?format=json (returns structured data).
  *
@@ -25,7 +25,7 @@ router.get("/v1/whitepaper", async (req, res): Promise<void> => {
       res.setHeader("Content-Type", "text/markdown; charset=utf-8");
       res.setHeader(
         "Content-Disposition",
-        `inline; filename="Agent-Sentinel-v4-White-Paper-${data.documentId}.md"`,
+        `inline; filename="MaroShield-v4-White-Paper-${data.documentId}.md"`,
       );
       res.send(markdown);
       return;

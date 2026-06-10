@@ -137,8 +137,8 @@ export async function generateAuditPDF(
     size: "A4",
     margins: { top: 50, bottom: 50, left: 50, right: 50 },
     info: {
-      Title: "Agent-Sentinel Audit Ledger",
-      Author: "Agent-Sentinel Governance Engine",
+      Title: "MaroShield Audit Ledger",
+      Author: "MaroShield Governance Engine",
       Subject: "EU AI Act Art. 12/14 Compliance Export",
       Keywords: "audit,immutable,blockchain,EU-AI-Act",
       CreationDate: generatedAt,
@@ -156,7 +156,7 @@ export async function generateAuditPDF(
     .font("Courier-Bold")
     .fontSize(22)
     .fillColor("#f1f5f9")
-    .text("AGENT-SENTINEL", 50, 35);
+    .text("MAROSHIELD", 50, 35);
 
   doc
     .font("Courier")
@@ -280,7 +280,7 @@ export async function generateAuditPDF(
 
   // Dark header bar on page 2
   doc.rect(0, 0, 595, 40).fill("#0f172a");
-  doc.font("Courier-Bold").fontSize(9).fillColor("#94a3b8").text("AGENT-SENTINEL  ·  AUDIT LEDGER (CONT.)", 50, 15);
+  doc.font("Courier-Bold").fontSize(9).fillColor("#94a3b8").text("MAROSHIELD  ·  AUDIT LEDGER (CONT.)", 50, 15);
   doc.font("Courier").fontSize(7).fillColor("#0ea5e9").text(`SEAL: ${documentSeal}`, 400, 15, { align: "right", width: 145 });
 
   // Section 2: Authorization + Human Interventions
@@ -420,7 +420,7 @@ export async function generateAuditPDF(
   doc.addPage();
 
   doc.rect(0, 0, 595, 40).fill("#0f172a");
-  doc.font("Courier-Bold").fontSize(9).fillColor("#94a3b8").text("AGENT-SENTINEL  ·  CRYPTOGRAPHIC PROOF OF INTEGRITY", 50, 15);
+  doc.font("Courier-Bold").fontSize(9).fillColor("#94a3b8").text("MAROSHIELD  ·  CRYPTOGRAPHIC PROOF OF INTEGRITY", 50, 15);
 
   doc.font("Courier-Bold").fontSize(11).fillColor("#0ea5e9").text("§4  CRYPTOGRAPHIC HASH CHAIN SUMMARY", 50, 55);
   doc.rect(50, 68, 495, 1).fill("#1e293b");
@@ -511,7 +511,7 @@ export async function generateAuditPDF(
     .fontSize(7)
     .fillColor("#475569")
     .text(
-      "This document is a machine-generated audit record produced by Agent-Sentinel in compliance with EU AI Act",
+      "This document is a machine-generated audit record produced by MaroShield in compliance with EU AI Act",
       50,
       568,
       { align: "center", width: 495 },

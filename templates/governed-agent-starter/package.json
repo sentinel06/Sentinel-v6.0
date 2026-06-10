@@ -1,7 +1,7 @@
 {
   "name": "governed-agent-starter",
   "version": "1.0.0",
-  "description": "EU AI Act compliant LLM agent starter kit powered by Agent-Sentinel",
+  "description": "EU AI Act compliant LLM agent starter kit powered by MaroShield",
   "type": "module",
   "scripts": {
     "start": "npx tsx index.ts",

@@ -61,7 +61,7 @@ export default function Slide01Title() {
             marginBottom: "3vh",
           }}
         >
-          Agent-Sentinel
+          MaroShield
         </div>
 
         {/* Teal divider */}
@@ -303,7 +303,7 @@ export default function Slide01Title() {
           zIndex: 3,
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>01</span>
       </div>
     </div>

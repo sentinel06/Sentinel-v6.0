@@ -1,14 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════╗
 ║   THE GOVERNED AGENT STARTER KIT  ·  Python 3.9+    ║
-║   Powered by Agent-Sentinel  ·  EU AI Act Art. 12   ║
+║   Powered by MaroShield  ·  EU AI Act Art. 12   ║
 ╚══════════════════════════════════════════════════════╝
 
 This template wraps any LLM call (OpenAI, Anthropic, Gemini, etc.)
 with full audit logging, authorization gating, and anomaly detection.
 
 Every action is:
-  ✓ Pre-authorized by the Sentinel circuit breaker
+  ✓ Pre-authorized by the MaroShield circuit breaker
   ✓ Logged to an immutable SHA-256 hash-chained ledger
   ✓ Scored for hallucination / logic poisoning detection
   ✓ Compliant with EU AI Act Art. 12 (traceability) & Art. 14 (oversight)
@@ -31,7 +31,7 @@ from sdk.sentinel import SentinelClient, AsyncSentinelClient, SentinelBlockedErr
 SENTINEL_URL = os.environ.get("SENTINEL_URL", "http://localhost:8080/api/v1")
 AGENT_ID     = os.environ.get("AGENT_ID",     "my-governed-agent-py")
 
-# ── Initialise the Sentinel client ────────────────────────────────────────
+# ── Initialise the MaroShield client ────────────────────────────────────────
 
 sentinel = SentinelClient(base_url=SENTINEL_URL, agent_id=AGENT_ID)
 
@@ -67,7 +67,7 @@ def call_llm(prompt: str) -> str:
 # ── Main agent flow ───────────────────────────────────────────────────────
 
 def main():
-    print(f"\nAgent-Sentinel Governed Agent  ·  {AGENT_ID}")
+    print(f"\nMaroShield Governed Agent  ·  {AGENT_ID}")
     print(f"Sentinel endpoint: {SENTINEL_URL}\n")
 
     # Example 1 — Low-risk query, auto-authorized

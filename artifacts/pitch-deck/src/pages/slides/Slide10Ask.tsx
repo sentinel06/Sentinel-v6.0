@@ -254,7 +254,7 @@ export default function Slide10Ask() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>10</span>
       </div>
     </div>

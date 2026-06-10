@@ -90,7 +90,7 @@ if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY in environment");
 }
 
-// Sentinel Command Center palette (mirrors index.css --cmd-* tokens).
+// MaroShield Command Center palette (mirrors index.css --cmd-* tokens).
 const clerkAppearance = {
   theme: shadcn,
   cssLayerName: "clerk",
@@ -146,7 +146,7 @@ const clerkAppearance = {
   },
 };
 
-const DEFAULT_TITLE = "Agent-Sentinel — Immutable Audit Ledger for AI Agents";
+const DEFAULT_TITLE = "MaroShield — Immutable Audit Ledger for AI Agents";
 
 function usePageTitle(title: string) {
   useEffect(() => {
@@ -156,7 +156,7 @@ function usePageTitle(title: string) {
 }
 
 function SignInPage() {
-  usePageTitle("Sign In | Agent-Sentinel");
+  usePageTitle("Sign In | MaroShield");
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
       <SignIn
@@ -170,7 +170,7 @@ function SignInPage() {
 }
 
 function SignUpPage() {
-  usePageTitle("Sign Up | Agent-Sentinel");
+  usePageTitle("Sign Up | MaroShield");
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 page-transition">
       <SignUp
@@ -198,7 +198,7 @@ function HomeRoute() {
   );
 }
 
-// Checks whether the signed-in user already has a Sentinel key.
+// Checks whether the signed-in user already has a MaroShield key.
 // If not (404 from /me/key), redirect them to /onboarding so they go
 // through key provisioning before hitting the main dashboard.
 // If the check errors for any other reason we let them through rather
@@ -331,13 +331,13 @@ function ClerkProviderWithRoutes() {
       localization={{
         signIn: {
           start: {
-            title: "Welcome to Agent-Sentinel",
+            title: "Welcome to MaroShield",
             subtitle: "Sign in to access the audit ledger",
           },
         },
         signUp: {
           start: {
-            title: "Create your Sentinel account",
+            title: "Create your MaroShield account",
             subtitle: "Email or social login — verified, audit-grade",
           },
         },

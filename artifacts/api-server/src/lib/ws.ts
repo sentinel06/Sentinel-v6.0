@@ -137,7 +137,7 @@ export function setupWebSocket(server: Server): void {
       clients.delete(ws);
     });
 
-    ws.send(JSON.stringify({ type: "connected", message: "Agent-Sentinel live stream active" }));
+    ws.send(JSON.stringify({ type: "connected", message: "MaroShield live stream active" }));
   });
 
   // Relay all governance events (auth requests, kill-switch) to dashboard.

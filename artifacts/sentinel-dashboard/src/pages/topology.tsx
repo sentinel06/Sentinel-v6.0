@@ -337,7 +337,7 @@ function TopologyGraph({ nodes }: { nodes: Map<string, TraceNode> }) {
           </div>
           {selectedNode.node.isPoisoned && (
             <div className="p-3 rounded bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-300 leading-relaxed">
-              <strong>Logic Poisoning Warning:</strong> This node's cluster health ({Math.round(selectedNode.node.clusterHealth * 100)}%) is significantly lower than its own consistency score ({Math.round(selectedNode.node.lowestScore * 100)}%). An upstream ancestor in the trace chain has degraded trust, which automatically lowers the Sentinel's approval threshold for actions from this node — even if the node itself appears healthy.
+              <strong>Logic Poisoning Warning:</strong> This node's cluster health ({Math.round(selectedNode.node.clusterHealth * 100)}%) is significantly lower than its own consistency score ({Math.round(selectedNode.node.lowestScore * 100)}%). An upstream ancestor in the trace chain has degraded trust, which automatically lowers MaroShield's approval threshold for actions from this node — even if the node itself appears healthy.
             </div>
           )}
         </div>
@@ -421,7 +421,7 @@ export default function TopologyPage() {
           <div>
             <div className="text-xs font-mono font-bold text-purple-300">Logic Poisoning Detected in {stats.poisoned} trace{stats.poisoned > 1 ? "s" : ""}</div>
             <div className="text-[11px] font-mono text-purple-400/70 mt-0.5">
-              Garbage In, Action Out prevention: Sentinel has automatically lowered the trust threshold for these downstream nodes. Click a purple node for details.
+              Garbage In, Action Out prevention: MaroShield has automatically lowered the trust threshold for these downstream nodes. Click a purple node for details.
             </div>
           </div>
         </div>

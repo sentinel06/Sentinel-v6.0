@@ -1,4 +1,4 @@
-# Sentinel v6.0 Forensic Verification Guide
+# MaroShield v6.0 Forensic Verification Guide
 
 ## CLI Verification
 To verify any artifact, execute:

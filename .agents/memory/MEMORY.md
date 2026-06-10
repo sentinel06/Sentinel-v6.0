@@ -1,5 +1,6 @@
 - [Mesh-proxy blacklist architecture](mesh-proxy-blacklist.md) — node isolation split across two packages; fail-open on Redis error; use `redisPublisher` (not subscriber) for HSET calls in ws.ts.
 - [Per-tenant isolation pattern](per-tenant-isolation.md) — owner.ts + viewerScopeCondition is the canonical gate; all read endpoints use requireAuth + viewerScopeCondition; demo rows stay NULL-owner, invisible to signed-in users.
 - [Interceptor async refactor](interceptor-async.md) — interceptor.ts uses async handler via void wrapper; collectBody promisifies body collection; blacklist check is step 1.5 between circuit-breaker gate and trace resolution.
-- [Chain-append serialization](chain-append-serialization.md) — every audit_logs computeHash append MUST be inside withChainLock + capture timestamp inside the lock; v2=canonical hashing, legacy stays default; startup 36-entry TAMPER is expected demo data.
-- [Composite lib stale decls](composite-lib-stale-decls.md) — after editing lib/db schema, rebuild with `pnpm exec tsc -b lib/db/tsconfig.json` before leaf typechecks; root `typecheck:libs` script does NOT exist here.
+- [Chain-append serialization](chain-append-serialization.md) — every audit_logs hash append must run inside withChainLock with the timestamp captured in-lock; startup TAMPER on demo rows is expected.
+- [Composite lib stale decls](composite-lib-stale-decls.md) — after editing a lib/db schema, rebuild libs with `tsc -b` before leaf typechecks; root has no `typecheck:libs` script.
+- [Rebrand protected tokens](rebrand-protected-tokens.md) — never global-replace bare "Sentinel": `AGENT_SENTINEL_` is crypto, X-Sentinel-*/sk_sent_core/SDK ids must stay; cased brand strings are safe to rename.

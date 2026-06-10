@@ -22,7 +22,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[Sentinel ErrorBoundary]", error, info.componentStack);
+    console.error("[MaroShield ErrorBoundary]", error, info.componentStack);
   }
 
   render() {

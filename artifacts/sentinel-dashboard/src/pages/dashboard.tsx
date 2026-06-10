@@ -451,7 +451,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Sentinel Health — Hardened Security telemetry row */}
+      {/* MaroShield Health — Hardened Security telemetry row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <LatticeStrengthGauge bits={87} />
         <RedisPulse />

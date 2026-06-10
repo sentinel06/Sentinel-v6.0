@@ -711,7 +711,7 @@ const NAV_GROUPS = [
       { path: "/registry",   label: "Registry",       icon: Cpu },
       { path: "/compliance", label: "Compliance",     icon: FileCheck },
       { path: "/integrity",  label: "Hash Chain",     icon: ShieldCheck },
-      { path: "/badge",      label: "Sentinel Badge", icon: Award },
+      { path: "/badge",      label: "MaroShield Badge", icon: Award },
     ],
   },
   {
@@ -829,7 +829,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           });
           setShowNotif(true);
           if (Notification.permission === "granted") {
-            new Notification("Agent-Sentinel: Authorization Required", {
+            new Notification("MaroShield: Authorization Required", {
               body: `Agent ${agentId} wants to execute ${actionType}. Approve or deny in the War Room.`,
             });
           }
@@ -923,7 +923,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         }}>
           <img
             src="/logo.png"
-            alt="Sentinel"
+            alt="MaroShield"
             style={{ width: 30, height: 30, objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 0 6px #00F5FF66)" }}
           />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2, minWidth: 0 }}>
@@ -1233,7 +1233,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Sovereign Induction Onboarding ── */}
       <SovereignInduction />
 
-      {/* ── Sentinel Assistant (AI support) ── */}
+      {/* ── MaroShield Assistant (AI support) ── */}
       <SupportWidget />
 
       {/* ── Responsive sidebar choreography ──

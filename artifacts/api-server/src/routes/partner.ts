@@ -40,7 +40,7 @@ router.get("/v1/partner/whitepaper", (_req, res): void => {
     res.status(404).json({ error: "White paper not found" });
     return;
   }
-  res.setHeader("Content-Disposition", 'attachment; filename="Agent-Sentinel-White-Paper.md"');
+  res.setHeader("Content-Disposition", 'attachment; filename="MaroShield-White-Paper.md"');
   res.setHeader("Content-Type", "text/markdown; charset=utf-8");
   res.sendFile(WHITE_PAPER_PATH);
 });
@@ -280,7 +280,7 @@ async function generate_executive_summary(
       ? `Quantum Integrity: ${quantumScore}% of events carry ML-DSA-87 (FIPS-204, Level 5) hybrid signatures — certification status: ${fipsCertification}.`
       : "Quantum signature migration has not yet commenced for this portfolio. Recommend immediate QL-2.0 onboarding.",
     totalInterventions > 0
-      ? `The Sentinel governance engine executed ${totalInterventions} autonomous intervention${totalInterventions !== 1 ? "s" : ""} — ${driftTriggered} via Cognitive Drift Detection and ${circuitTriggered} via Circuit Breaker. Intervention success rate: ${successRate}%.`
+      ? `The MaroShield governance engine executed ${totalInterventions} autonomous intervention${totalInterventions !== 1 ? "s" : ""} — ${driftTriggered} via Cognitive Drift Detection and ${circuitTriggered} via Circuit Breaker. Intervention success rate: ${successRate}%.`
       : "No autonomous interventions were required in the reporting window.",
     `Overall risk classification: ${riskRating}.`,
   ].join(" ");
@@ -853,7 +853,7 @@ router.get("/v1/partner/onboarding", async (req, res): Promise<void> => {
       res.status(401).json({
         authorized: false,
         error: "Access denied. This route requires the SENTINEL-DEMO-GOLDEN-2026 key or an active partner API key.",
-        hint:  "Obtain your Alpha key from your Sentinel account manager or use the Golden Key.",
+        hint:  "Obtain your Alpha key from your MaroShield account manager or use the Golden Key.",
       });
       return;
     }
@@ -926,7 +926,7 @@ router.get("/v1/partner/onboarding", async (req, res): Promise<void> => {
       id: "art12-1-logging", article: "Art. 12 §1", title: "Automated Audit Logging",
       requirement: "High-risk AI systems shall automatically log all actions and decisions in an immutable audit trail.",
       status: (totalEvents > 0 ? "COMPLIANT" : "NON-COMPLIANT") as CheckStatus,
-      evidence: totalEvents > 0 ? `${totalEvents.toLocaleString()} events logged · ${recentLogs.toLocaleString()} in last 7 days` : "No events logged. Integrate the Sentinel SDK to begin capturing agent actions.",
+      evidence: totalEvents > 0 ? `${totalEvents.toLocaleString()} events logged · ${recentLogs.toLocaleString()} in last 7 days` : "No events logged. Integrate the MaroShield SDK to begin capturing agent actions.",
       metric: `${totalEvents.toLocaleString()} events`, controlRef: "EU AI Act 2026, Article 12, §1", euDeadline: "2026-08-02",
     },
     {
@@ -954,7 +954,7 @@ router.get("/v1/partner/onboarding", async (req, res): Promise<void> => {
       id: "art14-2-drift", article: "Art. 14 §2", title: "Cognitive Drift Detection",
       requirement: "Operators must monitor AI systems for behavioural drift. Anomalous patterns must trigger governance review.",
       status: (anomalous > 0 && driftDetected > 0 ? "COMPLIANT" : anomalous > 0 ? "PARTIAL" : "PENDING") as CheckStatus,
-      evidence: driftDetected > 0 ? `${driftDetected} drift events detected and flagged · ${anomalous} total anomalies intercepted` : "No drift events yet. Sentinel drift detector monitors consistencyScore in real-time.",
+      evidence: driftDetected > 0 ? `${driftDetected} drift events detected and flagged · ${anomalous} total anomalies intercepted` : "No drift events yet. MaroShield drift detector monitors consistencyScore in real-time.",
       metric: `${driftDetected} drift events`, controlRef: "EU AI Act 2026, Article 14, §2", euDeadline: "2026-08-02",
     },
     {
@@ -976,14 +976,14 @@ router.get("/v1/partner/onboarding", async (req, res): Promise<void> => {
       requirement: "Two-Man Rule compliance requires a distinct Secondary Sovereign Key (ML-DSA-87) held by a different authorized individual.",
       status: "PENDING" as CheckStatus,
       evidence: "Primary Operator key enrolled. Secondary Sovereign Key not yet registered. Follow provisioning instructions.",
-      metric: "Awaiting enrollment", controlRef: "Sentinel Multi-Sig SLA §3.2 + EU AI Act Art. 14 §3", euDeadline: "2026-08-02",
+      metric: "Awaiting enrollment", controlRef: "MaroShield Multi-Sig SLA §3.2 + EU AI Act Art. 14 §3", euDeadline: "2026-08-02",
     },
     {
       id: "sla-sampling", article: "Post-Interdiction SLA", title: "100% Signature Sampling Window",
       requirement: "Following any human interdiction, the affected agent enters a 100-event elevated sampling window with full ML-DSA-87 coverage.",
       status: (recursiveFixes > 0 ? "COMPLIANT" : "PARTIAL") as CheckStatus,
       evidence: recursiveFixes > 0 ? `Fix Monitor activated · ${recursiveFixes} interdicted agent(s) under 100-event elevated window` : "Fix Monitor available. SLA clock starts on first Apply Fix.",
-      metric: "100-event window", controlRef: "Sentinel SLA §4.1 — Post-Interdiction Sampling", euDeadline: "Continuous",
+      metric: "100-event window", controlRef: "MaroShield SLA §4.1 — Post-Interdiction Sampling", euDeadline: "Continuous",
     },
   ];
 

@@ -152,7 +152,7 @@ export default function SettingsPage() {
           </h1>
         </div>
         <p style={{ fontSize: 13, color: "#64748B", fontFamily: "Inter, system-ui, sans-serif" }}>
-          Manage the key your agents use to send audit logs to Sentinel.
+          Manage the key your agents use to send audit logs to MaroShield.
         </p>
       </div>
 

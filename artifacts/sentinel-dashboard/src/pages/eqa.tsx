@@ -220,7 +220,7 @@ function generatePDFDoc(r: EQAReport, qLog: QuarantineEvent[] = []): jsPDF {
   function drawPageHeader(pageNum: number, totalLabel: string) {
     pFill(doc, R.dark); doc.rect(0, 0, PW, 15, "F");
     pFont(doc, 8, true);  pText(doc, R.sage);
-    doc.text("AGENT-SENTINEL", ML, 8);
+    doc.text("MAROSHIELD", ML, 8);
     pFont(doc, 5.5); pText(doc, R.dim);
     doc.text("NEURAL SOVEREIGNTY · v6.0", ML, 12.5);
     pFont(doc, 5.5); pText(doc, R.dim);

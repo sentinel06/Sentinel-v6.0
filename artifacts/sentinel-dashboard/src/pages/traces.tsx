@@ -26,7 +26,7 @@ import SovereignMultiSigModal from "@/components/SovereignMultiSigModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// ── Sentinel Zen palette ─────────────────────────────────────────────────────
+// ── MaroShield Zen palette ─────────────────────────────────────────────────────
 const P = {
   sage:   "#00F5FF",
   amber:  "#FFB800",

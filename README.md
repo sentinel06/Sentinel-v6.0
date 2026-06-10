@@ -1,6 +1,6 @@
 ![sentinel-governed](https://agent-sentinel.net/api/v1/badge.svg)
 
-# Agent-Sentinel
+# MaroShield
 
 > Immutable audit ledger, active governance, and EU AI Act compliance for production AI agents.
 
@@ -10,7 +10,7 @@
 
 ## What is this?
 
-Agent-Sentinel is a full-stack governance framework that wraps your AI agents with:
+MaroShield is a full-stack governance framework that wraps your AI agents with:
 
 - **Immutable hash-chained audit ledger** — every action is SHA-256 linked and tamper-evident
 - **Active circuit breaker** — blocks anomalous or high-risk actions before they execute
@@ -24,7 +24,7 @@ Agent-Sentinel is a full-stack governance framework that wraps your AI agents wi
 
 ## Quick Start
 
-### Python (Sentinel-Bridge SDK)
+### Python (MaroShield-Bridge SDK)
 
 ```python
 from sentinel_bridge import SovereignGateway
@@ -272,7 +272,7 @@ agent-sentinel/
 │           │   ├── swarmmap.tsx      # Swarm lifecycle & evolutionary dynamics (/swarmmap)
 │           │   ├── pulse.tsx         # Trust-velocity real-time feed (/pulse)
 │           │   ├── status.tsx        # Platform metrics overview (/status)
-│           │   ├── badge.tsx         # Sentinel-Certified badge generator (/badge)
+│           │   ├── badge.tsx         # MaroShield-Certified badge generator (/badge)
 │           │   ├── settings.tsx      # API key management — view, reveal, rotate (/settings)
 │           │   ├── support.tsx       # Support channels + triage form (/support)
 │           │   ├── partnerportal.tsx # Partner program portal (/partner) [URL-only]
@@ -288,7 +288,7 @@ agent-sentinel/
 │           │   ├── CausalTopologyMap.tsx    # D3 causal graph renderer
 │           │   ├── DataRoomExport.tsx       # M&A data-room evidence bundle UI
 │           │   ├── ExecutiveSummaryPDF.tsx  # Executive summary PDF generator
-│           │   ├── support-widget.tsx       # Floating Sentinel Assistant chat (Claude SSE)
+│           │   ├── support-widget.tsx       # Floating MaroShield Assistant chat (Claude SSE)
 │           │   ├── widgets/
 │           │   │   ├── LatticeStrengthGauge.tsx  # PQC lattice strength gauge (top bar)
 │           │   │   ├── RedisPulse.tsx            # Redis latency sparkline (top bar)
@@ -393,8 +393,8 @@ Any agent that calls one of these is immediately and permanently revoked.
 | Compliance | `/compliance` | EU AI Act Art. 12/14 signed PDF export |
 | Hash Chain | `/integrity` | Merkle sweep and sequential integrity verification |
 | Swarm Map | `/swarmmap` | Swarm lifecycle, evolutionary dynamics, mutations |
-| Sentinel Badge | `/badge` | Certification status and README embed code |
-| API Key Settings | `/settings` | View, reveal, copy, and rotate your Sentinel key |
+| MaroShield Badge | `/badge` | Certification status and README embed code |
+| API Key Settings | `/settings` | View, reveal, copy, and rotate your MaroShield key |
 | Support | `/support` | Support channels + AI-powered triage form |
 
 ---
@@ -424,7 +424,7 @@ pnpm --filter @workspace/scripts run breach
 
 ---
 
-## Sentinel-Certified Badge
+## MaroShield-Certified Badge
 
 Add a live governance badge to any project README:
 
@@ -434,12 +434,12 @@ Add a live governance badge to any project README:
 
 | Color | Health | Status |
 |---|---|---|
-| Green | ≥ 80% | **Sentinel-Certified** — consistent, low-risk behavior |
+| Green | ≥ 80% | **MaroShield-Certified** — consistent, low-risk behavior |
 | Yellow | 60–79% | Marginal — some anomalies detected |
 | Red | < 60% | Compromised — integrity failures detected |
 | Black | — | Permanently revoked after honey-token breach |
 
-> Generate your exact embed snippet from the **Sentinel Badge** page in the dashboard.
+> Generate your exact embed snippet from the **MaroShield Badge** page in the dashboard.
 
 ---
 

@@ -15,7 +15,7 @@ import { formatTime } from "@/lib/audit-utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// ── Sentinel Zen palette ────────────────────────────────────────────────────
+// ── MaroShield Zen palette ────────────────────────────────────────────────────
 const P = {
   sage:       "#00F5FF",
   amber:      "#FFB800",
@@ -1509,7 +1509,7 @@ export default function WarRoomPage() {
             </div>
             <div className="px-4 py-3 border-t border-amber-500/20 bg-amber-500/5">
               <p className="text-[10px] font-mono text-amber-600/70 leading-relaxed">
-                Each case above is a real-world validation of the Sentinel active defense system.
+                Each case above is a real-world validation of the MaroShield active defense system.
                 Rogue agents that attempted to invoke forbidden ghost tools were caught, revoked,
                 and logged within milliseconds. Export an Evidence Bag (PDF) to include these
                 incidents in your EU AI Act Art. 14 compliance submission.

@@ -1,6 +1,6 @@
 """
 ████████████████████████████████████████████████████
-  AGENT-SENTINEL SDK  ·  Python 3.9+
+  MAROSHIELD SDK  ·  Python 3.9+
   EU AI Act Art. 12/14 Traceability Wrapper
 ████████████████████████████████████████████████████
 

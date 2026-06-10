@@ -219,9 +219,9 @@ async function handleRequest(
     logger.warn({ path: req.url, state: breaker.currentState },
       "mesh-proxy: request blocked — governance connection unavailable");
     writeError(res, 503, "GOVERNANCE_DISCONNECT", [
-      "Sentinel mesh sidecar: governance connection lost.",
+      "MaroShield mesh sidecar: governance connection lost.",
       `Circuit state: ${breaker.currentState}.`,
-      "Agent tool calls are suspended until the Sentinel data plane reconnects (fail-closed policy).",
+      "Agent tool calls are suspended until the MaroShield data plane reconnects (fail-closed policy).",
     ].join(" "), { circuitState: breaker.currentState });
     return;
   }
@@ -260,7 +260,7 @@ async function handleRequest(
     } catch (err) {
       logger.error({ err, nodeId }, "mesh-proxy: blacklist Redis error — failing closed (SECURITY_DATA_PLANE_OFFLINE)");
       writeError(res, 503, "SECURITY_DATA_PLANE_OFFLINE",
-        "Sentinel enforcement mechanism is unreachable. Integrity cannot be verified. Failing closed.");
+        "MaroShield enforcement mechanism is unreachable. Integrity cannot be verified. Failing closed.");
       return;
     }
   }

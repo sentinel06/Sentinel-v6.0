@@ -188,7 +188,7 @@ export default function Slide09Team() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>09</span>
       </div>
     </div>

@@ -1,4 +1,4 @@
-# Agent-Sentinel: 2026–2030 Strategic Roadmap
+# MaroShield: 2026–2030 Strategic Roadmap
 
 ### **Current Status: Phase 1 - The Integrity Foundation (Q4 2026)**
 *Focus: Hardening the "Black Box" and Regulatory Compliance.*

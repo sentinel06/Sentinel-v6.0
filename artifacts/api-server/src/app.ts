@@ -165,7 +165,7 @@ if (process.env["NODE_ENV"] === "production") {
 
   function buildAuthHtml(baseHtml: string, variant: "sign-in" | "sign-up"): string {
     const title =
-      variant === "sign-in" ? "Sign In — Agent-Sentinel" : "Sign Up — Agent-Sentinel";
+      variant === "sign-in" ? "Sign In — MaroShield" : "Sign Up — MaroShield";
 
     let html = baseHtml;
 
@@ -175,7 +175,7 @@ if (process.env["NODE_ENV"] === "production") {
     // Replace meta description
     html = html.replace(
       /<meta name="description" content="[^"]*" \/>/,
-      `<meta name="description" content="Sign in to your Agent-Sentinel account to access your immutable audit ledger and AI governance dashboard." />`,
+      `<meta name="description" content="Sign in to your MaroShield account to access your immutable audit ledger and AI governance dashboard." />`,
     );
 
     // Flip robots: index → noindex

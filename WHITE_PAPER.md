@@ -1,11 +1,11 @@
-# WHITE PAPER: Agent-Sentinel v6.0
+# WHITE PAPER: MaroShield v6.0
 **The Sovereign Infrastructure for Agentic Governance**
 
 ---
 
 ## 1. Executive Summary
 
-By 2026, autonomous agents have moved from experimental prompts to production-grade orchestration. However, the "Agentic Gap" — the delta between autonomous action and human accountability — remains the primary barrier to global adoption. Agent-Sentinel provides a Zero-Trust Governance Layer that bridges this gap through active circuit breaking, cryptographic integrity, and post-quantum audit provenance.
+By 2026, autonomous agents have moved from experimental prompts to production-grade orchestration. However, the "Agentic Gap" — the delta between autonomous action and human accountability — remains the primary barrier to global adoption. MaroShield provides a Zero-Trust Governance Layer that bridges this gap through active circuit breaking, cryptographic integrity, and post-quantum audit provenance.
 
 The platform is engineered for compliance with the **EU AI Act 2026** (Art. 12 audit logging, Art. 14 human oversight), **NIST AI RMF 2026**, and **FIPS-204 ML-DSA-87** post-quantum signature standards.
 
@@ -15,7 +15,7 @@ The platform is engineered for compliance with the **EU AI Act 2026** (Art. 12 a
 
 ### 2.1 Phase 1: The Integrity Ledger (Current — v6.0)
 
-The foundation of Agent-Sentinel is the SHA-512 + ML-DSA-87 Hash Chain. Every intent, tool call, and result is chained in a WORM (Write-Once, Read-Many) ledger with post-quantum signatures.
+The foundation of MaroShield is the SHA-512 + ML-DSA-87 Hash Chain. Every intent, tool call, and result is chained in a WORM (Write-Once, Read-Many) ledger with post-quantum signatures.
 
 **Immutable Audit Ledger:** Every agent action is committed with a SHA-512 hash over the previous entry, forming a tamper-evident chain. Any retroactive mutation breaks all subsequent hashes — immediately detectable by the chain verifier.
 
@@ -27,7 +27,7 @@ The foundation of Agent-Sentinel is the SHA-512 + ML-DSA-87 Hash Chain. Every in
 
 ### 2.2 Phase 2: Swarm Ancestry Tracking (2027)
 
-In multi-agent environments, a "Logic Poisoning" event in a sub-agent can cascade. Sentinel implements Swarm Ancestry Tracking, assigning a `parentTraceId` to every cross-agent handoff.
+In multi-agent environments, a "Logic Poisoning" event in a sub-agent can cascade. MaroShield implements Swarm Ancestry Tracking, assigning a `parentTraceId` to every cross-agent handoff.
 
 **Causal Topology Graph:** The forensic Causal Dependency Graph reconstructs the exact attack vector from initial stimulus to harmful action — making cross-agent contamination immediately visible without requiring operators to inspect raw hashes.
 
@@ -55,7 +55,7 @@ After any successful interdiction, the affected agent enters the Fix Monitor —
 
 ## 4. Post-Quantum Signing — ML-DSA-87 (FIPS-204 SL5)
 
-Agent-Sentinel uses the **ML-DSA-87** variant of the Module Lattice-Based Digital Signature Algorithm, standardised as **NIST FIPS-204** at Security Level 5 — the highest available, providing 256-bit collision resistance equivalent to AES-256.
+MaroShield uses the **ML-DSA-87** variant of the Module Lattice-Based Digital Signature Algorithm, standardised as **NIST FIPS-204** at Security Level 5 — the highest available, providing 256-bit collision resistance equivalent to AES-256.
 
 Every signature is **context-bound** to `{ partnerId, swarmId }` — preventing cross-tenant signature replay attacks. Signatures are wrapped in a **Hybrid Signature Envelope (QL-2.0)** combining SHA-512-HMAC and ML-DSA-87, providing harvest-now-decrypt-later resistance.
 
@@ -90,4 +90,4 @@ Every signature is **context-bound** to `{ partnerId, swarmId }` — preventing 
 
 ---
 
-*Agent-Sentinel v6.0 · EU AI Act Art. 12/14 · NIST AI RMF 2026 · FIPS-204 ML-DSA-87 · QL-2.0*
+*MaroShield v6.0 · EU AI Act Art. 12/14 · NIST AI RMF 2026 · FIPS-204 ML-DSA-87 · QL-2.0*

@@ -179,7 +179,7 @@ agent.log_action(
         <div>
           <h1 className="text-2xl font-bold text-white">Connect your first agent</h1>
           <p className="text-sm text-[#9AA4B1]">
-            Provision a Sentinel key, drop it into your agent, and every action will be sealed in your immutable ledger.
+            Provision a MaroShield key, drop it into your agent, and every action will be sealed in your immutable ledger.
           </p>
         </div>
       </div>
@@ -188,7 +188,7 @@ agent.log_action(
       <section className="mt-8">
         <div className="flex items-center gap-2 mb-3">
           <span className="font-mono text-[11px] uppercase tracking-wider text-[#00F5FF]">Step 1</span>
-          <span className="text-sm font-semibold text-white">Your Sentinel API key</span>
+          <span className="text-sm font-semibold text-white">Your MaroShield API key</span>
         </div>
 
         <div className="glass-panel rounded-xl p-5">

@@ -1,5 +1,5 @@
 /**
- * Sentinel Support — AI assistant chat (SSE) + support triage agent.
+ * MaroShield Support — AI assistant chat (SSE) + support triage agent.
  *
  * POST /api/v1/support/chat  — streaming chat, Clerk-auth required.
  * POST /api/v1/support/triage — classify + auto-respond, Clerk-auth required.
@@ -35,7 +35,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are Sentinel Assistant, the in-product AI support agent for **Agent-Sentinel** — an immutable audit ledger and governance layer for AI agents (EU AI Act Article 12 compliant).
+const SYSTEM_PROMPT = `You are MaroShield Assistant, the in-product AI support agent for **MaroShield** — an immutable audit ledger and governance layer for AI agents (EU AI Act Article 12 compliant).
 
 Your job is to help users with anything they need: connecting their first agent, understanding the SDK, debugging integration issues, interpreting dashboard widgets, billing/account questions, and general "how does X work" inquiries. Be friendly, concise, and concrete. When code helps, give the smallest snippet that solves the problem.
 
@@ -118,7 +118,7 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 router.post("/v1/support/chat", async (req, res): Promise<void> => {
   const auth = getAuth(req);
   if (!auth.userId) {
-    res.status(401).json({ error: "Sign in to use Sentinel Assistant." });
+    res.status(401).json({ error: "Sign in to use MaroShield Assistant." });
     return;
   }
 
@@ -187,7 +187,7 @@ router.post("/v1/support/chat", async (req, res): Promise<void> => {
     // event so the client UI can render it instead of hanging on a dead socket.
     res.write(
       `data: ${JSON.stringify({
-        error: "Sentinel Assistant is temporarily unavailable. Please try again in a moment.",
+        error: "MaroShield Assistant is temporarily unavailable. Please try again in a moment.",
         done: true,
       })}\n\n`,
     );
@@ -229,7 +229,7 @@ const ROUTING: Record<
   },
 };
 
-const TRIAGE_SYSTEM = `You are a support triage agent for Agent-Sentinel (AI governance platform).
+const TRIAGE_SYSTEM = `You are a support triage agent for MaroShield (AI governance platform).
 
 Classify the incoming message and draft a first response. Reply ONLY with valid JSON — no markdown fences, no explanation.
 
@@ -254,7 +254,7 @@ Urgency:
 
 escalationRequired: true only for critical urgency.
 
-autoResponse: acknowledge the issue specifically, state the SLA commitment, give 1-2 immediate self-service steps if applicable. Do not invent features. Sign off as "Sentinel Support".`;
+autoResponse: acknowledge the issue specifically, state the SLA commitment, give 1-2 immediate self-service steps if applicable. Do not invent features. Sign off as "MaroShield Support".`;
 
 function makeTicketId(): string {
   const date = new Date();
@@ -335,7 +335,7 @@ router.post("/v1/support/triage", async (req, res): Promise<void> => {
       autoResponse:
         typeof parsed.autoResponse === "string" && parsed.autoResponse.length > 0
           ? parsed.autoResponse
-          : `Thank you for reaching out. Your request has been routed to our ${route.label} team at ${route.email}. Expected response time: ${route.sla}. — Sentinel Support`,
+          : `Thank you for reaching out. Your request has been routed to our ${route.label} team at ${route.email}. Expected response time: ${route.sla}. — MaroShield Support`,
       submittedAt: new Date().toISOString(),
       contactEmail: typeof contactEmail === "string" && contactEmail.trim() ? contactEmail.trim() : null,
     });

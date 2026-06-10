@@ -401,7 +401,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   return `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
-<title>Agent-Sentinel v6.0 — Technical White Paper — ${dateStr}</title>
+<title>MaroShield v6.0 — Technical White Paper — ${dateStr}</title>
 <style>
   @page {
     size: A4 landscape;
@@ -509,7 +509,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
 </style></head>
 <body>
 <div class="screen-toolbar">
-  <span>AGENT-SENTINEL v6.0 — TECHNICAL WHITE PAPER · ${dateStr} ${timeStr}</span>
+  <span>MAROSHIELD v6.0 — TECHNICAL WHITE PAPER · ${dateStr} ${timeStr}</span>
   <button class="print-btn" onclick="window.print()">⎙ SAVE AS PDF</button>
 </div>
 <div class="document">
@@ -567,7 +567,7 @@ function buildWhitepaperPrintHTML(wp: WhitepaperResponse): string {
   </div>
   ${bodyHtml}
   <div class="footer">
-    Agent-Sentinel v6.0 · Document AS-WP-${wp.documentId} · Generated ${dateStr} ${timeStr} ·
+    MaroShield v6.0 · Document AS-WP-${wp.documentId} · Generated ${dateStr} ${timeStr} ·
     ML-DSA-87 (FIPS-204 SL5) · EU AI Act Art. 12/14 · NIST AI RMF 2026 · CONFIDENTIAL
   </div>
 </div>

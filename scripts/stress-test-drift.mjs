@@ -1,5 +1,5 @@
 /**
- * Agent-Sentinel v2.0 — Cognitive Drift Stress Test
+ * MaroShield v2.0 — Cognitive Drift Stress Test
  *
  * Simulates an agent that starts with safe READ_FILE operations,
  * then pivots to aggressive DELETE_USER / POST_PAYMENT actions.
@@ -60,7 +60,7 @@ async function postLog(n, eventType, action, expectBlock = false) {
 }
 
 async function main() {
-  console.log(`\n${color(BOLD + CYAN, "Agent-Sentinel v2.0 — Cognitive Drift Stress Test")}`);
+  console.log(`\n${color(BOLD + CYAN, "MaroShield v2.0 — Cognitive Drift Stress Test")}`);
   console.log(color(DIM, `Target: ${BASE_URL}`));
   console.log(color(DIM, `Agent:  ${AGENT_ID}`));
   console.log(color(DIM, `Swarm:  ${SWARM_ID}\n`));

@@ -188,7 +188,7 @@ export default function Slide07BusinessModel() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>07</span>
       </div>
     </div>

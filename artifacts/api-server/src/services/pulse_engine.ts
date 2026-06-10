@@ -1,5 +1,5 @@
 /**
- * Sovereign Pulse Engine — Internal heartbeat system for Agent-Sentinel
+ * Sovereign Pulse Engine — Internal heartbeat system for MaroShield
  *
  * Runs every 6 hours. Computes three core metrics over the ENTIRE ledger:
  *

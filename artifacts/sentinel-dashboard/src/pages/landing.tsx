@@ -16,28 +16,28 @@ const FAQ_ITEMS = [
     a: "An AI agent audit trail is a complete, ordered record of every action, decision, and output produced by an autonomous AI system. It matters because regulators (EU AI Act), auditors, and security teams need to be able to reconstruct exactly what an agent did, when it did it, and why — especially when things go wrong. Without an immutable audit trail, organisations cannot prove compliance, investigate incidents, or hold AI systems accountable.",
   },
   {
-    q: "How does Agent-Sentinel satisfy EU AI Act Article 12?",
-    a: "Article 12 of the EU AI Act requires that high-risk AI systems maintain logs sufficient to ensure traceability of the system's operation throughout its lifecycle. Agent-Sentinel satisfies this by recording every agent event into a hash-chained, append-only ledger that cannot be modified or deleted. The integrity of the chain can be verified at any time via the dashboard or the /api/v1/integrity endpoint, and a compliance export maps each log entry to the relevant regulatory obligation.",
+    q: "How does MaroShield satisfy EU AI Act Article 12?",
+    a: "Article 12 of the EU AI Act requires that high-risk AI systems maintain logs sufficient to ensure traceability of the system's operation throughout its lifecycle. MaroShield satisfies this by recording every agent event into a hash-chained, append-only ledger that cannot be modified or deleted. The integrity of the chain can be verified at any time via the dashboard or the /api/v1/integrity endpoint, and a compliance export maps each log entry to the relevant regulatory obligation.",
   },
   {
     q: "What is hash chaining and how does it prevent tampering?",
-    a: "Hash chaining means each audit log entry includes a SHA-256 hash computed from its own content plus the hash of the previous entry. If anyone modifies an earlier record — even a single byte — every subsequent hash in the chain becomes mathematically invalid. Agent-Sentinel can detect this instantly by replaying the chain. Combined with PostgreSQL triggers that block UPDATE and DELETE at the database engine level, the ledger is tamper-evident even against privileged administrators.",
+    a: "Hash chaining means each audit log entry includes a SHA-256 hash computed from its own content plus the hash of the previous entry. If anyone modifies an earlier record — even a single byte — every subsequent hash in the chain becomes mathematically invalid. MaroShield can detect this instantly by replaying the chain. Combined with PostgreSQL triggers that block UPDATE and DELETE at the database engine level, the ledger is tamper-evident even against privileged administrators.",
   },
   {
     q: "What does 'post-quantum' cryptography mean for audit logs?",
-    a: "Post-quantum cryptography refers to algorithms designed to resist attacks from quantum computers, which could break the RSA and ECDSA signatures used in most current systems. Agent-Sentinel uses ML-DSA-87 (FIPS 204 / CRYSTALS-Dilithium), a lattice-based digital signature scheme standardised by NIST, to seal every audit event. This means your audit records remain cryptographically valid even as quantum computing capabilities advance.",
+    a: "Post-quantum cryptography refers to algorithms designed to resist attacks from quantum computers, which could break the RSA and ECDSA signatures used in most current systems. MaroShield uses ML-DSA-87 (FIPS 204 / CRYSTALS-Dilithium), a lattice-based digital signature scheme standardised by NIST, to seal every audit event. This means your audit records remain cryptographically valid even as quantum computing capabilities advance.",
   },
   {
-    q: "How long does it take to integrate Agent-Sentinel?",
-    a: "Most teams are submitting their first audit events within 10–15 minutes. The Sentinel-Bridge Python SDK requires three lines of code to initialise, register an agent, and submit an event. The REST API requires only an HTTP POST with your Sentinel key header. No infrastructure changes are needed — Agent-Sentinel runs as a hosted service that your agents call over HTTPS.",
+    q: "How long does it take to integrate MaroShield?",
+    a: "Most teams are submitting their first audit events within 10–15 minutes. The MaroShield-Bridge Python SDK requires three lines of code to initialise, register an agent, and submit an event. The REST API requires only an HTTP POST with your MaroShield key header. No infrastructure changes are needed — MaroShield runs as a hosted service that your agents call over HTTPS.",
   },
   {
     q: "Is my audit data isolated from other tenants?",
-    a: "Yes. Every audit log row is tagged with the Clerk user ID of the authenticated account that ingested it. All read endpoints enforce this at the query level — you only ever see your own organisation's data. Partner API keys are also scoped to a single tenant, so even programmatic access via the Sentinel-Bridge SDK cannot read another organisation's records.",
+    a: "Yes. Every audit log row is tagged with the Clerk user ID of the authenticated account that ingested it. All read endpoints enforce this at the query level — you only ever see your own organisation's data. Partner API keys are also scoped to a single tenant, so even programmatic access via the MaroShield-Bridge SDK cannot read another organisation's records.",
   },
   {
     q: "What is the Governance Registry?",
-    a: "The Governance Registry is a structured inventory of every AI agent your organisation has registered with Agent-Sentinel. Each entry records the agent's ID, model version, owner, risk tier, authorisation status, and operational history. Compliance officers can use the registry to demonstrate that all deployed agents are known, authorised, and monitored — a core requirement of the EU AI Act and ISO/IEC 42001.",
+    a: "The Governance Registry is a structured inventory of every AI agent your organisation has registered with MaroShield. Each entry records the agent's ID, model version, owner, risk tier, authorisation status, and operational history. Compliance officers can use the registry to demonstrate that all deployed agents are known, authorised, and monitored — a core requirement of the EU AI Act and ISO/IEC 42001.",
   },
   {
     q: "Can I export audit data for regulators or M&A due diligence?",
@@ -184,7 +184,7 @@ export default function LandingPage() {
       >
         <img
           src="/logo.png"
-          alt="Sentinel"
+          alt="MaroShield"
           style={{
             width: 22,
             height: 22,
@@ -194,7 +194,7 @@ export default function LandingPage() {
           }}
         />
         <div className="font-mono text-[11px] font-bold tracking-[0.24em]" style={{ color: SAGE }}>
-          AGENT-SENTINEL
+          MAROSHIELD
         </div>
         <span
           className="font-mono text-[9px] font-bold px-2 py-0.5 rounded hidden sm:inline"
@@ -386,7 +386,7 @@ export default function LandingPage() {
           >
             {[
               { n: "1", title: "Create your account", body: "Email or one-click social login." },
-              { n: "2", title: "Connect your AI agent", body: "Drop in the Sentinel-Bridge SDK or call the gateway API." },
+              { n: "2", title: "Connect your AI agent", body: "Drop in the MaroShield-Bridge SDK or call the gateway API." },
               { n: "3", title: "Watch your ledger fill up", body: "Every agent action signed, sealed, and audit-ready." },
             ].map((s) => (
               <li
@@ -540,17 +540,17 @@ export default function LandingPage() {
         style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
       >
 
-        {/* ── How Agent-Sentinel Works ── */}
+        {/* ── How MaroShield Works ── */}
         <section aria-labelledby="how-it-works-heading">
           <h2
             id="how-it-works-heading"
             className="text-xl sm:text-2xl font-semibold mb-2"
             style={{ color: SAGE, letterSpacing: "-0.01em" }}
           >
-            How Agent-Sentinel Works
+            How MaroShield Works
           </h2>
           <p className="mb-8 text-sm sm:text-base leading-relaxed" style={{ color: "#94A3B8", maxWidth: 760 }}>
-            Agent-Sentinel sits between your AI agents and the rest of your infrastructure, recording every decision,
+            MaroShield sits between your AI agents and the rest of your infrastructure, recording every decision,
             tool call, and output into a tamper-proof ledger before it reaches downstream systems.
             The platform operates in three layers: ingestion, verification, and governance.
           </p>
@@ -561,14 +561,14 @@ export default function LandingPage() {
                 icon: Cpu,
                 color: SAGE,
                 heading: "Ingestion & Sealing",
-                body: "Every agent event — tool invocation, model output, permission grant, or error — is submitted to the Sentinel Gateway via the Sentinel-Bridge SDK or REST API. Each event is timestamped, assigned a SHA-256 hash that incorporates the previous hash, and sealed with a ML-DSA-87 post-quantum signature. The result is an immutable, hash-chained audit log that cannot be altered retroactively.",
+                body: "Every agent event — tool invocation, model output, permission grant, or error — is submitted to the MaroShield Gateway via the MaroShield-Bridge SDK or REST API. Each event is timestamped, assigned a SHA-256 hash that incorporates the previous hash, and sealed with a ML-DSA-87 post-quantum signature. The result is an immutable, hash-chained audit log that cannot be altered retroactively.",
               },
               {
                 step: "02",
                 icon: Activity,
                 color: VIOLET,
                 heading: "Real-Time Analysis",
-                body: "As events arrive, Agent-Sentinel runs anomaly scoring, hallucination detection, and drift analysis. Suspicious patterns — unexpected permission escalations, financial transfers, or off-policy tool use — trigger sub-1ms interdiction signals. Human-in-the-loop War Room approvals can block any agent action before it propagates to production systems.",
+                body: "As events arrive, MaroShield runs anomaly scoring, hallucination detection, and drift analysis. Suspicious patterns — unexpected permission escalations, financial transfers, or off-policy tool use — trigger sub-1ms interdiction signals. Human-in-the-loop War Room approvals can block any agent action before it propagates to production systems.",
               },
               {
                 step: "03",
@@ -609,7 +609,7 @@ export default function LandingPage() {
           </h2>
           <p className="mb-6 text-sm sm:text-base leading-relaxed" style={{ color: "#94A3B8", maxWidth: 760 }}>
             The EU AI Act imposes strict traceability and human-oversight requirements on high-risk AI systems.
-            Agent-Sentinel is purpose-built to satisfy Articles 12 and 14 without requiring changes to your agent codebase.
+            MaroShield is purpose-built to satisfy Articles 12 and 14 without requiring changes to your agent codebase.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
@@ -686,7 +686,7 @@ export default function LandingPage() {
             Use Cases for AI Governance Teams
           </h2>
           <p className="mb-6 text-sm sm:text-base leading-relaxed" style={{ color: "#94A3B8", maxWidth: 760 }}>
-            Agent-Sentinel serves every stakeholder involved in deploying and auditing autonomous AI systems —
+            MaroShield serves every stakeholder involved in deploying and auditing autonomous AI systems —
             from platform engineers building agent infrastructure to compliance officers preparing for regulatory review.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -713,13 +713,13 @@ export default function LandingPage() {
                 icon: GitBranch,
                 color: TERRA,
                 heading: "Agentic Product Teams",
-                body: "Integrate the Sentinel-Bridge Python SDK in under ten minutes. Each agent run automatically records tool calls, model outputs, and decision rationale. The swarm map gives product teams a live visual of every agent's lifecycle, mutations, and interventions.",
+                body: "Integrate the MaroShield-Bridge Python SDK in under ten minutes. Each agent run automatically records tool calls, model outputs, and decision rationale. The swarm map gives product teams a live visual of every agent's lifecycle, mutations, and interventions.",
               },
               {
                 icon: Lock,
                 color: "#00C6FF",
                 heading: "Enterprise Risk & Audit",
-                body: "Agent-Sentinel's immutable ledger satisfies the evidentiary standard required for internal audit, M&A due diligence, and regulatory examination. Hash chain verification proves that no log entry has been altered since ingestion — even by administrators.",
+                body: "MaroShield's immutable ledger satisfies the evidentiary standard required for internal audit, M&A due diligence, and regulatory examination. Hash chain verification proves that no log entry has been altered since ingestion — even by administrators.",
               },
               {
                 icon: Activity,
@@ -763,7 +763,7 @@ export default function LandingPage() {
                 agents operating autonomously in production, that gap in integrity is a material compliance risk.
               </p>
               <p className="text-sm sm:text-base leading-relaxed mb-4" style={{ color: "#94A3B8" }}>
-                Agent-Sentinel's hash-chaining approach solves this at the data layer. Every audit log row stores a
+                MaroShield's hash-chaining approach solves this at the data layer. Every audit log row stores a
                 SHA-256 hash computed from its own content <em>and</em> the hash of the previous row. Alter any earlier
                 record — even a single byte — and every subsequent hash in the chain becomes invalid. The integrity of
                 the entire ledger can be verified in O(n) time by replaying the chain, and the verification result is
@@ -808,7 +808,7 @@ export default function LandingPage() {
             Integration Options
           </h2>
           <p className="mb-6 text-sm sm:text-base leading-relaxed" style={{ color: "#94A3B8", maxWidth: 760 }}>
-            Agent-Sentinel is designed to integrate with any AI agent stack — from LangChain and AutoGPT to custom
+            MaroShield is designed to integrate with any AI agent stack — from LangChain and AutoGPT to custom
             Python orchestration or REST-based microservice agents. Choose the integration method that fits your
             architecture.
           </p>
@@ -816,8 +816,8 @@ export default function LandingPage() {
             {[
               {
                 color: SAGE,
-                label: "Sentinel-Bridge Python SDK",
-                detail: "The official Python SDK provides a SovereignGateway class with methods for agent registration, pre-flight governance checks, telemetry ingestion, and liveness pings. Works with any Python-based agent framework. Install via pip and authenticate with your Sentinel key.",
+                label: "MaroShield-Bridge Python SDK",
+                detail: "The official Python SDK provides a SovereignGateway class with methods for agent registration, pre-flight governance checks, telemetry ingestion, and liveness pings. Works with any Python-based agent framework. Install via pip and authenticate with your MaroShield key.",
                 code: "pip install sentinel-bridge",
               },
               {
@@ -829,7 +829,7 @@ export default function LandingPage() {
               {
                 color: AMBER,
                 label: "Webhook & Stream Ingestion",
-                detail: "For high-volume agent swarms, Agent-Sentinel accepts bulk event batches and supports real-time streaming via WebSocket. The dashboard live-updates without polling — events appear in the audit log within milliseconds of ingestion.",
+                detail: "For high-volume agent swarms, MaroShield accepts bulk event batches and supports real-time streaming via WebSocket. The dashboard live-updates without polling — events appear in the audit log within milliseconds of ingestion.",
                 code: "wss://agent-sentinel.net/api/v1/stream",
               },
             ].map(({ color, label, detail, code }) => (

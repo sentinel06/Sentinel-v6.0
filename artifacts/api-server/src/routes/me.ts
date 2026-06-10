@@ -195,7 +195,7 @@ router.post("/v1/me/key/regenerate", async (req, res): Promise<void> => {
 
 // ── POST /v1/auth/verify — SDK handshake ──────────────────────────────────
 // Called by the SDK on initialisation to confirm the key is live in the
-// Sentinel ledger before starting a run. Validates X-Sentinel-Key against
+// MaroShield ledger before starting a run. Validates X-Sentinel-Key against
 // partner_keys and returns key metadata. Does NOT write a log entry.
 //
 // Response shape:
@@ -269,7 +269,7 @@ router.post("/v1/auth/verify", async (req, res): Promise<void> => {
       ownerEmail: row.partnerEmail,
       createdAt:  row.createdAt,
       lastUsedAt: row.lastUsedAt,
-      message: "Key verified — Sentinel ledger is ready to accept events.",
+      message: "Key verified — MaroShield ledger is ready to accept events.",
     });
   } catch (err) {
     req.log.error({ err }, "POST /v1/auth/verify failed");

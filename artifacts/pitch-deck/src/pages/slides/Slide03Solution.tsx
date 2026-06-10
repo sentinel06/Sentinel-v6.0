@@ -65,7 +65,7 @@ export default function Slide03Solution() {
                 lineHeight: 1.35,
               }}
             >
-              Sentinel-Gate Compliance Proxy: Operates an active /authorize circuit breaker to block non-compliant tool executions, high-risk data transfers, and unauthorized API mutations before execution.
+              MaroShield-Gate Compliance Proxy: Operates an active /authorize circuit breaker to block non-compliant tool executions, high-risk data transfers, and unauthorized API mutations before execution.
             </div>
           </div>
 
@@ -242,7 +242,7 @@ export default function Slide03Solution() {
           color: "#475569",
         }}
       >
-        <span>Agent-Sentinel | Pre-Seed Deck</span>
+        <span>MaroShield | Pre-Seed Deck</span>
         <span style={{ color: "#14B8A6" }}>03</span>
       </div>
     </div>
